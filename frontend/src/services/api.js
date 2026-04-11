@@ -1,6 +1,11 @@
 import axios from 'axios'
-import { store } from '../store'
-import { clearCredentials } from '../store/slices/authSlice'
+
+// Injected lazily to break circular dependency:
+// store → authSlice → api → store
+let _store = null
+export function injectStore(s) {
+  _store = s
+}
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
@@ -39,11 +44,11 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${accessToken}`
           return api(originalRequest)
         } catch {
-          store.dispatch(clearCredentials())
+          _store?.dispatch({ type: 'auth/clearCredentials' })
           window.location.href = '/login?session=expired'
         }
       } else {
-        store.dispatch(clearCredentials())
+        _store?.dispatch({ type: 'auth/clearCredentials' })
         window.location.href = '/login'
       }
     }

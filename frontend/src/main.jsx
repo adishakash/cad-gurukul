@@ -4,7 +4,11 @@ import { Provider } from 'react-redux'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
 import { store } from './store'
+import { injectStore } from './services/api'
 import './index.css'
+
+// Break circular dependency: api.js cannot import store at module level
+injectStore(store)
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
