@@ -1,5 +1,7 @@
 FROM node:20-alpine AS builder
 
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 COPY package*.json ./
@@ -15,6 +17,7 @@ RUN npm prune --omit=dev
 FROM node:20-alpine
 
 RUN apk add --no-cache \
+    openssl \
     chromium \
     nss \
     freetype \
