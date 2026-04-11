@@ -1,0 +1,28 @@
+# Root
+node_modules/
+.env
+*.log
+dist/
+build/
+.DS_Store
+
+# Backend
+backend/node_modules/
+backend/.env
+backend/logs/
+backend/uploads/
+backend/prisma/migrations/
+
+# Frontend
+frontend/node_modules/
+frontend/.env
+frontend/dist/
+
+# Docker
+postgres_data/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,477 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  STUDENT
+  PARENT
+  COUNSELLOR
+}
+
+enum Board {
+  CBSE
+  ICSE
+  STATE_BOARD
+  IGCSE
+  IB
+  OTHER
+}
+
+enum ClassStandard {
+  CLASS_9
+  CLASS_10
+  CLASS_11
+  CLASS_12
+}
+
+enum AssessmentStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  FAILED
+}
+
+enum QuestionType {
+  MCQ
+  RATING_SCALE
+  OPEN_TEXT
+  RANKING
+  YES_NO
+}
+
+enum QuestionCategory {
+  APTITUDE
+  PERSONALITY
+  INTERESTS
+  LEARNING_STYLE
+  LOGICAL_REASONING
+  CREATIVE_INCLINATION
+  SOCIAL_ORIENTATION
+  STEM_NON_STEM
+  VOCATIONAL_ACADEMIC
+}
+
+enum ReportAccessLevel {
+  FREE
+  PAID
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  REFUNDED
+  FAILED
+}
+
+enum PaymentProvider {
+  RAZORPAY
+}
+
+enum AIProvider {
+  OPENAI
+  GEMINI
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  role            UserRole @default(STUDENT)
+  isEmailVerified Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  studentProfile  StudentProfile?
+  parentDetails   ParentDetail[]
+  assessments     Assessment[]
+  payments        Payment[]
+  reportDownloads ReportDownload[]
+  activityLogs    ActivityLog[]
+  aiSessions      AISession[]
+  refreshTokens   RefreshToken[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STUDENT PROFILE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model StudentProfile {
+  id                String         @id @default(cuid())
+  userId            String         @unique
+  fullName          String
+  age               Int?
+  classStandard     ClassStandard?
+  schoolName        String?
+  board             Board?
+  city              String?
+  state             String?
+  pinCode           String?
+  mobileNumber      String?
+  address           String?
+  languagePreference String?       @default("English")
+
+  // Academic
+  academicScores    Json?          // { subject: score } format
+  preferredSubjects String[]
+
+  // Interests & Personality
+  hobbies           String[]
+  interests         String[]
+  careerAspirations String?
+
+  // Higher Education Preferences
+  budgetPreference  String?        // "under-5L", "5-10L", "10-20L", "20L+"
+  locationPreference String[]      // ["local", "state", "national", "abroad"]
+
+  // Flags
+  isOnboardingComplete Boolean @default(false)
+  specialNotes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentDetail ParentDetail?
+
+  @@index([userId])
+  @@map("student_profiles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARENT DETAILS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ParentDetail {
+  id               String  @id @default(cuid())
+  userId           String
+  studentProfileId String  @unique
+  parentName       String
+  relationship     String  @default("Parent")
+  contactNumber    String?
+  email            String?
+  occupation       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("parent_details")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ASSESSMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Assessment {
+  id             String           @id @default(cuid())
+  userId         String
+  accessLevel    ReportAccessLevel @default(FREE)
+  status         AssessmentStatus  @default(IN_PROGRESS)
+  currentStep    Int               @default(0)
+  totalQuestions Int               @default(0)
+  startedAt      DateTime          @default(now())
+  completedAt    DateTime?
+  metadata       Json?             // Additional session context
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions AssessmentQuestion[]
+  answers   AssessmentAnswer[]
+  report    CareerReport?
+
+  @@index([userId])
+  @@index([status])
+  @@map("assessments")
+}
+
+model AssessmentQuestion {
+  id           String           @id @default(cuid())
+  assessmentId String
+  sequence     Int
+  questionText String
+  questionType QuestionType
+  category     QuestionCategory
+  options      Json?            // For MCQ: [{label, value}]
+  metadata     Json?            // Extra AI context
+  aiProvider   AIProvider
+  generatedAt  DateTime         @default(now())
+
+  assessment Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  answer     AssessmentAnswer?
+
+  @@index([assessmentId])
+  @@map("assessment_questions")
+}
+
+model AssessmentAnswer {
+  id           String   @id @default(cuid())
+  assessmentId String
+  questionId   String   @unique
+  answerText   String?
+  answerValue  Json?    // Structured answer (MCQ choice, rating, etc.)
+  timeSpentSec Int?     // Time taken to answer
+  answeredAt   DateTime @default(now())
+
+  assessment Assessment        @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@map("assessment_answers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI SESSIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AISession {
+  id           String     @id @default(cuid())
+  userId       String?
+  assessmentId String?
+  provider     AIProvider
+  model        String
+  purpose      String     // "question_gen", "evaluation", "report_gen", etc.
+  promptTokens Int        @default(0)
+  completionTokens Int    @default(0)
+  totalTokens  Int        @default(0)
+  latencyMs    Int?
+  success      Boolean    @default(true)
+  errorMessage String?
+  requestId    String?    // Provider request ID for debugging
+  createdAt    DateTime   @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([assessmentId])
+  @@index([createdAt])
+  @@map("ai_sessions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CAREER REPORTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CareerReport {
+  id           String            @id @default(cuid())
+  assessmentId String            @unique
+  userId       String
+  accessLevel  ReportAccessLevel @default(FREE)
+  status       ReportStatus      @default(PENDING)
+
+  // Report Content (stored as JSON for flexibility)
+  reportData   Json?             // Full structured report
+
+  // Key Scores (indexed for analytics)
+  confidenceScore Float?         // 0-100
+  stemScore       Float?
+  creativeScore   Float?
+  socialScore     Float?
+
+  // Recommendations (quick-access fields)
+  topCareers      String[]
+  recommendedStream String?
+  recommendedSubjects String[]
+
+  generatedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  assessment      Assessment       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  payment         Payment?
+  reportDownloads ReportDownload[]
+
+  @@index([userId])
+  @@index([accessLevel])
+  @@map("career_reports")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Payment {
+  id               String          @id @default(cuid())
+  userId           String
+  reportId         String?         @unique
+  provider         PaymentProvider @default(RAZORPAY)
+  amountPaise      Int             // Amount in smallest unit (paise)
+  currency         String          @default("INR")
+  status           PaymentStatus   @default(CREATED)
+
+  // Razorpay specific
+  razorpayOrderId  String          @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+
+  metadata         Json?           // Extra payment context
+  paidAt           DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report CareerReport? @relation(fields: [reportId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REPORT DOWNLOADS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ReportDownload {
+  id        String   @id @default(cuid())
+  reportId  String
+  userId    String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  report CareerReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([userId])
+  @@map("report_downloads")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  role         AdminRole @default(ADMIN)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  activityLogs ActivityLog[]
+
+  @@index([email])
+  @@map("admin_users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRICING PLANS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PricingPlan {
+  id           String            @id @default(cuid())
+  name         String
+  accessLevel  ReportAccessLevel
+  amountPaise  Int
+  currency     String            @default("INR")
+  features     String[]
+  isActive     Boolean           @default(true)
+  displayOrder Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@map("pricing_plans")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTIVITY LOGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  adminUserId String?
+  action      String
+  entityType  String?
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([adminUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTACT QUERIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ContactQuery {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("contact_queries")
+}

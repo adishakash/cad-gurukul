@@ -1,0 +1,79 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
+import { selectIsAuthenticated } from './store/slices/authSlice'
+
+// Layout
+import Header from './components/Layout/Header'
+import Footer from './components/Layout/Footer'
+
+// Public pages
+import Home from './pages/Home'
+import About from './pages/About'
+import HowItWorks from './pages/HowItWorks'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import Contact from './pages/Contact'
+import PlanSelection from './pages/PlanSelection'
+
+// Protected pages
+import Dashboard from './pages/Dashboard'
+import Onboarding from './pages/Onboarding'
+import Assessment from './pages/Assessment'
+import Payment from './pages/Payment'
+import Report from './pages/Report'
+
+// Admin pages
+import AdminLogin from './pages/Admin/AdminLogin'
+import AdminDashboard from './pages/Admin/AdminDashboard'
+
+// Guards
+const ProtectedRoute = ({ children }) => {
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+  return isAuthenticated ? children : <Navigate to="/login" replace />
+}
+
+const GuestRoute = ({ children }) => {
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : children
+}
+
+const PublicLayout = ({ children }) => (
+  <>
+    <Header />
+    <main className="min-h-screen">{children}</main>
+    <Footer />
+  </>
+)
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
+        <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
+        <Route path="/how-it-works" element={<PublicLayout><HowItWorks /></PublicLayout>} />
+        <Route path="/contact" element={<PublicLayout><Contact /></PublicLayout>} />
+        <Route path="/plans" element={<PublicLayout><PlanSelection /></PublicLayout>} />
+
+        {/* Guest-only routes */}
+        <Route path="/login" element={<GuestRoute><PublicLayout><Login /></PublicLayout></GuestRoute>} />
+        <Route path="/register" element={<GuestRoute><PublicLayout><Register /></PublicLayout></GuestRoute>} />
+
+        {/* Protected student routes */}
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+        <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
+        <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
+        <Route path="/reports/:id" element={<ProtectedRoute><Report /></ProtectedRoute>} />
+
+        {/* Admin routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}

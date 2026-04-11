@@ -1,0 +1,132 @@
+# DigitalOcean App Platform Spec
+# Docs: https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+#
+# How to deploy:
+#   doctl apps create --spec .do/app.yaml
+# OR push this file to GitHub and connect via the DO Console.
+#
+# Before deploying, set SECRET values in the DO Console under:
+#   App → Settings → Environment Variables
+
+name: cad-gurukul
+region: blr   # Bangalore — closest for India
+
+# ─── Backend API (Dockerfile-based, includes Chromium for PDF) ───
+services:
+  - name: api
+    source_dir: /
+    github:
+      repo: adishakash/cad-gurukul
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: backend/Dockerfile
+    http_port: 5000
+    instance_size_slug: basic-xs     # 1 vCPU, 512 MB — upgrade if needed
+    instance_count: 1
+    health_check:
+      http_path: /api/v1/health
+      initial_delay_seconds: 40      # allow time for migrations on first deploy
+      period_seconds: 30
+      timeout_seconds: 10
+      failure_threshold: 3
+    envs:
+      # ── Core ──────────────────────────────────────────────────
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}       # injected from managed DB below
+      - key: FRONTEND_URL
+        value: ${frontend.PUBLIC_URL}   # injected from static site below
+
+      # ── JWT (set values as secrets in DO Console) ──────────────
+      - key: JWT_SECRET
+        type: SECRET
+      - key: JWT_REFRESH_SECRET
+        type: SECRET
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+
+      # ── AI (set values as secrets in DO Console) ───────────────
+      - key: OPENAI_API_KEY
+        type: SECRET
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: OPENAI_MAX_TOKENS
+        value: "4096"
+      - key: GEMINI_API_KEY
+        type: SECRET
+      - key: GEMINI_MODEL
+        value: gemini-1.5-pro
+      - key: AI_DEFAULT_PROVIDER
+        value: auto
+
+      # ── Razorpay (set values as secrets in DO Console) ─────────
+      - key: RAZORPAY_KEY_ID
+        type: SECRET
+      - key: RAZORPAY_KEY_SECRET
+        type: SECRET
+      - key: RAZORPAY_WEBHOOK_SECRET
+        type: SECRET
+
+      # ── Email (set values as secrets in DO Console) ────────────
+      - key: SMTP_HOST
+        type: SECRET
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        type: SECRET
+      - key: SMTP_PASS
+        type: SECRET
+      - key: EMAIL_FROM
+        value: "CAD Gurukul <noreply@cadgurukul.com>"
+
+      # ── Puppeteer / Chrome ─────────────────────────────────────
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium-browser
+      - key: CHROME_HEADLESS
+        value: "true"
+
+      # ── Rate Limiting ──────────────────────────────────────────
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX
+        value: "100"
+      - key: AI_RATE_LIMIT_MAX
+        value: "20"
+
+      # ── Logging ───────────────────────────────────────────────
+      - key: LOG_LEVEL
+        value: info
+
+# ─── Frontend (static site — Vite build → served by DO CDN) ──────
+static_sites:
+  - name: frontend
+    source_dir: frontend
+    github:
+      repo: adishakash/cad-gurukul
+      branch: main
+      deploy_on_push: true
+    build_command: npm run build
+    output_dir: dist
+    index_document: index.html
+    catchall_document: index.html    # SPA routing — all 404s serve index.html
+    envs:
+      - key: VITE_API_BASE_URL
+        value: ${api.PUBLIC_URL}/api/v1   # auto-resolves to backend URL
+      - key: VITE_RAZORPAY_KEY_ID
+        type: SECRET                      # Razorpay public key (set in DO Console)
+
+# ─── Managed PostgreSQL Database ─────────────────────────────────
+databases:
+  - name: db
+    engine: PG
+    version: "15"
+    size: db-s-dev-database    # free dev tier — upgrade to db-s-1vcpu-1gb for prod
+    num_nodes: 1
+    production: false
