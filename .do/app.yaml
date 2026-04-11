@@ -7,7 +7,6 @@ services:
     repo: adishakash/cad-gurukul
     branch: main
     deploy_on_push: true
-  source_dir: /backend
   dockerfile_path: backend/Dockerfile
   http_port: 5000
   instance_size_slug: basic-xs
@@ -122,7 +121,7 @@ static_sites:
     repo: adishakash/cad-gurukul
     branch: main
     deploy_on_push: true
-  source_dir: /frontend
+  source_dir: frontend
   build_command: npm run build
   output_dir: dist
   index_document: index.html
