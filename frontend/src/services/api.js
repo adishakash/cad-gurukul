@@ -59,11 +59,28 @@ api.interceptors.response.use(
 
 // ─── Lead API ─────────────────────────────────────────────────────────────────
 export const leadApi = {
-  create: (data) => api.post('/leads', data),
-  getMe: () => api.get('/leads/me'),
-  updateMe: (data) => api.patch('/leads/me', data),
+  create:      (data)          => api.post('/leads', data),
+  getMe:       ()              => api.get('/leads/me'),
+  update:      (data)          => api.patch('/leads/me', data),
+  updateMe:    (data)          => api.patch('/leads/me', data),
   appendEvent: (event, metadata) => api.post('/leads/me/events', { event, metadata }),
-  linkUser: (leadId) => api.post('/leads/me/link-user', { leadId }),
+  linkUser:    (leadId)        => api.post('/leads/me/link-user', { leadId }),
+}
+
+// ─── Report API ───────────────────────────────────────────────────────────────
+export const reportApi = {
+  getMyReports:   ()         => api.get('/reports/my'),
+  getReport:      (id)       => api.get(`/reports/${id}`),
+  getReportStatus:(id)       => api.get(`/reports/${id}/status`),
+  downloadPdf:    (id)       => api.get(`/reports/${id}/pdf`, { responseType: 'blob' }),
+}
+
+// ─── Payment API ──────────────────────────────────────────────────────────────
+export const paymentApi = {
+  createOrder:  (assessmentId) => api.post('/payments/create-order', { assessmentId }),
+  verify:       (data)         => api.post('/payments/verify', data),
+  getHistory:   ()             => api.get('/payments/history'),
+  getStatus:    (orderId)      => api.get(`/payments/status/${orderId}`),
 }
 
 // ─── Admin API client (uses cg_admin_token, separate from student API) ───────
@@ -80,15 +97,16 @@ adminApiClient.interceptors.request.use((config) => {
 
 // ─── Admin Lead API ───────────────────────────────────────────────────────────
 export const adminLeadApi = {
-  list: (params) => adminApiClient.get('/admin/leads', { params }),
-  getDetail: (id) => adminApiClient.get(`/admin/leads/${id}`),
-  update: (id, data) => adminApiClient.patch(`/admin/leads/${id}`, data),
-  triggerAction: (id, action) => adminApiClient.post(`/admin/leads/${id}/actions`, { action }),
-  getFunnel: (days = 30) => adminApiClient.get('/admin/funnel', { params: { days } }),
-  exportCsv: () => adminApiClient.get('/admin/export/leads', { responseType: 'blob' }),
+  list:          (params)        => adminApiClient.get('/admin/leads', { params }),
+  getDetail:     (id)            => adminApiClient.get(`/admin/leads/${id}`),
+  update:        (id, data)      => adminApiClient.patch(`/admin/leads/${id}`, data),
+  triggerAction: (id, action)    => adminApiClient.post(`/admin/leads/${id}/actions`, { action }),
+  getFunnel:     (days = 30)     => adminApiClient.get('/admin/funnel', { params: { days } }),
+  getAnalytics:  ()              => adminApiClient.get('/admin/analytics'),
+  exportCsv:     ()              => adminApiClient.get('/admin/export/leads', { responseType: 'blob' }),
 }
 
-// ─── Analytics helper (fire-and-forget) ──────────────────────────────────────
+// ─── Analytics helper (fire-and-forget from frontend) ────────────────────────
 export const trackEvent = (event, metadata = {}) => {
   leadApi.appendEvent(event, metadata).catch(() => {/* silent */})
 }

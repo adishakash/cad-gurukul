@@ -267,7 +267,10 @@ const completeAssessment = async (req, res) => {
       await triggerAutomation('assessment_completed', {
         leadId: lead.id, assessmentId: assessment.id, reportId: report.id,
       });
-      await prisma.lead.update({ where: { id: lead.id }, data: { reportId: report.id } });
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { reportId: report.id, status: 'assessment_completed' },
+      });
     }
 
     logger.info('[Assessment] Completed', { assessmentId: assessment.id, reportId: report.id });
@@ -322,6 +325,7 @@ const generateReportAsync = async (assessment, profile, reportId) => {
     const lead = await prisma.lead.findFirst({ where: { reportId } });
     if (lead) {
       await triggerAutomation(eventName, { leadId: lead.id, reportId });
+      await prisma.lead.update({ where: { id: lead.id }, data: { status: eventName } });
     }
   } catch (err) {
     logger.error('[Assessment] Report generation failed', { reportId, error: err.message });

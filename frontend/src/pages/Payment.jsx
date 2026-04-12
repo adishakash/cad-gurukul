@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectAssessment } from '../store/slices/assessmentSlice'
 import { selectUser } from '../store/slices/authSlice'
@@ -37,11 +37,19 @@ const loadRazorpay = () =>
 
 export default function Payment() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const user = useSelector(selectUser)
   const assessment = useSelector(selectAssessment)
+  // assessmentId can come from URL param (when navigating from PremiumUpsell) or Redux state
+  const assessmentId = searchParams.get('assessmentId') || assessment?.id
   const [loading, setLoading] = useState(false)
 
   const handlePayment = async () => {
+    if (!assessmentId) {
+      toast.error('Assessment not found. Please complete the assessment first.')
+      navigate('/assessment?plan=FREE')
+      return
+    }
     setLoading(true)
     try {
       const loaded = await loadRazorpay()
@@ -50,18 +58,16 @@ export default function Payment() {
         return
       }
 
-      const { data } = await api.post('/payments/create-order', {
-        assessmentId: assessment?.id,
-      })
+      const { data } = await api.post('/payments/create-order', { assessmentId })
 
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: data.data.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: data.data.amount,
         currency: data.data.currency,
         name: 'CAD Gurukul',
         description: 'Premium Career Report',
         image: '/logo.svg',
-        order_id: data.data.razorpayOrderId,
+        order_id: data.data.orderId,
         prefill: {
           name: user?.fullName || user?.email?.split('@')[0] || '',
           email: user?.email || '',
@@ -70,26 +76,25 @@ export default function Payment() {
         handler: async (response) => {
           try {
             await api.post('/payments/verify', {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              internalOrderId: data.data.id,
+              razorpayOrderId:   response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
             })
-            toast.success('Payment successful! Starting premium assessment...')
-            navigate('/assessment?plan=PAID')
+            toast.success('Payment successful! Your premium report is being generated…')
+            navigate('/dashboard')
           } catch {
-            toast.error('Payment verification failed. Contact support.')
+            toast.error('Payment verification failed. Contact support if amount was deducted.')
           }
         },
         modal: {
-          ondismiss: () => toast('Payment cancelled.'),
+          ondismiss: () => toast('Payment cancelled. You can retry anytime.'),
         },
       }
 
       const rzp = new window.Razorpay(options)
       rzp.open()
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to initiate payment.')
+      toast.error(err?.response?.data?.error?.message || 'Failed to initiate payment.')
     } finally {
       setLoading(false)
     }

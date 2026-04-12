@@ -44,15 +44,19 @@ const listUsers = async (req, res) => {
  */
 const getAnalytics = async (req, res) => {
   try {
+    const { days } = req.query;
+    const since = days ? new Date(Date.now() - parseInt(days) * 24 * 60 * 60 * 1000) : null;
+    const dateFilter = since ? { createdAt: { gte: since } } : {};
+
     const [
       totalUsers, totalAssessments, totalCompletedReports,
       totalPayments, totalRevenuePaise, recentSignups,
     ] = await Promise.all([
-      prisma.user.count(),
-      prisma.assessment.count(),
-      prisma.careerReport.count({ where: { status: 'COMPLETED' } }),
-      prisma.payment.count({ where: { status: 'CAPTURED' } }),
-      prisma.payment.aggregate({ where: { status: 'CAPTURED' }, _sum: { amountPaise: true } }),
+      prisma.user.count({ where: dateFilter }),
+      prisma.assessment.count({ where: dateFilter }),
+      prisma.careerReport.count({ where: { status: 'COMPLETED', ...dateFilter } }),
+      prisma.payment.count({ where: { status: 'CAPTURED', ...dateFilter } }),
+      prisma.payment.aggregate({ where: { status: 'CAPTURED', ...dateFilter }, _sum: { amountPaise: true } }),
       prisma.user.count({ where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } }),
     ]);
 
@@ -213,7 +217,7 @@ const listLeads = async (req, res) => {
     const {
       page = 1, limit = 25,
       status, leadSource, classStandard, selectedPlan,
-      search, dateFrom, dateTo,
+      search, from, to, sortBy = 'createdAt', sortDir = 'desc',
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -224,10 +228,10 @@ const listLeads = async (req, res) => {
     if (classStandard) where.classStandard = classStandard;
     if (selectedPlan)  where.selectedPlan = selectedPlan;
 
-    if (dateFrom || dateTo) {
+    if (from || to) {
       where.createdAt = {};
-      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo)   where.createdAt.lte = new Date(dateTo);
+      if (from) where.createdAt.gte = new Date(from);
+      if (to)   where.createdAt.lte = new Date(to);
     }
 
     if (search) {
@@ -244,7 +248,7 @@ const listLeads = async (req, res) => {
         where,
         skip,
         take: parseInt(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortDir },
         select: {
           id: true, fullName: true, email: true, mobileNumber: true,
           classStandard: true, stream: true, city: true, userType: true,
@@ -378,8 +382,10 @@ const getFunnelMetrics = async (req, res) => {
  */
 const updateLeadAdmin = async (req, res) => {
   const VALID_STATUSES = [
-    'new_lead', 'assessment_started', 'assessment_completed', 'free_report_ready',
-    'payment_pending', 'paid', 'premium_report_ready', 'counselling_interested', 'closed',
+    'new_lead', 'onboarding_started', 'plan_selected', 'assessment_started',
+    'assessment_in_progress', 'assessment_completed', 'free_report_ready',
+    'payment_pending', 'paid', 'premium_report_generating',
+    'premium_report_ready', 'counselling_interested', 'closed',
   ];
 
   try {

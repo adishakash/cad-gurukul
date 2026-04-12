@@ -125,4 +125,24 @@ const downloadReportPdf = async (req, res) => {
   }
 };
 
-module.exports = { getMyReports, getReport, downloadReportPdf };
+/**
+ * GET /reports/:id/status
+ * Lightweight status-only endpoint for frontend polling during report generation.
+ */
+const getReportStatus = async (req, res) => {
+  try {
+    const report = await prisma.careerReport.findFirst({
+      where: { id: req.params.id, userId: req.user.id },
+      select: { id: true, status: true, accessLevel: true, generatedAt: true },
+    });
+
+    if (!report) return errorResponse(res, 'Report not found', 404, 'NOT_FOUND');
+
+    return successResponse(res, report);
+  } catch (err) {
+    logger.error('[Report] getReportStatus error', { error: err.message });
+    throw err;
+  }
+};
+
+module.exports = { getMyReports, getReport, getReportStatus, downloadReportPdf };

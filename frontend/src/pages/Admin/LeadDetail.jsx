@@ -4,8 +4,10 @@ import { adminLeadApi } from '../../services/api'
 import toast from 'react-hot-toast'
 
 const STATUS_OPTIONS = [
-  'new_lead','assessment_started','assessment_completed','free_report_ready',
-  'payment_pending','paid','premium_report_ready','counselling_interested','closed',
+  'new_lead','onboarding_started','plan_selected','assessment_started',
+  'assessment_in_progress','assessment_completed','free_report_ready',
+  'payment_pending','paid','premium_report_generating',
+  'premium_report_ready','counselling_interested','closed',
 ]
 
 function Timeline({ events }) {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import api from '../services/api'
+import api, { leadApi } from '../services/api'
 import toast from 'react-hot-toast'
 
 const STEPS = [
@@ -111,6 +111,8 @@ export default function Onboarding() {
         interests: selectedInterests,
         locationPreference: selectedLocationPref,
       })
+      // Advance lead funnel status — fire-and-forget
+      leadApi.update({ status: 'onboarding_started' }).catch(() => {})
       toast.success('Profile saved! Now start your assessment.')
       navigate('/dashboard')
     } catch (err) {
