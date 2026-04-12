@@ -31,6 +31,12 @@ services:
   - key: FRONTEND_URL
     scope: RUN_TIME
     value: "${frontend.PUBLIC_URL}"
+  - key: FRONTEND_URLS
+    scope: RUN_TIME
+    value: "${frontend.PUBLIC_URL},https://cadgurukul.com,https://www.cadgurukul.com"
+  - key: ALLOW_DO_PREVIEW_ORIGINS
+    scope: RUN_TIME
+    value: "true"
   - key: JWT_SECRET
     scope: RUN_TIME
     type: SECRET

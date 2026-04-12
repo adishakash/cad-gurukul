@@ -26,11 +26,11 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-const ALLOWED_ORIGINS = [
+const ALLOWED_ORIGINS = new Set([
   'https://cadgurukul.com',
   'https://www.cadgurukul.com',
-  ...(config.frontendUrl ? [config.frontendUrl] : []),
-];
+  ...(Array.isArray(config.frontendUrls) ? config.frontendUrls : []),
+]);
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -40,7 +40,10 @@ app.use(cors({
     if (/^https:\/\/([a-z0-9-]+\.)*cadgurukul\.com$/.test(origin)) {
       return callback(null, true);
     }
-    if (ALLOWED_ORIGINS.includes(origin)) {
+    if (config.allowDigitalOceanPreviewOrigins && /^https:\/\/([a-z0-9-]+\.)*ondigitalocean\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+    if (ALLOWED_ORIGINS.has(origin)) {
       return callback(null, true);
     }
     return callback(new Error(`CORS: origin '${origin}' not allowed`));

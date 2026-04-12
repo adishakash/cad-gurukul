@@ -84,6 +84,37 @@ npm run build
 
 ---
 
+## Option 3: DigitalOcean App Platform (Recommended for this repo)
+
+This repository already includes a deploy spec at `.do/app.yaml` with:
+
+- `api` as a Docker-based service from `backend/`
+- `frontend` as a static site from `frontend/`
+- managed PostgreSQL (`db`) wired to backend `DATABASE_URL`
+
+### 1. Create app from spec
+
+In DigitalOcean App Platform, choose **Create App** and import this repository.
+App Platform will detect `.do/app.yaml` automatically.
+
+### 2. Set real secret values
+
+Replace all `CHANGE_ME_*` values in App Platform settings before first production deploy.
+
+### 3. Confirm critical runtime variables
+
+- Backend: `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `RAZORPAY_*`, `SMTP_*`
+- Backend CORS: `FRONTEND_URLS` includes `${frontend.PUBLIC_URL}` plus custom domains
+- Frontend build-time: `VITE_API_BASE_URL=${api.PUBLIC_URL}/api/v1`
+
+### 4. Deploy and verify
+
+- API health: `${api.PUBLIC_URL}/api/v1/health`
+- Frontend app loads from `${frontend.PUBLIC_URL}`
+- Register/login/payment/report flows work end-to-end
+
+---
+
 ## Environment Variables Checklist
 
 ### backend/.env
@@ -112,7 +143,7 @@ npm run build
 - [ ] Test a Paid assessment + payment flow
 - [ ] Confirm PDF download works
 - [ ] Confirm welcome email is sent on register
-- [ ] Configure SSL (Let's Encrypt / Cloudflare)
+- [ ] Configure custom domains in App Platform (TLS is managed by DigitalOcean)
 - [ ] Set up database backups (pg_dump cron)
 - [ ] Enable PM2 or systemd service restart on crash
 
