@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts'
-import api from '../services/api'
+import api, { trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
+import PremiumUpsell from '../components/PremiumUpsell'
 
 const POLL_INTERVAL = 12000
 
@@ -61,6 +62,7 @@ export default function Report() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [showUpsell, setShowUpsell] = useState(false)
   const pollRef = useRef(null)
 
   const fetchReport = async () => {
@@ -92,6 +94,19 @@ export default function Report() {
     fetchReport()
     return () => pollRef.current && clearInterval(pollRef.current)
   }, [id])
+
+  // Track free report view
+  useEffect(() => {
+    if (report && report.accessLevel === 'FREE' && report.status === 'COMPLETED') {
+      trackEvent('free_report_viewed', { reportId: id })
+      // Show upsell 3s after free report loads
+      const t = setTimeout(() => setShowUpsell(true), 3000)
+      return () => clearTimeout(t)
+    }
+    if (report && report.accessLevel === 'PAID') {
+      trackEvent('premium_report_viewed', { reportId: id })
+    }
+  }, [report])
 
   const handleDownload = async () => {
     setDownloading(true)
@@ -217,18 +232,36 @@ export default function Report() {
 
         {/* Upgrade CTA (free users) */}
         {!isPaid && (
-          <div className="card text-center border-2 border-brand-red shadow-xl">
-            <div className="text-4xl mb-3">🔐</div>
-            <h3 className="text-xl font-extrabold text-brand-dark mb-2">Unlock Your Full Report</h3>
-            <p className="text-gray-500 text-sm mb-6">
-              Get 15+ career paths, roadmaps, PDF download, parent guidance, and a 30-question deep assessment for just ₹499.
-            </p>
-            <button onClick={() => navigate('/payment')} className="btn-primary">
-              💎 Upgrade for ₹499
-            </button>
-          </div>
+          <PremiumUpsell
+            assessmentId={report.assessmentId}
+            inline
+          />
         )}
       </div>
+
+      {/* Floating sticky upgrade bar on mobile for free report */}
+      {!isPaid && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-brand-red text-white px-4 py-3 flex items-center justify-between shadow-2xl md:hidden">
+          <div>
+            <div className="font-bold text-sm">Unlock Full Report</div>
+            <div className="text-xs text-red-200">7 careers · roadmap · PDF · ₹499</div>
+          </div>
+          <button
+            onClick={() => { trackEvent('premium_cta_clicked', { source: 'sticky_bar' }); navigate(`/payment?assessmentId=${report.assessmentId}`) }}
+            className="bg-white text-brand-red font-bold text-sm px-4 py-2 rounded-lg shrink-0"
+          >
+            Upgrade →
+          </button>
+        </div>
+      )}
+
+      {/* Auto-show upsell modal */}
+      {showUpsell && !isPaid && (
+        <PremiumUpsell
+          assessmentId={report.assessmentId}
+          onClose={() => setShowUpsell(false)}
+        />
+      )}
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
+import { adminLeadApi } from '../../services/api'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1')
 
@@ -12,8 +13,8 @@ adminApi.interceptors.request.use((cfg) => {
   return cfg
 })
 
-const StatCard = ({ icon, label, value, sub }) => (
-  <div className="card text-center hover:shadow-lg transition-shadow">
+const StatCard = ({ icon, label, value, sub, highlight }) => (
+  <div className={`card text-center hover:shadow-lg transition-shadow ${highlight ? 'border-2 border-brand-red bg-red-50' : ''}`}>
     <div className="text-3xl mb-2">{icon}</div>
     <div className="text-3xl font-extrabold text-brand-dark">{value ?? '—'}</div>
     <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
@@ -49,11 +50,12 @@ const Table = ({ headers, rows, emptyText = 'No data.' }) => (
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const [analytics, setAnalytics] = useState(null)
-  const [users, setUsers] = useState([])
-  const [payments, setPayments] = useState([])
-  const [aiStats, setAiStats] = useState(null)
+  const [users, setUsers]         = useState([])
+  const [payments, setPayments]   = useState([])
+  const [aiStats, setAiStats]     = useState(null)
+  const [funnel, setFunnel]       = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]     = useState(true)
 
   const admin = JSON.parse(localStorage.getItem('cg_admin') || '{}')
 
@@ -66,16 +68,18 @@ export default function AdminDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [analyticsRes, usersRes, paymentsRes, aiStatsRes] = await Promise.all([
+      const [analyticsRes, usersRes, paymentsRes, aiStatsRes, funnelRes] = await Promise.all([
         adminApi.get('/admin/analytics'),
         adminApi.get('/admin/users?limit=50'),
         adminApi.get('/admin/payments?limit=50'),
-        adminApi.get('/admin/ai-stats'),
+        adminApi.get('/admin/ai-usage').catch(() => ({ data: { data: null } })),
+        adminLeadApi.getFunnel(30).catch(() => ({ data: { data: null } })),
       ])
       setAnalytics(analyticsRes.data.data)
       setUsers(usersRes.data.data?.users || [])
       setPayments(paymentsRes.data.data?.payments || [])
       setAiStats(aiStatsRes.data.data)
+      setFunnel(funnelRes.data.data)
     } catch (err) {
       if (err?.response?.status === 401) {
         toast.error('Session expired.')
@@ -108,7 +112,7 @@ export default function AdminDashboard() {
     navigate('/admin/login')
   }
 
-  const tabs = ['overview', 'users', 'payments', 'ai-usage']
+  const tabs = ['overview', 'leads', 'users', 'payments', 'ai-usage']
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -146,35 +150,83 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            {activeTab === 'overview' && analytics && (
+            {activeTab === 'overview' && (
               <div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                  <StatCard icon="👤" label="Total Users" value={analytics.users?.total} sub={`+${analytics.users?.lastWeek || 0} this week`} />
-                  <StatCard icon="📋" label="Assessments" value={analytics.assessments?.total} sub={`${analytics.assessments?.completed || 0} completed`} />
-                  <StatCard icon="💰" label="Total Revenue" value={`₹${((analytics.payments?.revenue || 0) / 100).toLocaleString('en-IN')}`} sub={`${analytics.payments?.count || 0} payments`} />
-                  <StatCard icon="📄" label="Reports Generated" value={analytics.reports?.total} />
-                </div>
+                {/* Funnel metrics */}
+                {funnel && (
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="font-bold text-gray-900">Conversion Funnel (Last 30 days)</h2>
+                      <span className="text-sm font-semibold text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                        {funnel.conversionRate} conversion rate
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                      {[
+                        { icon: '📥', label: 'Total Leads',        value: funnel.funnel.totalLeads },
+                        { icon: '📝', label: 'Assessment Started', value: funnel.funnel.assessmentStarted },
+                        { icon: '✅', label: 'Assessment Done',    value: funnel.funnel.assessmentCompleted },
+                        { icon: '📊', label: 'Free Report',        value: funnel.funnel.freeReportReady },
+                        { icon: '💳', label: 'Paid',               value: funnel.funnel.paid, highlight: true },
+                        { icon: '📄', label: 'Premium Report',     value: funnel.funnel.premiumReportReady },
+                        { icon: '📞', label: 'Counselling',        value: funnel.funnel.counsellingInterested },
+                      ].map((m) => (
+                        <StatCard key={m.label} icon={m.icon} label={m.label} value={m.value} highlight={m.highlight} />
+                      ))}
+                    </div>
+
+                    {/* Revenue */}
+                    <div className="mt-4 bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-green-900">Total Revenue (30 days)</div>
+                        <div className="text-sm text-green-700">From verified Razorpay payments</div>
+                      </div>
+                      <div className="text-3xl font-extrabold text-green-700">₹{Number(funnel.totalRevenueRupees).toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* General analytics */}
+                {analytics && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <StatCard icon="👤" label="Total Users"        value={analytics.totalUsers} />
+                    <StatCard icon="📋" label="Total Assessments"  value={analytics.totalAssessments} />
+                    <StatCard icon="💰" label="All-time Revenue"   value={`₹${Number(analytics.totalRevenueRupees || 0).toLocaleString('en-IN')}`} />
+                    <StatCard icon="📄" label="Reports Generated"  value={analytics.totalCompletedReports} />
+                  </div>
+                )}
+
+                {/* Quick links */}
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="card">
                     <h3 className="font-bold text-brand-dark mb-4">Quick Actions</h3>
                     <div className="flex flex-wrap gap-3">
+                      <Link to="/admin/leads" className="btn-outline text-sm">👥 Manage Leads</Link>
                       <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export Leads CSV</button>
-                      <button onClick={() => handleExport('payments')} className="btn-outline text-sm">⬇ Export Payments CSV</button>
                       <button onClick={loadData} className="btn-secondary text-sm">↻ Refresh</button>
                     </div>
                   </div>
                   {aiStats && (
                     <div className="card">
-                      <h3 className="font-bold text-brand-dark mb-4">AI Usage Summary</h3>
+                      <h3 className="font-bold text-brand-dark mb-4">AI Usage</h3>
                       <div className="space-y-2 text-sm text-gray-700">
-                        <div className="flex justify-between"><span>Total AI calls</span><strong>{aiStats.totalCalls}</strong></div>
-                        <div className="flex justify-between"><span>OpenAI calls</span><strong>{aiStats.openaiCalls}</strong></div>
-                        <div className="flex justify-between"><span>Gemini calls</span><strong>{aiStats.geminiCalls}</strong></div>
-                        <div className="flex justify-between"><span>Est. cost (approx)</span><strong>₹{aiStats.estimatedCostInr || '—'}</strong></div>
+                        <div className="flex justify-between"><span>Total AI calls</span><strong>{aiStats.totals?._count?.id || 0}</strong></div>
+                        <div className="flex justify-between"><span>Total tokens</span><strong>{(aiStats.totals?._sum?.totalTokens || 0).toLocaleString()}</strong></div>
+                        <div className="flex justify-between"><span>Avg latency</span><strong>{Math.round(aiStats.totals?._avg?.latencyMs || 0)}ms</strong></div>
                       </div>
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'leads' && (
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-brand-dark text-lg">Lead Management</h3>
+                  <Link to="/admin/leads" className="btn-primary text-sm">Open Full Lead Manager →</Link>
+                </div>
+                <p className="text-sm text-gray-500">Use the full lead manager for filters, search, status updates, and manual actions.</p>
               </div>
             )}
 
@@ -185,13 +237,13 @@ export default function AdminDashboard() {
                   <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export CSV</button>
                 </div>
                 <Table
-                  headers={['Name', 'Email', 'Role', 'Class', 'Board', 'Joined']}
+                  headers={['Name', 'Email', 'Role', 'Class', 'City', 'Joined']}
                   rows={users.map((u) => [
-                    u.name,
+                    u.studentProfile?.fullName || u.email.split('@')[0],
                     u.email,
                     u.role,
-                    u.studentProfile?.classStandard || '—',
-                    u.studentProfile?.board || '—',
+                    u.studentProfile?.classStandard?.replace('CLASS_', 'Class ') || '—',
+                    u.studentProfile?.city || '—',
                     new Date(u.createdAt).toLocaleDateString('en-IN'),
                   ])}
                   emptyText="No users found."

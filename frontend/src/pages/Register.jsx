@@ -1,11 +1,13 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { registerUser, selectAuthLoading } from '../store/slices/authSlice'
+import { leadApi } from '../services/api'
 
 export default function Register() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const isLoading = useSelector(selectAuthLoading)
 
   const { register, handleSubmit, formState: { errors }, watch } = useForm()
@@ -13,6 +15,12 @@ export default function Register() {
   const onSubmit = async (data) => {
     const result = await dispatch(registerUser(data))
     if (registerUser.fulfilled.match(result)) {
+      // Link any pending lead captured before registration
+      const leadId = localStorage.getItem('cg_lead_id') || searchParams.get('leadId')
+      if (leadId) {
+        leadApi.linkUser(leadId).catch(() => {})
+        localStorage.removeItem('cg_lead_id')
+      }
       navigate('/onboarding')
     }
   }

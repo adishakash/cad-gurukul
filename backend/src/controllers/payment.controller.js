@@ -5,6 +5,8 @@ const razorpayService = require('../services/payment/razorpayService');
 const { successResponse, errorResponse, rupeesToPaise } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const config = require('../config');
+const { triggerAutomation } = require('../services/automation/automationService');
+const analytics = require('../services/analytics/analyticsService');
 
 const PAID_REPORT_PRICE_RUPEES = 499;
 
@@ -55,6 +57,15 @@ const createOrder = async (req, res) => {
         metadata: { assessmentId },
       },
     });
+
+    // Track analytics + trigger automation
+    analytics.track('payment_initiated', req, { userId: req.user.id });
+
+    // Link lead to payment_pending if lead exists
+    const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
+    if (lead) {
+      await triggerAutomation('payment_initiated', { leadId: lead.id, userId: req.user.id });
+    }
 
     logger.info('[Payment] Order created', { paymentId: payment.id, orderId: order.id });
 
@@ -141,6 +152,27 @@ const verifyPayment = async (req, res) => {
     }
 
     logger.info('[Payment] Payment verified', { paymentId: payment.id, razorpayPaymentId });
+
+    // ─── Automation hooks post-payment ────────────────────────────────────────
+    analytics.track('payment_success', req, {
+      userId: req.user.id,
+      amountRupees: PAID_REPORT_PRICE_RUPEES,
+    });
+
+    // Update lead: status → paid, link paymentId
+    const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
+    if (lead) {
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { paymentId: updatedPayment.id },
+      });
+      await triggerAutomation('payment_success', {
+        leadId:       lead.id,
+        userId:       req.user.id,
+        amountRupees: PAID_REPORT_PRICE_RUPEES,
+        paymentId:    updatedPayment.id,
+      });
+    }
 
     return successResponse(res, { paymentId: payment.id, status: 'CAPTURED' }, 'Payment successful! Your full report is being generated.');
   } catch (err) {

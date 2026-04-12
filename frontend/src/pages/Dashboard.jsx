@@ -2,26 +2,79 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectUser } from '../store/slices/authSlice'
-import api from '../services/api'
+import api, { leadApi } from '../services/api'
 import toast from 'react-hot-toast'
+
+// ── Funnel progress bar ───────────────────────────────────────────────────────
+const FUNNEL_STEPS = [
+  { key: 'new_lead',              label: 'Lead Created',          icon: '✅' },
+  { key: 'assessment_started',    label: 'Assessment Started',    icon: '📝' },
+  { key: 'assessment_completed',  label: 'Assessment Done',       icon: '🎯' },
+  { key: 'free_report_ready',     label: 'Free Report Ready',     icon: '📊' },
+  { key: 'paid',                  label: 'Payment Complete',      icon: '💳' },
+  { key: 'premium_report_ready',  label: 'Premium Report Ready',  icon: '📄' },
+]
+
+const STATUS_ORDER = FUNNEL_STEPS.map((s) => s.key)
+
+function FunnelProgress({ status }) {
+  const currentIdx = STATUS_ORDER.indexOf(status)
+  return (
+    <div className="card mb-6">
+      <h3 className="font-bold text-brand-dark mb-4 text-sm">🗺️ Your Career Journey Progress</h3>
+      <div className="flex items-center gap-1 overflow-x-auto pb-2">
+        {FUNNEL_STEPS.map((step, idx) => {
+          const done    = idx <= currentIdx
+          const current = idx === currentIdx
+          return (
+            <div key={step.key} className="flex items-center gap-1 shrink-0">
+              <div className={`flex flex-col items-center gap-1 ${done ? 'opacity-100' : 'opacity-40'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 ${current ? 'border-brand-red bg-red-50' : done ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                  {step.icon}
+                </div>
+                <span className="text-[10px] text-center text-gray-500 leading-tight max-w-[56px]">{step.label}</span>
+              </div>
+              {idx < FUNNEL_STEPS.length - 1 && (
+                <div className={`w-4 h-0.5 mb-4 rounded ${idx < currentIdx ? 'bg-green-400' : 'bg-gray-200'}`} />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ProfileRow({ label, value }) {
+  if (!value) return null
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-gray-500">{label}</span>
+      <span className="font-medium text-brand-dark">{value}</span>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const user = useSelector(selectUser)
   const navigate = useNavigate()
-  const [profile, setProfile] = useState(null)
-  const [reports, setReports] = useState([])
+  const [profile, setProfile]   = useState(null)
+  const [reports, setReports]   = useState([])
+  const [lead, setLead]         = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [profileRes, reportsRes] = await Promise.all([
+        const [profileRes, reportsRes, leadRes] = await Promise.all([
           api.get('/students/me').catch(() => ({ data: { data: null } })),
           api.get('/reports/my').catch(() => ({ data: { data: [] } })),
+          leadApi.getMe().catch(() => ({ data: { data: null } })),
         ])
         setProfile(profileRes.data.data)
         setReports(reportsRes.data.data || [])
-      } catch (err) {
+        setLead(leadRes.data.data)
+      } catch {
         toast.error('Failed to load dashboard data')
       } finally {
         setIsLoading(false)
@@ -30,8 +83,10 @@ export default function Dashboard() {
     loadData()
   }, [])
 
-  const completedReports = reports.filter((r) => r.status === 'COMPLETED')
+  const completedReports  = reports.filter((r) => r.status === 'COMPLETED')
   const generatingReports = reports.filter((r) => r.status === 'GENERATING')
+  const freeReport        = completedReports.find((r) => r.accessLevel === 'FREE')
+  const paidReport        = completedReports.find((r) => r.accessLevel === 'PAID')
 
   if (isLoading) {
     return (
@@ -55,6 +110,9 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Funnel progress */}
+        {lead && <FunnelProgress status={lead.status} />}
+
         {/* Profile not complete notice */}
         {(!profile || !profile.isOnboardingComplete) && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -186,6 +244,22 @@ export default function Dashboard() {
                       </Link>
                     </div>
                   ))}
+
+                  {/* Upsell nudge: has free report but no paid */}
+                  {freeReport && !paidReport && (
+                    <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-gray-800 text-sm">🔓 Ready for the full picture?</div>
+                        <div className="text-xs text-gray-500 mt-0.5">Unlock 7 career paths, 3-year roadmap, and PDF download for just ₹499.</div>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/payment?assessmentId=${freeReport.assessmentId || ''}`)}
+                        className="btn-primary text-xs px-4 py-2 shrink-0"
+                      >
+                        Upgrade →  ₹499
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -195,11 +269,3 @@ export default function Dashboard() {
     </div>
   )
 }
-
-const ProfileRow = ({ label, value }) =>
-  value ? (
-    <div className="flex justify-between text-sm">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-gray-800 text-right max-w-[60%] truncate">{value}</span>
-    </div>
-  ) : null

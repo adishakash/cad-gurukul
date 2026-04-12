@@ -201,4 +201,247 @@ const toggleUserStatus = async (req, res) => {
   }
 };
 
-module.exports = { listUsers, getAnalytics, listPayments, listReports, getAIUsage, exportLeads, toggleUserStatus };
+/**
+ * GET /admin/leads
+ * List leads with filters: status, leadSource, class, date range, plan
+ */
+const listLeads = async (req, res) => {
+  try {
+    const {
+      page = 1, limit = 25,
+      status, leadSource, classStandard, selectedPlan,
+      search, dateFrom, dateTo,
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = {};
+    if (status)        where.status       = status;
+    if (leadSource)    where.leadSource   = leadSource;
+    if (classStandard) where.classStandard = classStandard;
+    if (selectedPlan)  where.selectedPlan = selectedPlan;
+
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo)   where.createdAt.lte = new Date(dateTo);
+    }
+
+    if (search) {
+      where.OR = [
+        { fullName:     { contains: search, mode: 'insensitive' } },
+        { email:        { contains: search, mode: 'insensitive' } },
+        { mobileNumber: { contains: search } },
+        { city:         { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [leads, total] = await Promise.all([
+      prisma.lead.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, fullName: true, email: true, mobileNumber: true,
+          classStandard: true, stream: true, city: true, userType: true,
+          selectedPlan: true, status: true, leadSource: true,
+          utmSource: true, utmCampaign: true,
+          counsellingInterested: true, assessmentId: true,
+          reportId: true, paymentId: true, createdAt: true, updatedAt: true,
+        },
+      }),
+      prisma.lead.count({ where }),
+    ]);
+
+    return successResponse(res, { leads, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (err) {
+    logger.error('[Admin] listLeads error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * GET /admin/leads/:id
+ * Full lead detail with event timeline.
+ */
+const getLeadDetail = async (req, res) => {
+  try {
+    const lead = await prisma.lead.findUnique({
+      where: { id: req.params.id },
+      include: {
+        events: { orderBy: { createdAt: 'asc' } },
+        user: {
+          select: {
+            id: true, email: true, role: true, isActive: true, createdAt: true,
+            studentProfile: { select: { fullName: true, classStandard: true, board: true, city: true, mobileNumber: true, isOnboardingComplete: true } },
+            assessments: {
+              orderBy: { createdAt: 'desc' },
+              take: 3,
+              select: { id: true, status: true, accessLevel: true, currentStep: true, totalQuestions: true, startedAt: true, completedAt: true },
+            },
+            payments: {
+              orderBy: { createdAt: 'desc' },
+              take: 3,
+              select: { id: true, amountPaise: true, status: true, razorpayOrderId: true, paidAt: true, createdAt: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!lead) return errorResponse(res, 'Lead not found', 404, 'NOT_FOUND');
+
+    return successResponse(res, lead);
+  } catch (err) {
+    logger.error('[Admin] getLeadDetail error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * GET /admin/funnel
+ * Conversion funnel metrics + source breakdown.
+ */
+const getFunnelMetrics = async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const since = new Date(Date.now() - parseInt(days) * 24 * 60 * 60 * 1000);
+
+    const [
+      totalLeads,
+      byStatus,
+      bySource,
+      totalRevenuePaise,
+      paidLeads,
+      assessmentStarted,
+      assessmentCompleted,
+      freeReportReady,
+      premiumReportReady,
+      counsellingInterested,
+    ] = await Promise.all([
+      prisma.lead.count({ where: { createdAt: { gte: since } } }),
+      prisma.lead.groupBy({
+        by: ['status'],
+        _count: { id: true },
+        where: { createdAt: { gte: since } },
+      }),
+      prisma.lead.groupBy({
+        by: ['leadSource'],
+        _count: { id: true },
+        where: { createdAt: { gte: since } },
+      }),
+      prisma.payment.aggregate({
+        where: { status: 'CAPTURED', createdAt: { gte: since } },
+        _sum: { amountPaise: true },
+      }),
+      prisma.lead.count({ where: { status: 'paid', createdAt: { gte: since } } }),
+      prisma.lead.count({ where: { status: 'assessment_started', createdAt: { gte: since } } }),
+      prisma.lead.count({ where: { status: 'assessment_completed', createdAt: { gte: since } } }),
+      prisma.lead.count({ where: { status: 'free_report_ready', createdAt: { gte: since } } }),
+      prisma.lead.count({ where: { status: 'premium_report_ready', createdAt: { gte: since } } }),
+      prisma.lead.count({ where: { counsellingInterested: true, createdAt: { gte: since } } }),
+    ]);
+
+    const conversionRate = totalLeads > 0
+      ? ((paidLeads / totalLeads) * 100).toFixed(1)
+      : '0.0';
+
+    return successResponse(res, {
+      period: { days: parseInt(days), since },
+      funnel: {
+        totalLeads,
+        assessmentStarted,
+        assessmentCompleted,
+        freeReportReady,
+        paid: paidLeads,
+        premiumReportReady,
+        counsellingInterested,
+      },
+      conversionRate: `${conversionRate}%`,
+      totalRevenueRupees: ((totalRevenuePaise._sum.amountPaise || 0) / 100).toFixed(2),
+      statusBreakdown: byStatus.map((r) => ({ status: r.status, count: r._count.id })),
+      sourceBreakdown: bySource.map((r) => ({ source: r.leadSource, count: r._count.id })),
+    });
+  } catch (err) {
+    logger.error('[Admin] getFunnelMetrics error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * PATCH /admin/leads/:id
+ * Admin can update lead status, counselling flag, notes.
+ */
+const updateLeadAdmin = async (req, res) => {
+  try {
+    const { status, counsellingInterested, counsellingNotes } = req.body;
+    const data = {};
+    if (status !== undefined)               data.status = status;
+    if (counsellingInterested !== undefined) data.counsellingInterested = counsellingInterested;
+    if (counsellingNotes !== undefined)      data.counsellingNotes = counsellingNotes;
+
+    const updated = await prisma.lead.update({
+      where: { id: req.params.id },
+      data,
+    });
+
+    logger.info('[Admin] Lead updated', { leadId: req.params.id, adminId: req.admin.id });
+    return successResponse(res, updated);
+  } catch (err) {
+    logger.error('[Admin] updateLeadAdmin error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * POST /admin/leads/:id/actions
+ * Manual trigger buttons: regenerate_report | resend_report_link | mark_counselling.
+ */
+const triggerAdminAction = async (req, res) => {
+  try {
+    const { action } = req.body;
+    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    if (!lead) return errorResponse(res, 'Lead not found', 404, 'NOT_FOUND');
+
+    const { triggerAutomation } = require('../services/automation/automationService');
+
+    if (action === 'regenerate_report') {
+      if (!lead.reportId) return errorResponse(res, 'No report linked to this lead', 400, 'NO_REPORT');
+      await prisma.careerReport.update({
+        where: { id: lead.reportId },
+        data: { status: 'GENERATING' },
+      });
+      await prisma.leadEvent.create({
+        data: { id: require('crypto').randomUUID(), leadId: lead.id, event: 'admin_regenerate_report', metadata: { adminId: req.admin.id } },
+      });
+      return successResponse(res, null, 'Report regeneration queued');
+    }
+
+    if (action === 'resend_report_link') {
+      await triggerAutomation('premium_report_ready', { leadId: lead.id, reportId: lead.reportId });
+      await prisma.leadEvent.create({
+        data: { id: require('crypto').randomUUID(), leadId: lead.id, event: 'admin_resend_report_link', metadata: { adminId: req.admin.id } },
+      });
+      return successResponse(res, null, 'Report link resent via WhatsApp');
+    }
+
+    if (action === 'mark_counselling') {
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { counsellingInterested: true, status: 'counselling_interested' },
+      });
+      await prisma.leadEvent.create({
+        data: { id: require('crypto').randomUUID(), leadId: lead.id, event: 'admin_mark_counselling', metadata: { adminId: req.admin.id } },
+      });
+      return successResponse(res, null, 'Lead marked as counselling interested');
+    }
+
+    return errorResponse(res, `Unknown action: ${action}`, 400, 'INVALID_ACTION');
+  } catch (err) {
+    logger.error('[Admin] triggerAdminAction error', { error: err.message });
+    throw err;
+  }
+};
+
+module.exports = { listUsers, getAnalytics, listPayments, listReports, getAIUsage, exportLeads, toggleUserStatus, listLeads, getLeadDetail, getFunnelMetrics, updateLeadAdmin, triggerAdminAction };

@@ -123,6 +123,7 @@ model User {
   activityLogs    ActivityLog[]
   aiSessions      AISession[]
   refreshTokens   RefreshToken[]
+  leads           Lead[]
 
   @@index([email])
   @@map("users")
@@ -476,4 +477,185 @@ model ContactQuery {
   @@index([isRead])
   @@index([createdAt])
   @@map("contact_queries")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEADS (conversion funnel tracking)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum LeadStatus {
+  new_lead
+  assessment_started
+  assessment_completed
+  free_report_ready
+  payment_pending
+  paid
+  premium_report_ready
+  counselling_interested
+  closed
+}
+
+enum LeadSource {
+  meta_ads
+  instagram
+  facebook
+  google_ads
+  direct
+  referral
+  organic
+  whatsapp
+  other
+}
+
+enum UserType {
+  student
+  parent
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  userId         String?    // nullable — lead may exist before account creation
+  fullName       String
+  email          String
+  mobileNumber   String
+  classStandard  String?    // "8","9","10","11","12"
+  stream         String?    // "Science","Commerce","Arts","Not Decided"
+  city           String?
+  pincode        String?
+  userType       UserType   @default(student)
+  selectedPlan   String     @default("free") // "free" | "paid"
+  status         LeadStatus @default(new_lead)
+
+  // UTM / attribution
+  leadSource     LeadSource @default(direct)
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  utmContent     String?
+  referralCode   String?
+
+  // Counselling flag
+  counsellingInterested Boolean @default(false)
+  counsellingNotes      String?
+
+  // Linked entities (set as funnel progresses)
+  assessmentId   String?
+  reportId       String?
+  paymentId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  events  LeadEvent[]
+
+  @@unique([email])
+  @@index([mobileNumber])
+  @@index([status])
+  @@index([leadSource])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("leads")
+}
+
+model LeadEvent {
+  id        String   @id @default(cuid())
+  leadId    String
+  event     String   // e.g. "assessment_started", "payment_success"
+  metadata  Json?    // any extra context
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([event])
+  @@index([createdAt])
+  @@map("lead_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHATSAPP MESSAGES (log for audit + retry)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum WhatsAppStatus {
+  queued
+  sent
+  delivered
+  failed
+  skipped
+}
+
+model WhatsAppMessage {
+  id           String        @id @default(cuid())
+  leadId       String?
+  userId       String?
+  toNumber     String
+  templateName String
+  payload      Json          // template variables
+  status       WhatsAppStatus @default(queued)
+  providerRef  String?       // provider message ID for tracking
+  errorMessage String?
+  retryCount   Int           @default(0)
+  sentAt       DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([leadId])
+  @@index([status])
+  @@index([toNumber])
+  @@index([createdAt])
+  @@map("whatsapp_messages")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTOMATION JOBS (event-driven async tasks)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AutomationJobStatus {
+  pending
+  processing
+  done
+  failed
+  skipped
+}
+
+model AutomationJob {
+  id          String             @id @default(cuid())
+  eventName   String             // e.g. "payment_success", "assessment_completed"
+  payload     Json               // event payload
+  status      AutomationJobStatus @default(pending)
+  attempts    Int                @default(0)
+  maxAttempts Int                @default(3)
+  lastError   String?
+  processedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([eventName])
+  @@index([status])
+  @@index([createdAt])
+  @@map("automation_jobs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS EVENTS (lightweight funnel tracking)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  event      String   // e.g. "lead_created", "premium_cta_clicked"
+  userId     String?
+  leadId     String?
+  sessionId  String?
+  source     String?  // utm_source or lead source
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([event])
+  @@index([userId])
+  @@index([leadId])
+  @@index([createdAt])
+  @@map("analytics_events")
 }

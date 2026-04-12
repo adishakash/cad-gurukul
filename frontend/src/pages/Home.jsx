@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import LeadCaptureForm from '../components/LeadCaptureForm'
 
 const stats = [
   { label: 'Students Guided', value: '10,000+' },
@@ -17,6 +19,8 @@ const steps = [
 const careers = ['Engineering', 'Medicine', 'Law', 'Commerce & Finance', 'Design & Arts', 'Civil Services', 'Teaching', 'Entrepreneurship', 'IT & Software', 'Media & Journalism', 'Architecture', 'Psychology']
 
 export default function Home() {
+  const [showLeadModal, setShowLeadModal] = useState(false)
+
   return (
     <div className="animate-fade-in">
       {/* ─── Hero ─────────────────────────────────────────────────────────────── */}
@@ -37,9 +41,9 @@ export default function Home() {
               analyzes your aptitude, personality, and interests to give you a personalized career roadmap.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/register" className="btn-primary text-center text-lg px-8 py-4">
+              <button onClick={() => setShowLeadModal(true)} className="btn-primary text-center text-lg px-8 py-4">
                 Start Free Assessment 🚀
-              </Link>
+              </button>
               <Link to="/how-it-works" className="border-2 border-white/40 text-white px-8 py-4 rounded-lg font-semibold hover:bg-white/10 transition-all text-center">
                 See How It Works
               </Link>
@@ -185,11 +189,37 @@ export default function Home() {
         <div className="max-w-3xl mx-auto px-4">
           <h2 className="text-3xl font-bold mb-4">Your Career Journey Starts Today</h2>
           <p className="text-lg text-red-100 mb-8">Join 10,000+ Indian students who've already found clarity about their career with CAD Gurukul.</p>
-          <Link to="/register" className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
+          <button onClick={() => setShowLeadModal(true)} className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
             Get Your Free Career Report Now →
-          </Link>
+          </button>
         </div>
       </section>
+
+      {/* ─── Sticky mobile CTA ──────────────────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 sm:hidden bg-white border-t border-gray-200 px-4 py-3 flex items-center gap-3 shadow-xl">
+        <div className="flex-1 text-sm">
+          <div className="font-bold text-brand-dark">Free Career Report</div>
+          <div className="text-xs text-gray-500">Takes less than 30 min</div>
+        </div>
+        <button onClick={() => setShowLeadModal(true)} className="btn-primary text-sm px-5 py-2">
+          Start Free →
+        </button>
+      </div>
+
+      {/* ─── Lead Capture Modal ──────────────────────────────────────────────── */}
+      {showLeadModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowLeadModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b">
+              <h2 className="font-bold text-brand-dark text-lg">Start Your Free Career Assessment</h2>
+              <button onClick={() => setShowLeadModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="p-6">
+              <LeadCaptureForm defaultPlan="free" onSuccess={() => setShowLeadModal(false)} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

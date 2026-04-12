@@ -3,6 +3,8 @@ const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const aiOrchestrator = require('../services/ai/aiOrchestrator');
+const { triggerAutomation } = require('../services/automation/automationService');
+const analytics = require('../services/analytics/analyticsService');
 
 // Max questions per plan
 const QUESTION_LIMITS = { FREE: 10, PAID: 30 };
@@ -49,6 +51,14 @@ const startAssessment = async (req, res) => {
     });
 
     logger.info('[Assessment] Started', { userId: req.user.id, assessmentId: assessment.id, accessLevel });
+
+    // Analytics + automation
+    analytics.track('assessment_started', req, { userId: req.user.id, accessLevel });
+    const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
+    if (lead && !existing) {
+      await triggerAutomation('assessment_started', { leadId: lead.id, assessmentId: assessment.id });
+      await prisma.lead.update({ where: { id: lead.id }, data: { assessmentId: assessment.id } });
+    }
 
     return successResponse(res, assessment, 'Assessment started', 201);
   } catch (err) {
@@ -246,6 +256,20 @@ const completeAssessment = async (req, res) => {
 
     generateReportAsync(assessment, profile, report.id);
 
+    // Analytics + funnel hooks
+    analytics.track('assessment_completed', req, {
+      userId: req.user.id,
+      assessmentId: assessment.id,
+      accessLevel: assessment.accessLevel,
+    });
+    const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
+    if (lead) {
+      await triggerAutomation('assessment_completed', {
+        leadId: lead.id, assessmentId: assessment.id, reportId: report.id,
+      });
+      await prisma.lead.update({ where: { id: lead.id }, data: { reportId: report.id } });
+    }
+
     logger.info('[Assessment] Completed', { assessmentId: assessment.id, reportId: report.id });
 
     return successResponse(res, {
@@ -289,6 +313,16 @@ const generateReportAsync = async (assessment, profile, reportId) => {
     });
 
     logger.info('[Assessment] Report generated successfully', { reportId });
+
+    // Trigger post-report automation
+    const completedReport = await prisma.careerReport.findUnique({ where: { id: reportId } });
+    const eventName = completedReport?.accessLevel === 'PAID'
+      ? 'premium_report_ready'
+      : 'free_report_ready';
+    const lead = await prisma.lead.findFirst({ where: { reportId } });
+    if (lead) {
+      await triggerAutomation(eventName, { leadId: lead.id, reportId });
+    }
   } catch (err) {
     logger.error('[Assessment] Report generation failed', { reportId, error: err.message });
     await prisma.careerReport.update({

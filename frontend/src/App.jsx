@@ -25,6 +25,8 @@ import Report from './pages/Report'
 // Admin pages
 import AdminLogin from './pages/Admin/AdminLogin'
 import AdminDashboard from './pages/Admin/AdminDashboard'
+import LeadList from './pages/Admin/LeadList'
+import LeadDetail from './pages/Admin/LeadDetail'
 
 // Guards
 const ProtectedRoute = ({ children }) => {
@@ -70,6 +72,8 @@ export default function App() {
         {/* Admin routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/leads" element={<LeadList />} />
+        <Route path="/admin/leads/:id" element={<LeadDetail />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
