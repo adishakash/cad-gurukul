@@ -19,11 +19,15 @@ const handleExportCsv = async () => {
 
 const STATUS_COLORS = {
   new_lead:               'bg-gray-100 text-gray-700',
+  onboarding_started:     'bg-sky-100 text-sky-700',
+  plan_selected:          'bg-cyan-100 text-cyan-700',
   assessment_started:     'bg-blue-100 text-blue-700',
+  assessment_in_progress: 'bg-blue-200 text-blue-800',
   assessment_completed:   'bg-indigo-100 text-indigo-700',
   free_report_ready:      'bg-purple-100 text-purple-700',
   payment_pending:        'bg-yellow-100 text-yellow-700',
   paid:                   'bg-green-100 text-green-700',
+  premium_report_generating: 'bg-amber-100 text-amber-700',
   premium_report_ready:   'bg-emerald-100 text-emerald-700',
   counselling_interested: 'bg-pink-100 text-pink-700',
   closed:                 'bg-red-100 text-red-700',

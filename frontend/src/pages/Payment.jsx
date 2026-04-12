@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectAssessment } from '../store/slices/assessmentSlice'
 import { selectUser } from '../store/slices/authSlice'
-import api from '../services/api'
+import { leadApi, paymentApi } from '../services/api'
 import toast from 'react-hot-toast'
 
 const features = {
@@ -47,18 +47,20 @@ export default function Payment() {
   const handlePayment = async () => {
     if (!assessmentId) {
       toast.error('Assessment not found. Please complete the assessment first.')
-      navigate('/assessment?plan=FREE')
+      navigate('/dashboard')
       return
     }
     setLoading(true)
     try {
+      leadApi.update({ status: 'payment_pending' }).catch(() => {})
+
       const loaded = await loadRazorpay()
       if (!loaded) {
         toast.error('Could not load payment gateway. Check your internet connection.')
         return
       }
 
-      const { data } = await api.post('/payments/create-order', { assessmentId })
+      const { data } = await paymentApi.createOrder(assessmentId)
 
       const options = {
         key: data.data.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
@@ -75,11 +77,12 @@ export default function Payment() {
         theme: { color: '#e53e3e' },
         handler: async (response) => {
           try {
-            await api.post('/payments/verify', {
+            await paymentApi.verify({
               razorpayOrderId:   response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             })
+            leadApi.update({ status: 'premium_report_generating' }).catch(() => {})
             toast.success('Payment successful! Your premium report is being generated…')
             navigate('/dashboard')
           } catch {

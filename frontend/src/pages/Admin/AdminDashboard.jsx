@@ -69,7 +69,7 @@ export default function AdminDashboard() {
     setLoading(true)
     try {
       const [analyticsRes, usersRes, paymentsRes, aiStatsRes, funnelRes] = await Promise.all([
-        adminApi.get('/admin/analytics'),
+        adminLeadApi.getAnalytics(30),
         adminApi.get('/admin/users?limit=50'),
         adminApi.get('/admin/payments?limit=50'),
         adminApi.get('/admin/ai-usage').catch(() => ({ data: { data: null } })),
@@ -128,7 +128,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Tabs */}
         <div className="flex gap-2 mb-8 overflow-x-auto">
           {tabs.map((t) => (
@@ -261,9 +261,9 @@ export default function AdminDashboard() {
                   headers={['User', 'Amount', 'Status', 'Provider', 'Date']}
                   rows={payments.map((p) => [
                     p.user?.name || p.userId,
-                    `₹${(p.amount / 100).toLocaleString('en-IN')}`,
+                    `₹${((p.amountPaise || 0) / 100).toLocaleString('en-IN')}`,
                     <span key="status" className={`px-2 py-0.5 rounded-full text-xs font-bold ${p.status === 'CAPTURED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.status}</span>,
-                    p.provider,
+                    p.provider || 'RAZORPAY',
                     new Date(p.createdAt).toLocaleDateString('en-IN'),
                   ])}
                   emptyText="No payments yet."
@@ -275,20 +275,30 @@ export default function AdminDashboard() {
               <div className="card">
                 <h3 className="font-bold text-brand-dark text-lg mb-6">AI Usage Breakdown</h3>
                 <div className="grid md:grid-cols-3 gap-4 mb-6">
-                  <StatCard icon="🤖" label="Total AI Sessions" value={aiStats.totalCalls} />
-                  <StatCard icon="🟢" label="OpenAI (GPT-4o)" value={aiStats.openaiCalls} sub="Paid reports" />
-                  <StatCard icon="🔵" label="Gemini Pro" value={aiStats.geminiCalls} sub="Questions & free reports" />
+                  <StatCard icon="🤖" label="Total AI Sessions" value={aiStats.totals?._count?.id || 0} />
+                  <StatCard
+                    icon="🟢"
+                    label="OpenAI"
+                    value={(aiStats.byProvider || []).filter((r) => r.provider === 'OPENAI').reduce((sum, r) => sum + (r._count?.id || 0), 0)}
+                    sub="Paid report heavy"
+                  />
+                  <StatCard
+                    icon="🔵"
+                    label="Gemini"
+                    value={(aiStats.byProvider || []).filter((r) => r.provider === 'GEMINI').reduce((sum, r) => sum + (r._count?.id || 0), 0)}
+                    sub="Question + free flow"
+                  />
                 </div>
                 <Table
-                  headers={['Purpose', 'Provider', 'Tokens Used', 'Status', 'Date']}
-                  rows={(aiStats.recentSessions || []).map((s) => [
-                    s.purpose,
+                  headers={['Provider', 'Model', 'Calls', 'Total Tokens', 'Prompt/Completion']}
+                  rows={(aiStats.byProvider || []).map((s) => [
                     s.provider,
-                    s.tokensUsed || '—',
-                    <span key="s" className={`px-2 py-0.5 rounded-full text-xs ${s.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{s.success ? 'OK' : 'FAILED'}</span>,
-                    new Date(s.createdAt).toLocaleDateString('en-IN'),
+                    s.model,
+                    s._count?.id || 0,
+                    (s._sum?.totalTokens || 0).toLocaleString('en-IN'),
+                    `${(s._sum?.promptTokens || 0).toLocaleString('en-IN')} / ${(s._sum?.completionTokens || 0).toLocaleString('en-IN')}`,
                   ])}
-                  emptyText="No AI sessions recorded."
+                  emptyText="No AI usage recorded."
                 />
               </div>
             )}

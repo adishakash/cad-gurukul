@@ -7,6 +7,7 @@ import {
   selectAssessment, selectCurrentQuestion, selectAssessmentLoading, selectIsCompleted, selectReportId
 } from '../store/slices/assessmentSlice'
 import toast from 'react-hot-toast'
+import { leadApi } from '../services/api'
 
 const QuestionCard = ({ question, onAnswer, isSubmitting }) => {
   const [answer, setAnswer] = useState('')
@@ -83,6 +84,7 @@ export default function Assessment() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const plan = searchParams.get('plan') || 'FREE'
+  const intent = searchParams.get('intent') || ''
 
   const assessment = useSelector(selectAssessment)
   const currentQuestion = useSelector(selectCurrentQuestion)
@@ -96,10 +98,15 @@ export default function Assessment() {
     dispatch(resetAssessment())
     dispatch(startAssessment(plan)).then((action) => {
       if (startAssessment.fulfilled.match(action)) {
+        const seededCount = Number(action.payload?.currentStep || 0)
+        if (!Number.isNaN(seededCount) && seededCount > 0) {
+          setAnsweredCount(seededCount)
+        }
+        leadApi.update({ status: 'assessment_started' }).catch(() => {})
         dispatch(fetchNextQuestion(action.payload.id))
       }
     })
-  }, [])
+  }, [dispatch, plan])
 
   useEffect(() => {
     if (isCompleted && reportId) {
@@ -119,6 +126,9 @@ export default function Assessment() {
     if (submitAnswer.fulfilled.match(answerResult)) {
       const newAnsweredCount = answeredCount + 1
       setAnsweredCount(newAnsweredCount)
+      if (newAnsweredCount >= 1) {
+        leadApi.update({ status: 'assessment_in_progress' }).catch(() => {})
+      }
 
       if (newAnsweredCount >= assessment.totalQuestions) {
         dispatch(completeAssessment(assessment.id))
@@ -167,6 +177,12 @@ export default function Assessment() {
             <div className="text-xs text-gray-500">Complete</div>
           </div>
         </div>
+
+        {intent === 'paid' && (
+          <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
+            <span className="font-semibold">Premium path selected:</span> complete this assessment first, then unlock your full premium report at checkout.
+          </div>
+        )}
 
         {/* Progress */}
         <div className="w-full bg-gray-200 rounded-full h-2 mb-8">

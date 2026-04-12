@@ -7,18 +7,21 @@ import toast from 'react-hot-toast'
 
 // ── Funnel progress bar ───────────────────────────────────────────────────────
 const FUNNEL_STEPS = [
-  { key: 'new_lead',              label: 'Lead Created',          icon: '✅' },
-  { key: 'assessment_started',    label: 'Assessment Started',    icon: '📝' },
-  { key: 'assessment_completed',  label: 'Assessment Done',       icon: '🎯' },
-  { key: 'free_report_ready',     label: 'Free Report Ready',     icon: '📊' },
-  { key: 'paid',                  label: 'Payment Complete',      icon: '💳' },
-  { key: 'premium_report_ready',  label: 'Premium Report Ready',  icon: '📄' },
+  { key: 'new_lead',             label: 'Lead Created',         icon: '✅', includes: ['new_lead', 'onboarding_started', 'plan_selected'] },
+  { key: 'assessment_started',   label: 'Assessment Started',   icon: '📝', includes: ['assessment_started', 'assessment_in_progress'] },
+  { key: 'assessment_completed', label: 'Assessment Done',      icon: '🎯', includes: ['assessment_completed'] },
+  { key: 'free_report_ready',    label: 'Free Report Ready',    icon: '📊', includes: ['free_report_ready'] },
+  { key: 'paid',                 label: 'Payment Complete',     icon: '💳', includes: ['payment_pending', 'paid', 'premium_report_generating'] },
+  { key: 'premium_report_ready', label: 'Premium Report Ready', icon: '📄', includes: ['premium_report_ready', 'counselling_interested', 'closed'] },
 ]
 
-const STATUS_ORDER = FUNNEL_STEPS.map((s) => s.key)
+const resolveStatusIndex = (status) => {
+  const idx = FUNNEL_STEPS.findIndex((step) => step.includes.includes(status))
+  return idx >= 0 ? idx : 0
+}
 
 function FunnelProgress({ status }) {
-  const currentIdx = STATUS_ORDER.indexOf(status)
+  const currentIdx = resolveStatusIndex(status)
   return (
     <div className="card mb-6">
       <h3 className="font-bold text-brand-dark mb-4 text-sm">🗺️ Your Career Journey Progress</h3>
@@ -41,6 +44,7 @@ function FunnelProgress({ status }) {
           )
         })}
       </div>
+      <p className="mt-2 text-xs text-gray-500">Current status: {status?.replace(/_/g, ' ') || 'new lead'}</p>
     </div>
   )
 }

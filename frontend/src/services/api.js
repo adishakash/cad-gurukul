@@ -100,9 +100,14 @@ export const adminLeadApi = {
   list:          (params)        => adminApiClient.get('/admin/leads', { params }),
   getDetail:     (id)            => adminApiClient.get(`/admin/leads/${id}`),
   update:        (id, data)      => adminApiClient.patch(`/admin/leads/${id}`, data),
-  triggerAction: (id, action)    => adminApiClient.post(`/admin/leads/${id}/actions`, { action }),
+  triggerAction: (id, actionOrPayload) => {
+    const payload = typeof actionOrPayload === 'string'
+      ? { action: actionOrPayload }
+      : actionOrPayload
+    return adminApiClient.post(`/admin/leads/${id}/actions`, payload)
+  },
   getFunnel:     (days = 30)     => adminApiClient.get('/admin/funnel', { params: { days } }),
-  getAnalytics:  ()              => adminApiClient.get('/admin/analytics'),
+  getAnalytics:  (days)          => adminApiClient.get('/admin/analytics', { params: days ? { days } : {} }),
   exportCsv:     ()              => adminApiClient.get('/admin/export/leads', { responseType: 'blob' }),
 }
 

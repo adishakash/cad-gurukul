@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { leadApi } from '../services/api'
@@ -14,8 +14,12 @@ import { leadApi } from '../services/api'
  *   onSuccess     fn(leadId) => void
  *   compact       bool — show only essential fields (for landing page modal)
  */
-export default function LeadCaptureForm({ selectedPlan = 'free', onSuccess, compact = false }) {
+export default function LeadCaptureForm({ selectedPlan = 'free', defaultPlan, onSuccess, compact = false }) {
   const navigate = useNavigate()
+  const normalizedPlan = useMemo(() => {
+    const raw = (selectedPlan || defaultPlan || 'free').toString().toLowerCase()
+    return raw === 'paid' ? 'paid' : 'free'
+  }, [selectedPlan, defaultPlan])
 
   // Detect UTM / source from URL once on mount
   const urlParams = new URLSearchParams(window.location.search)
@@ -68,8 +72,9 @@ export default function LeadCaptureForm({ selectedPlan = 'free', onSuccess, comp
 
     setLoading(true)
     try {
-      const leadSource = utmSource
-        ? (['meta_ads','instagram','facebook','google_ads'].includes(utmSource) ? utmSource : 'other')
+      const sourceFromUtm = (utmSource || '').toLowerCase()
+      const leadSource = sourceFromUtm
+        ? (['meta_ads', 'instagram', 'facebook', 'google_ads'].includes(sourceFromUtm) ? sourceFromUtm : 'other')
         : 'direct'
 
       const payload = {
@@ -81,7 +86,7 @@ export default function LeadCaptureForm({ selectedPlan = 'free', onSuccess, comp
         city:          form.city.trim()   || undefined,
         pincode:       form.pincode.trim()|| undefined,
         userType:      form.userType,
-        selectedPlan,
+        selectedPlan: normalizedPlan,
         leadSource,
         utmSource,
         utmMedium,
@@ -99,7 +104,7 @@ export default function LeadCaptureForm({ selectedPlan = 'free', onSuccess, comp
       if (onSuccess) {
         onSuccess(leadId)
       } else {
-        navigate(`/register?leadId=${leadId}&plan=${selectedPlan}`)
+        navigate(`/register?leadId=${leadId}&plan=${normalizedPlan}`)
       }
     } catch (err) {
       const msg = err.response?.data?.error?.message || 'Something went wrong. Please try again.'
@@ -241,7 +246,7 @@ export default function LeadCaptureForm({ selectedPlan = 'free', onSuccess, comp
             </svg>
             Saving details…
           </span>
-        ) : selectedPlan === 'paid' ? 'Proceed to Premium Report →' : 'Get My Free Career Report →'}
+        ) : normalizedPlan === 'paid' ? 'Proceed to Premium Report →' : 'Get My Free Career Report →'}
       </button>
 
       <p className="text-center text-xs text-gray-400">

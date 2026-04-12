@@ -5,6 +5,7 @@ import { leadApi } from '../services/api'
 
 const plans = [
   {
+    key: 'free',
     name: 'Free',
     price: '₹0',
     hint: 'Great start',
@@ -24,13 +25,14 @@ const plans = [
     ],
   },
   {
+    key: 'paid',
     name: 'Premium',
     price: '₹499',
     hint: 'One-time · No subscription',
     color: 'border-brand-red',
     badge: 'MOST POPULAR',
-    action: '/payment',
-    actionLabel: '💎 Get Full Report',
+    action: '/assessment?plan=FREE&intent=paid',
+    actionLabel: '💎 Choose Premium Path',
     actionClass: 'btn-primary',
     features: [
       { text: '30 in-depth adaptive questions', ok: true },
@@ -50,7 +52,7 @@ export default function PlanSelection() {
   const dispatch = useDispatch()
 
   const handlePlanSelect = async (plan) => {
-    const planKey = plan.name === 'Premium' ? 'paid' : 'free'
+    const planKey = plan.key
     dispatch(setPlan(planKey))
     // Fire-and-forget lead update so funnel status advances
     leadApi.update({ selectedPlan: planKey, status: 'plan_selected' }).catch(() => {})

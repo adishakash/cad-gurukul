@@ -20,6 +20,12 @@ const careers = ['Engineering', 'Medicine', 'Law', 'Commerce & Finance', 'Design
 
 export default function Home() {
   const [showLeadModal, setShowLeadModal] = useState(false)
+  const [capturePlan, setCapturePlan] = useState('free')
+
+  const openLeadModal = (plan = 'free') => {
+    setCapturePlan(plan)
+    setShowLeadModal(true)
+  }
 
   return (
     <div className="animate-fade-in">
@@ -41,7 +47,7 @@ export default function Home() {
               analyzes your aptitude, personality, and interests to give you a personalized career roadmap.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <button onClick={() => setShowLeadModal(true)} className="btn-primary text-center text-lg px-8 py-4">
+              <button onClick={() => openLeadModal('free')} className="btn-primary text-center text-lg px-8 py-4">
                 Start Free Assessment 🚀
               </button>
               <Link to="/how-it-works" className="border-2 border-white/40 text-white px-8 py-4 rounded-lg font-semibold hover:bg-white/10 transition-all text-center">
@@ -132,8 +138,8 @@ export default function Home() {
           </p>
           <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-10">
             {[
-              { plan: 'Free', price: '₹0', features: ['10 Questions', 'Basic Report', 'Stream Recommendation', '3 Career Options'], cta: 'Start Free', link: '/register', outline: true },
-              { plan: 'Premium', price: '₹499', features: ['30 Questions', 'Full AI Report', 'Subject Recommendations', '7 Career Fits', '3-Year Roadmap', 'PDF Download', 'Parent Guidance'], cta: 'Get Premium Report', link: '/register', outline: false },
+              { plan: 'Free', value: 'free', price: '₹0', features: ['10 Questions', 'Basic Report', 'Stream Recommendation', '3 Career Options'], cta: 'Start Free', outline: true },
+              { plan: 'Premium', value: 'paid', price: '₹499', features: ['30 Questions', 'Full AI Report', 'Subject Recommendations', '7 Career Fits', '3-Year Roadmap', 'PDF Download', 'Parent Guidance'], cta: 'Get Premium Report', outline: false },
             ].map((p) => (
               <div key={p.plan} className="bg-white/10 border border-white/20 rounded-2xl p-6 text-left">
                 <div className="text-2xl font-bold text-white mb-1">{p.plan}</div>
@@ -145,9 +151,13 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
-                <Link to={p.link} className={p.outline ? 'btn-outline w-full text-center block' : 'btn-primary w-full text-center block'}>
+                <button
+                  type="button"
+                  onClick={() => openLeadModal(p.value)}
+                  className={p.outline ? 'btn-outline w-full text-center block' : 'btn-primary w-full text-center block'}
+                >
                   {p.cta}
-                </Link>
+                </button>
               </div>
             ))}
           </div>
@@ -189,7 +199,7 @@ export default function Home() {
         <div className="max-w-3xl mx-auto px-4">
           <h2 className="text-3xl font-bold mb-4">Your Career Journey Starts Today</h2>
           <p className="text-lg text-red-100 mb-8">Join 10,000+ Indian students who've already found clarity about their career with CAD Gurukul.</p>
-          <button onClick={() => setShowLeadModal(true)} className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
+          <button onClick={() => openLeadModal('free')} className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
             Get Your Free Career Report Now →
           </button>
         </div>
@@ -201,7 +211,7 @@ export default function Home() {
           <div className="font-bold text-brand-dark">Free Career Report</div>
           <div className="text-xs text-gray-500">Takes less than 30 min</div>
         </div>
-        <button onClick={() => setShowLeadModal(true)} className="btn-primary text-sm px-5 py-2">
+        <button onClick={() => openLeadModal('free')} className="btn-primary text-sm px-5 py-2">
           Start Free →
         </button>
       </div>
@@ -211,11 +221,13 @@ export default function Home() {
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowLeadModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b">
-              <h2 className="font-bold text-brand-dark text-lg">Start Your Free Career Assessment</h2>
+              <h2 className="font-bold text-brand-dark text-lg">
+                {capturePlan === 'paid' ? 'Start Premium Career Journey' : 'Start Your Free Career Assessment'}
+              </h2>
               <button onClick={() => setShowLeadModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
             </div>
             <div className="p-6">
-              <LeadCaptureForm defaultPlan="free" onSuccess={() => setShowLeadModal(false)} />
+              <LeadCaptureForm selectedPlan={capturePlan} onSuccess={() => setShowLeadModal(false)} />
             </div>
           </div>
         </div>

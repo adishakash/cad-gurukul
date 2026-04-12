@@ -79,7 +79,10 @@ export default function LeadDetail() {
 
   const handleAction = async (action) => {
     try {
-      await adminLeadApi.triggerAction(id, action)
+      const payload = action === 'mark_counselling'
+        ? { action, interested: true, notes: form.counsellingNotes }
+        : { action }
+      await adminLeadApi.triggerAction(id, payload)
       toast.success(`Action "${action.replace(/_/g, ' ')}" triggered`)
       const { data } = await adminLeadApi.getDetail(id)
       setLead(data.data)

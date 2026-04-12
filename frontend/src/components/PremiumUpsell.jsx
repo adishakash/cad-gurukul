@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { trackEvent } from '../services/api'
+import { leadApi, trackEvent } from '../services/api'
 
 /**
  * PremiumUpsell
@@ -42,8 +42,19 @@ export default function PremiumUpsell({ assessmentId, onClose, inline = false })
   const [isLoading, setIsLoading] = useState(false)
 
   const handleGetPremium = () => {
+    if (!assessmentId) {
+      toast.error('Assessment details missing. Please open this from your report page.')
+      navigate('/dashboard')
+      return
+    }
+
     setIsLoading(true)
-    trackEvent('premium_cta_clicked', { assessmentId })
+    localStorage.setItem('cg_selected_plan', 'paid')
+    leadApi.update({ selectedPlan: 'paid', status: 'plan_selected' }).catch(() => {})
+    trackEvent('premium_cta_clicked', {
+      assessmentId,
+      source: inline ? 'report_inline' : 'report_modal',
+    })
     navigate(`/payment?assessmentId=${assessmentId}`)
   }
 

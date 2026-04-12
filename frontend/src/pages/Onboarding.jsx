@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import api, { leadApi } from '../services/api'
@@ -85,6 +85,10 @@ export default function Onboarding() {
   const navigate = useNavigate()
 
   const { register, handleSubmit, getValues, formState: { errors }, trigger } = useForm({ mode: 'onBlur' })
+
+  useEffect(() => {
+    leadApi.update({ status: 'onboarding_started' }).catch(() => {})
+  }, [])
 
   const nextStep = async () => {
     const fieldsPerStep = [

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts'
-import api, { trackEvent } from '../services/api'
+import { reportApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
 import PremiumUpsell from '../components/PremiumUpsell'
 
@@ -67,7 +67,7 @@ export default function Report() {
 
   const fetchReport = async () => {
     try {
-      const { data } = await api.get(`/reports/${id}`)
+      const { data } = await reportApi.getReport(id)
       const r = data.data
       setReport(r)
 
@@ -111,7 +111,7 @@ export default function Report() {
   const handleDownload = async () => {
     setDownloading(true)
     try {
-      const response = await api.get(`/reports/${id}/pdf`, { responseType: 'blob' })
+      const response = await reportApi.downloadPdf(id)
       const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
       const a = document.createElement('a')
       a.href = url
@@ -152,12 +152,11 @@ export default function Report() {
   if (!report) return <div className="text-center py-20 text-gray-400">Report not found.</div>
 
   const isPaid = report.accessLevel === 'PAID'
-  const content = report.reportContent || {}
-  const evaluation = content.evaluation || {}
-  const careers = content.topCareers || content.careers || []
-  const roadmaps = content.roadmaps || []
-  const parentGuidance = content.parentGuidance
-  const streamRec = content.streamRecommendation || evaluation.recommendedStream
+  const evaluation = report.evaluation || {}
+  const careers = report.topCareers || report.careers || []
+  const roadmaps = report.roadmaps || []
+  const parentGuidance = report.parentGuidance
+  const streamRec = report.streamRecommendation || report.recommendedStream || evaluation.recommendedStream
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -232,10 +231,18 @@ export default function Report() {
 
         {/* Upgrade CTA (free users) */}
         {!isPaid && (
-          <PremiumUpsell
-            assessmentId={report.assessmentId}
-            inline
-          />
+          <div className="space-y-4">
+            {report.upgradeCTA?.message && (
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
+                <p className="font-semibold">Upgrade Available</p>
+                <p className="mt-1">{report.upgradeCTA.message}</p>
+              </div>
+            )}
+            <PremiumUpsell
+              assessmentId={report.assessmentId}
+              inline
+            />
+          </div>
         )}
       </div>
 
