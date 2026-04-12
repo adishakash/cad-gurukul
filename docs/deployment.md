@@ -35,6 +35,10 @@ VITE_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx
 
 The bundled frontend nginx proxies `/api/*` to the backend container by default, so `/api/v1` is the correct same-origin setting for Docker Compose. Only use an absolute API URL if you are serving the backend from a different origin.
 
+The frontend Docker image now supports a build arg `NGINX_USE_PROXY`:
+- `true` (Docker Compose/local): enables `/api/* -> http://backend:5000` proxy
+- `false` (DigitalOcean App Platform): disables internal proxy dependency
+
 ### 3. Build & launch
 
 ```bash
@@ -114,6 +118,19 @@ Replace all `CHANGE_ME_*` values in App Platform settings before first productio
 - API health: `${api.PUBLIC_URL}/api/v1/health`
 - Frontend app loads from `${frontend.PUBLIC_URL}`
 - Register/login/payment/report flows work end-to-end
+
+### If using frontend as a Docker service on App Platform
+
+If you deploy `frontend/` with its `Dockerfile` (instead of `static_sites`), set build args:
+
+```text
+NGINX_USE_PROXY=false
+VITE_API_BASE_URL=https://<your-api-domain>/api/v1
+VITE_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx
+VITE_APP_NAME=CAD Gurukul
+```
+
+This avoids Nginx upstream failures like `host not found in upstream backend`.
 
 ---
 
