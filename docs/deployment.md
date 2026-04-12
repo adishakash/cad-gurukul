@@ -29,9 +29,11 @@ Create a `.env` at the project root:
 POSTGRES_USER=cadgurukul
 POSTGRES_PASSWORD=<strong-password>
 POSTGRES_DB=cadgurukul
-VITE_API_BASE_URL=https://api.yourdomain.com/api/v1
+VITE_API_BASE_URL=/api/v1
 VITE_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx
 ```
+
+The bundled frontend nginx proxies `/api/*` to the backend container by default, so `/api/v1` is the correct same-origin setting for Docker Compose. Only use an absolute API URL if you are serving the backend from a different origin.
 
 ### 3. Build & launch
 
