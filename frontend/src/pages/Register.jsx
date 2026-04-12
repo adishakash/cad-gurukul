@@ -12,6 +12,19 @@ export default function Register() {
 
   const { register, handleSubmit, formState: { errors }, watch } = useForm()
 
+  const loginHref = searchParams.toString() ? `/login?${searchParams.toString()}` : '/login'
+
+  const buildPostAuthAssessmentPath = () => {
+    const params = new URLSearchParams({
+      plan: (searchParams.get('plan') || 'free').toLowerCase() === 'paid' ? 'PAID' : 'FREE',
+    })
+
+    const intent = searchParams.get('intent')
+    if (intent) params.set('intent', intent)
+
+    return `/assessment?${params.toString()}`
+  }
+
   const onSubmit = async (data) => {
     const result = await dispatch(registerUser(data))
     if (registerUser.fulfilled.match(result)) {
@@ -21,6 +34,12 @@ export default function Register() {
         leadApi.linkUser(leadId).catch(() => {})
         localStorage.removeItem('cg_lead_id')
       }
+
+      if (searchParams.get('next') === 'assessment') {
+        navigate(buildPostAuthAssessmentPath())
+        return
+      }
+
       navigate('/onboarding')
     }
   }
@@ -117,7 +136,7 @@ export default function Register() {
 
         <p className="text-center text-sm text-gray-600 mt-6">
           Already have an account?{' '}
-          <Link to="/login" className="text-brand-red font-semibold hover:underline">Sign In</Link>
+          <Link to={loginHref} className="text-brand-red font-semibold hover:underline">Sign In</Link>
         </p>
 
         {/* Trust badges */}

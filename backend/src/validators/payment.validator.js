@@ -2,7 +2,12 @@
 const Joi = require('joi');
 
 const createOrderSchema = Joi.object({
-  assessmentId: Joi.string().trim().required(),
+  planType: Joi.string().valid('standard', 'premium', 'consultation').default('standard'),
+  assessmentId: Joi.when('planType', {
+    is: 'consultation',
+    then: Joi.string().trim().optional(),
+    otherwise: Joi.string().trim().required(),
+  }),
 });
 
 const verifyPaymentSchema = Joi.object({

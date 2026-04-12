@@ -12,9 +12,27 @@ export default function Login() {
 
   const { register, handleSubmit, formState: { errors } } = useForm()
 
+  const registerHref = searchParams.toString() ? `/register?${searchParams.toString()}` : '/register'
+
+  const buildPostAuthAssessmentPath = () => {
+    const params = new URLSearchParams({
+      plan: (searchParams.get('plan') || 'free').toLowerCase() === 'paid' ? 'PAID' : 'FREE',
+    })
+
+    const intent = searchParams.get('intent')
+    if (intent) params.set('intent', intent)
+
+    return `/assessment?${params.toString()}`
+  }
+
   const onSubmit = async (data) => {
     const result = await dispatch(loginUser(data))
     if (loginUser.fulfilled.match(result)) {
+      if (searchParams.get('next') === 'assessment') {
+        navigate(buildPostAuthAssessmentPath())
+        return
+      }
+
       navigate('/dashboard')
     }
   }
@@ -83,7 +101,7 @@ export default function Login() {
 
         <p className="text-center text-sm text-gray-600 mt-6">
           New here?{' '}
-          <Link to="/register" className="text-brand-red font-semibold hover:underline">Create a free account</Link>
+          <Link to={registerHref} className="text-brand-red font-semibold hover:underline">Create a free account</Link>
         </p>
       </div>
     </div>

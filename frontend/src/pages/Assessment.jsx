@@ -170,8 +170,16 @@ export default function Assessment() {
   }
 
   const handleLeadCaptured = (leadId) => {
+    const params = new URLSearchParams({
+      plan: plan.toLowerCase(),
+      next: 'assessment',
+    })
+
+    if (leadId) params.set('leadId', leadId)
+    if (intent) params.set('intent', intent)
+
     // Navigate to register; after registration the full assessment starts
-    navigate(`/register?leadId=${leadId}&plan=${plan.toLowerCase()}&next=assessment`)
+    navigate(`/register?${params.toString()}`)
   }
 
   // ── Authenticated assessment flow ─────────────────────────────────────────

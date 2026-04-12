@@ -5,7 +5,7 @@ const onboarding = Joi.object({
   fullName: Joi.string().min(2).max(100).trim().required(),
   age: Joi.number().integer().min(13).max(20).required(),
   classStandard: Joi.string()
-    .valid('CLASS_9', 'CLASS_10', 'CLASS_11', 'CLASS_12')
+    .valid('CLASS_8', 'CLASS_9', 'CLASS_10', 'CLASS_11', 'CLASS_12')
     .required(),
   schoolName: Joi.string().max(200).trim().allow('').optional(),
   board: Joi.string()

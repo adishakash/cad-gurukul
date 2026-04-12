@@ -5,6 +5,100 @@ const logger = require('../utils/logger');
 const pdfGenerator = require('../services/report/pdfGenerator');
 const { triggerAutomation } = require('../services/automation/automationService');
 
+const formatRoadmapLabel = (key) => key
+  .replace(/([A-Z])/g, ' $1')
+  .replace(/^./, (char) => char.toUpperCase())
+  .trim();
+
+const normalizeCareerEntry = (career, index) => {
+  if (typeof career === 'string') {
+    return {
+      name: career,
+      description: 'Suggested based on your assessment answers.',
+      fitScore: null,
+      stream: null,
+      subjects: [],
+    };
+  }
+
+  if (!career || typeof career !== 'object') return null;
+
+  return {
+    ...career,
+    name: career.name || career.title || `Career Match ${index + 1}`,
+    description: career.description || career.reason || career.indiaScope || 'Suggested based on your assessment answers.',
+    fitScore: typeof career.fitScore === 'number' ? career.fitScore : null,
+    stream: career.stream || null,
+    subjects: Array.isArray(career.subjects) ? career.subjects : [],
+  };
+};
+
+const normalizeTopCareers = (reportData) => {
+  const rawTopCareers = Array.isArray(reportData?.topCareers)
+    ? reportData.topCareers
+    : Array.isArray(reportData?.careers)
+      ? reportData.careers
+      : [];
+
+  return rawTopCareers
+    .map((career, index) => normalizeCareerEntry(career, index))
+    .filter(Boolean);
+};
+
+const normalizeEvaluation = (reportData) => {
+  const categoryScores = reportData?.evaluation?.categoryScores || reportData?.scores || null;
+
+  if (!categoryScores && !reportData?.evaluation) return null;
+
+  return {
+    ...(reportData?.evaluation || {}),
+    categoryScores: categoryScores || {},
+    recommendedStream: reportData?.evaluation?.recommendedStream || reportData?.streamRecommendation || reportData?.recommendedStream || null,
+  };
+};
+
+const normalizeRoadmaps = (reportData) => {
+  if (Array.isArray(reportData?.roadmaps) && reportData.roadmaps.length > 0) {
+    return reportData.roadmaps;
+  }
+
+  if (Array.isArray(reportData?.yearWiseRoadmap) && reportData.yearWiseRoadmap.length > 0) {
+    return reportData.yearWiseRoadmap.map((entry, index) => ({
+      career: entry.year || `Roadmap ${index + 1}`,
+      steps: [
+        ...(Array.isArray(entry.goals) ? entry.goals.map((item) => `Goal: ${item}`) : []),
+        ...(Array.isArray(entry.actions) ? entry.actions.map((item) => `Action: ${item}`) : []),
+        ...(Array.isArray(entry.milestones) ? entry.milestones.map((item) => `Milestone: ${item}`) : []),
+      ],
+    }));
+  }
+
+  const sections = [];
+
+  if (reportData?.oneYearRoadmap && typeof reportData.oneYearRoadmap === 'object') {
+    sections.push({
+      career: '1-Year Action Plan',
+      steps: Object.entries(reportData.oneYearRoadmap).map(([key, value]) => `${formatRoadmapLabel(key)}: ${value}`),
+    });
+  }
+
+  if (reportData?.threeYearRoadmap && typeof reportData.threeYearRoadmap === 'object') {
+    sections.push({
+      career: '3-Year Career Roadmap',
+      steps: Object.entries(reportData.threeYearRoadmap).map(([key, value]) => `${formatRoadmapLabel(key)}: ${value}`),
+    });
+  }
+
+  return sections;
+};
+
+const normalizeReportData = (reportData) => ({
+  ...(reportData || {}),
+  topCareers: normalizeTopCareers(reportData),
+  evaluation: normalizeEvaluation(reportData),
+  roadmaps: normalizeRoadmaps(reportData),
+});
+
 /**
  * GET /reports/my
  * List all reports for the current student.
@@ -57,13 +151,14 @@ const getReport = async (req, res) => {
     }
 
     const reportData = report.reportData;
+    const normalizedReportData = normalizeReportData(reportData);
 
     // For free reports — return a limited subset + trigger re-engagement automation
     if (report.accessLevel === 'FREE') {
       // Fire upgrade nudge WhatsApp (non-blocking, only if not already paid)
       try {
         const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
-        if (lead && lead.status !== 'paid' && lead.status !== 'premium_report_generating' && lead.status !== 'premium_report_ready') {
+        if (lead && !['paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested'].includes(lead.status)) {
           triggerAutomation('free_report_viewed', { leadId: lead.id, userId: req.user.id }).catch(() => {});
         }
       } catch (_) { /* non-fatal */ }
@@ -75,10 +170,12 @@ const getReport = async (req, res) => {
         reportType: 'free',
         status: report.status,
         generatedAt: report.generatedAt,
-        studentSummary: reportData?.studentSummary,
-        interestAnalysis: reportData?.interestAnalysis,
-        recommendedStream: reportData?.recommendedStream,
-        topCareers: (reportData?.topCareers || []).slice(0, 3),
+        studentSummary: normalizedReportData.studentSummary,
+        interestAnalysis: normalizedReportData.interestAnalysis,
+        recommendedStream: normalizedReportData.recommendedStream || normalizedReportData.streamRecommendation || null,
+        evaluation: normalizedReportData.evaluation,
+        roadmaps: normalizedReportData.roadmaps,
+        topCareers: normalizedReportData.topCareers.slice(0, 3),
         confidenceScore: report.confidenceScore,
         upgradeCTA: {
           message: 'Based on your answers, you are NOT suited for random stream selection. Unlock your exact career path — stream, subjects, 3-year roadmap, and top colleges.',
@@ -115,7 +212,7 @@ const getReport = async (req, res) => {
       assessmentId: report.assessmentId,
       accessLevel: 'PAID',
       reportType,
-      ...reportData,
+      ...normalizedReportData,
       premiumUpsell,
       generatedAt: report.generatedAt,
     });

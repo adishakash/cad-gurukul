@@ -501,7 +501,7 @@ const triggerAdminAction = async (req, res) => {
       });
 
       // Fire-and-forget — never throws
-      generateReportAsync(report.assessment, profile, lead.reportId);
+      generateReportAsync(report.assessment, profile, lead.reportId, report.reportType);
 
       return successResponse(res, null, 'Report regeneration queued');
     }

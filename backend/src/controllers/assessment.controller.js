@@ -9,6 +9,18 @@ const analytics = require('../services/analytics/analyticsService');
 // Max questions per plan
 const QUESTION_LIMITS = { FREE: 10, PAID: 30 };
 
+const extractTopCareerNames = (topCareers) => {
+  if (!Array.isArray(topCareers)) return [];
+
+  return topCareers
+    .map((career) => {
+      if (typeof career === 'string') return career;
+      if (career && typeof career === 'object') return career.name || career.title || null;
+      return null;
+    })
+    .filter(Boolean);
+};
+
 /**
  * POST /assessments/start
  * Starts a new assessment session for the authenticated student.
@@ -316,8 +328,8 @@ const generateReportAsync = async (assessment, profile, reportId, reportType) =>
         reportData,
         status: 'COMPLETED',
         reportType: resolvedType,
-        topCareers: reportData.topCareers || [],
-        recommendedStream: reportData.recommendedStream || null,
+        topCareers: extractTopCareerNames(reportData.topCareers),
+        recommendedStream: reportData.recommendedStream || reportData.streamRecommendation || null,
         recommendedSubjects: reportData.recommendedSubjects || [],
         confidenceScore: reportData.confidenceScore || null,
         stemScore: reportData.scores?.stem || null,

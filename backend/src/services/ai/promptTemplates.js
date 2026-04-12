@@ -204,9 +204,9 @@ Generate a detailed report and respond with ONLY this JSON:
   "subjectReason": "Why these subjects are recommended (80 words)",
   "topCareers": [
     {
-      "title": "Career Name",
+      "name": "Career Name",
       "fitScore": 85,
-      "reason": "Why this career fits (50 words)",
+      "description": "Why this career fits (50 words)",
       "skills": ["skill1", "skill2"],
       "coursePath": "How to get there from Class 12",
       "indiaScope": "Job market in India for this career"
@@ -214,7 +214,7 @@ Generate a detailed report and respond with ONLY this JSON:
   ],
   "careersToAvoid": [
     {
-      "title": "Career Name",
+      "name": "Career Name",
       "reason": "Why this may not suit the student"
     }
   ],

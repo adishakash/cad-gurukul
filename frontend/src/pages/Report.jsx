@@ -35,12 +35,14 @@ const CareerCard = ({ career, index }) => (
     <div className="flex items-start justify-between gap-4">
       <div>
         <h4 className="font-bold text-brand-dark text-lg">{career.name}</h4>
-        <p className="text-gray-600 text-sm mt-1">{career.description}</p>
+        <p className="text-gray-600 text-sm mt-1">{career.description || 'Suggested based on your assessment answers.'}</p>
       </div>
-      <div className="shrink-0 text-right">
-        <div className="text-2xl font-extrabold text-brand-red">{career.fitScore}%</div>
-        <div className="text-xs text-gray-400">fit</div>
-      </div>
+      {Number.isFinite(Number(career.fitScore)) && (
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-extrabold text-brand-red">{Math.round(Number(career.fitScore))}%</div>
+          <div className="text-xs text-gray-400">fit</div>
+        </div>
+      )}
     </div>
     {career.stream && (
       <div className="mt-3 flex flex-wrap gap-2">

@@ -182,6 +182,7 @@ export default function LeadCaptureForm({ selectedPlan = 'free', defaultPlan, on
     )
   }
   // ── END midAssessment form ─────────────────────────────────────────────────
+  return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
       {/* Name */}
       <div>

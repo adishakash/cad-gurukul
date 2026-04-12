@@ -29,6 +29,7 @@ const updateLeadSchema = Joi.object({
   city:                  Joi.string().trim().max(100).optional(),
   pincode:               Joi.string().pattern(/^\d{6}$/).optional(),
   selectedPlan:          Joi.string().valid('free','paid').optional(),
+  planType:              Joi.string().valid('standard', 'premium', 'consultation').optional(),
   counsellingInterested: Joi.boolean().optional(),
   counsellingNotes:      Joi.string().trim().max(500).optional().allow('', null),
   status:                Joi.string().valid(

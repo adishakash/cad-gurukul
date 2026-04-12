@@ -18,6 +18,19 @@ const PLAN_PRICES = {
 // Back-compat: keep the old constant so webhook path doesn't break
 const PAID_REPORT_PRICE_RUPEES = PLAN_PRICES.standard;
 
+const getAmountRupeesForPlan = (planType = 'standard') => PLAN_PRICES[planType] || PAID_REPORT_PRICE_RUPEES;
+
+const getLeadStatusAfterPayment = (planType, hasQueuedReport) => {
+  if (planType === 'consultation') return 'counselling_interested';
+  return hasQueuedReport ? 'premium_report_generating' : 'paid';
+};
+
+const getAutomationEventForPlan = (planType) => {
+  if (planType === 'consultation') return 'consultation_booked';
+  if (planType === 'premium') return 'premium_ai_purchased';
+  return 'payment_success';
+};
+
 /**
  * POST /payments/create-order
  * Creates a Razorpay order and a pending payment record.
@@ -161,7 +174,7 @@ const verifyPayment = async (req, res) => {
     // ─── Determine plan type from metadata ────────────────────────────────────
     const planType    = payment.metadata?.planType || 'standard';
     const assessmentId = payment.metadata?.assessmentId;
-    const amountRupees = PLAN_PRICES[planType] || PAID_REPORT_PRICE_RUPEES;
+    const amountRupees = getAmountRupeesForPlan(planType);
 
     let reportIdForGeneration = null;
     let assessmentForGeneration = null;
@@ -216,11 +229,7 @@ const verifyPayment = async (req, res) => {
 
     const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
     if (lead) {
-      const nextStatus = planType === 'consultation'
-        ? 'counselling_interested'
-        : reportIdForGeneration
-          ? 'premium_report_generating'
-          : 'paid';
+      const nextStatus = getLeadStatusAfterPayment(planType, Boolean(reportIdForGeneration));
 
       await prisma.lead.update({
         where: { id: lead.id },
@@ -233,11 +242,7 @@ const verifyPayment = async (req, res) => {
       });
 
       // Per-tier automation event
-      const automationEvent = planType === 'consultation'
-        ? 'consultation_booked'
-        : planType === 'premium'
-          ? 'premium_ai_purchased'
-          : 'payment_success';
+      const automationEvent = getAutomationEventForPlan(planType);
 
       await triggerAutomation(automationEvent, {
         leadId:      lead.id,
@@ -321,11 +326,13 @@ const handleWebhook = async (req, res) => {
       });
 
       const assessmentId = payment.metadata?.assessmentId;
+      const planType = payment.metadata?.planType || 'standard';
+      const amountRupees = getAmountRupeesForPlan(planType);
       let reportIdForGeneration = null;
       let assessmentForGeneration = null;
       let profileForGeneration = null;
 
-      if (assessmentId) {
+      if (planType !== 'consultation' && assessmentId) {
         await prisma.assessment.updateMany({
           where: { id: assessmentId, userId: payment.userId },
           data: { accessLevel: 'PAID', totalQuestions: 30 },
@@ -335,7 +342,7 @@ const handleWebhook = async (req, res) => {
         if (existingReport) {
           await prisma.careerReport.update({
             where: { id: existingReport.id },
-            data: { accessLevel: 'PAID', status: 'GENERATING' },
+            data: { accessLevel: 'PAID', status: 'GENERATING', reportType: planType },
           });
 
           await prisma.payment.update({
@@ -360,31 +367,37 @@ const handleWebhook = async (req, res) => {
 
       const lead = await prisma.lead.findFirst({ where: { userId: payment.userId } });
       if (lead) {
+        const nextStatus = getLeadStatusAfterPayment(planType, Boolean(reportIdForGeneration));
+
         await prisma.lead.update({
           where: { id: lead.id },
           data: {
             paymentId: updatedPayment.id,
-            status: reportIdForGeneration ? 'premium_report_generating' : 'paid',
+            planType,
+            status: nextStatus,
+            ...(planType === 'consultation' ? { counsellingInterested: true } : {}),
           },
         });
 
-        await triggerAutomation('payment_success', {
+        await triggerAutomation(getAutomationEventForPlan(planType), {
           leadId:       lead.id,
           userId:       payment.userId,
-          amountRupees: PAID_REPORT_PRICE_RUPEES,
+          planType,
+          amountRupees,
           paymentId:    updatedPayment.id,
         });
       }
 
       analytics.track('payment_success', null, {
         userId: payment.userId,
-        amountRupees: PAID_REPORT_PRICE_RUPEES,
+        planType,
+        amountRupees,
         source: 'webhook',
       });
 
       if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
         const { generateReportAsync } = require('./assessment.controller');
-        generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration);
+        generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
       }
     }
 
