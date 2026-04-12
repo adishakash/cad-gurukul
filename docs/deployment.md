@@ -133,7 +133,11 @@ Replace all `CHANGE_ME_*` values in App Platform settings before first productio
 | `SMTP_HOST` | SMTP host | ✅ |
 | `SMTP_USER` | SMTP user | ✅ |
 | `SMTP_PASS` | SMTP password | ✅ |
-| `FRONTEND_URL` | Frontend origin (CORS) | ✅ |
+| `FRONTEND_URL` | Single fallback frontend origin for CORS | ✅ |
+| `FRONTEND_URLS` | Comma-separated frontend origins for CORS allowlist | Recommended |
+
+Example:
+`FRONTEND_URLS=https://cadgurukul.com,https://www.cadgurukul.com,https://app.cadgurukul.com`
 
 ---
 
