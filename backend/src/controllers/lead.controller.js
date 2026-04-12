@@ -32,7 +32,7 @@ const createLeadSchema = Joi.object({
     'string.pattern.base': 'Enter a valid 10-digit Indian mobile number',
   }),
   classStandard: Joi.string().valid('8','9','10','11','12').optional(),
-  stream:        Joi.string().valid('Science','Commerce','Arts','Not Decided','NA').optional(),
+  stream:        Joi.string().valid('Science','Commerce','Arts','NA').optional(),
   city:          Joi.string().trim().max(100).optional(),
   pincode:       Joi.string().pattern(/^\d{6}$/).optional(),
   userType:      Joi.string().valid('student','parent').default('student'),

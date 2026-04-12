@@ -39,6 +39,12 @@ const GuestRoute = ({ children }) => {
   return isAuthenticated ? <Navigate to="/dashboard" replace /> : children
 }
 
+// Admin guard — checks localStorage directly (admin auth is independent of Redux store)
+const AdminRoute = ({ children }) => {
+  const token = localStorage.getItem('cg_admin_token')
+  return token ? children : <Navigate to="/admin/login" replace />
+}
+
 const PublicLayout = ({ children }) => (
   <>
     <Header />
@@ -71,9 +77,9 @@ export default function App() {
 
         {/* Admin routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/leads" element={<LeadList />} />
-        <Route path="/admin/leads/:id" element={<LeadDetail />} />
+        <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/leads" element={<AdminRoute><LeadList /></AdminRoute>} />
+        <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -31,12 +31,12 @@ const startAssessment = async (req, res) => {
       return successResponse(res, existing, 'Resume your existing assessment');
     }
 
-    // If PAID, verify payment
+    // If PAID, verify the user has a captured payment
     if (accessLevel === 'PAID') {
-      const paidReport = await prisma.careerReport.findFirst({
-        where: { userId: req.user.id, accessLevel: 'PAID' },
+      const paidPayment = await prisma.payment.findFirst({
+        where: { userId: req.user.id, status: 'CAPTURED' },
       });
-      if (!paidReport) {
+      if (!paidPayment) {
         return errorResponse(res, 'Please complete payment to access full assessment', 402, 'PAYMENT_REQUIRED');
       }
     }
@@ -332,4 +332,4 @@ const generateReportAsync = async (assessment, profile, reportId) => {
   }
 };
 
-module.exports = { startAssessment, getAssessment, getNextQuestion, submitAnswer, completeAssessment };
+module.exports = { startAssessment, getAssessment, getNextQuestion, submitAnswer, completeAssessment, generateReportAsync };

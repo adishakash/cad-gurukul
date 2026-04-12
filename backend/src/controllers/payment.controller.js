@@ -27,9 +27,13 @@ const createOrder = async (req, res) => {
       return errorResponse(res, 'Assessment not found', 404, 'NOT_FOUND');
     }
 
-    // Prevent duplicate payment for already-paid report
+    // Prevent duplicate payment for the same assessment
     const existingPayment = await prisma.payment.findFirst({
-      where: { userId: req.user.id, status: 'CAPTURED' },
+      where: {
+        userId: req.user.id,
+        status: 'CAPTURED',
+        metadata: { path: ['assessmentId'], equals: assessmentId },
+      },
     });
 
     if (existingPayment) {

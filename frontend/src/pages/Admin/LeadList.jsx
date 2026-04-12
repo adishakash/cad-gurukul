@@ -67,7 +67,8 @@ export default function LeadList() {
     } catch {}
   }, [])
 
-  useEffect(() => { fetchLeads(); fetchFunnel() }, [fetchLeads, fetchFunnel])
+  useEffect(() => { fetchLeads() }, [fetchLeads])
+  useEffect(() => { fetchFunnel() }, [])  // funnel metrics only load once
 
   const handleFilterChange = (e) => {
     setFilters((p) => ({ ...p, [e.target.name]: e.target.value }))

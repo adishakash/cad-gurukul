@@ -1,7 +1,10 @@
 'use strict';
+const crypto = require('crypto');
 const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
+const { triggerAutomation } = require('../services/automation/automationService');
+const { generateReportAsync } = require('./assessment.controller');
 
 /**
  * GET /admin/users
@@ -374,8 +377,18 @@ const getFunnelMetrics = async (req, res) => {
  * Admin can update lead status, counselling flag, notes.
  */
 const updateLeadAdmin = async (req, res) => {
+  const VALID_STATUSES = [
+    'new_lead', 'assessment_started', 'assessment_completed', 'free_report_ready',
+    'payment_pending', 'paid', 'premium_report_ready', 'counselling_interested', 'closed',
+  ];
+
   try {
     const { status, counsellingInterested, counsellingNotes } = req.body;
+
+    if (status !== undefined && !VALID_STATUSES.includes(status)) {
+      return errorResponse(res, `Invalid status value: ${status}`, 422, 'VALIDATION_ERROR');
+    }
+
     const data = {};
     if (status !== undefined)               data.status = status;
     if (counsellingInterested !== undefined) data.counsellingInterested = counsellingInterested;
@@ -404,24 +417,43 @@ const triggerAdminAction = async (req, res) => {
     const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
     if (!lead) return errorResponse(res, 'Lead not found', 404, 'NOT_FOUND');
 
-    const { triggerAutomation } = require('../services/automation/automationService');
-
     if (action === 'regenerate_report') {
       if (!lead.reportId) return errorResponse(res, 'No report linked to this lead', 400, 'NO_REPORT');
+
+      // Fetch the full report with its assessment so we can re-run generation
+      const report = await prisma.careerReport.findUnique({
+        where: { id: lead.reportId },
+        include: {
+          assessment: { include: { questions: true, answers: true } },
+        },
+      });
+      if (!report?.assessment) {
+        return errorResponse(res, 'Assessment data missing for this report', 400, 'MISSING_DATA');
+      }
+
+      const profile = await prisma.studentProfile.findUnique({
+        where: { userId: report.userId },
+        include: { parentDetail: true },
+      });
+
       await prisma.careerReport.update({
         where: { id: lead.reportId },
         data: { status: 'GENERATING' },
       });
       await prisma.leadEvent.create({
-        data: { id: require('crypto').randomUUID(), leadId: lead.id, event: 'admin_regenerate_report', metadata: { adminId: req.admin.id } },
+        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_regenerate_report', metadata: { adminId: req.admin.id } },
       });
+
+      // Fire-and-forget — never throws
+      generateReportAsync(report.assessment, profile, lead.reportId);
+
       return successResponse(res, null, 'Report regeneration queued');
     }
 
     if (action === 'resend_report_link') {
       await triggerAutomation('premium_report_ready', { leadId: lead.id, reportId: lead.reportId });
       await prisma.leadEvent.create({
-        data: { id: require('crypto').randomUUID(), leadId: lead.id, event: 'admin_resend_report_link', metadata: { adminId: req.admin.id } },
+        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_resend_report_link', metadata: { adminId: req.admin.id } },
       });
       return successResponse(res, null, 'Report link resent via WhatsApp');
     }
@@ -432,7 +464,7 @@ const triggerAdminAction = async (req, res) => {
         data: { counsellingInterested: true, status: 'counselling_interested' },
       });
       await prisma.leadEvent.create({
-        data: { id: require('crypto').randomUUID(), leadId: lead.id, event: 'admin_mark_counselling', metadata: { adminId: req.admin.id } },
+        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_mark_counselling', metadata: { adminId: req.admin.id } },
       });
       return successResponse(res, null, 'Lead marked as counselling interested');
     }
