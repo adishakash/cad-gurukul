@@ -68,6 +68,10 @@ const createOrder = async (req, res) => {
     // Link lead to payment_pending if lead exists
     const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
     if (lead) {
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { status: 'payment_pending' },
+      });
       await triggerAutomation('payment_initiated', { leadId: lead.id, userId: req.user.id });
     }
 

@@ -217,21 +217,27 @@ const listLeads = async (req, res) => {
     const {
       page = 1, limit = 25,
       status, leadSource, classStandard, selectedPlan,
+      source, plan, dateFrom, dateTo,
       search, from, to, sortBy = 'createdAt', sortDir = 'desc',
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const where = {};
-    if (status)        where.status       = status;
-    if (leadSource)    where.leadSource   = leadSource;
-    if (classStandard) where.classStandard = classStandard;
-    if (selectedPlan)  where.selectedPlan = selectedPlan;
+    const finalLeadSource = leadSource || source;
+    const finalSelectedPlan = selectedPlan || plan;
+    const finalDateFrom = dateFrom || from;
+    const finalDateTo = dateTo || to;
 
-    if (from || to) {
+    if (status)        where.status       = status;
+    if (finalLeadSource) where.leadSource = finalLeadSource;
+    if (classStandard) where.classStandard = classStandard;
+    if (finalSelectedPlan) where.selectedPlan = finalSelectedPlan;
+
+    if (finalDateFrom || finalDateTo) {
       where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to)   where.createdAt.lte = new Date(to);
+      if (finalDateFrom) where.createdAt.gte = new Date(finalDateFrom);
+      if (finalDateTo)   where.createdAt.lte = new Date(finalDateTo);
     }
 
     if (search) {

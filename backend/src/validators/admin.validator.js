@@ -10,11 +10,18 @@ const leadListQuerySchema = Joi.object({
     'payment_pending','paid','premium_report_generating',
     'premium_report_ready','counselling_interested','closed'
   ).optional(),
+  leadSource: Joi.string().valid(
+    'meta_ads','instagram','facebook','google_ads','direct','referral','organic','whatsapp','other'
+  ).optional(),
+  classStandard: Joi.string().valid('8', '9', '10', '11', '12').optional(),
+  selectedPlan: Joi.string().valid('free', 'paid').optional(),
+  search:   Joi.string().trim().max(200).optional(),
+  dateFrom: Joi.date().iso().optional(),
+  dateTo:   Joi.date().iso().optional(),
   source:   Joi.string().valid(
     'meta_ads','instagram','facebook','google_ads','direct','referral','organic','whatsapp','other'
   ).optional(),
-  plan:     Joi.string().valid('free','paid').optional(),
-  search:   Joi.string().trim().max(200).optional(),
+  plan:     Joi.string().valid('free', 'paid').optional(),
   from:     Joi.date().iso().optional(),
   to:       Joi.date().iso().optional(),
   sortBy:   Joi.string().valid('createdAt','updatedAt').default('createdAt'),
