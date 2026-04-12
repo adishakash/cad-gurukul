@@ -14,6 +14,7 @@
     "lint": "eslint src/",
     "smoke:frontend": "node scripts/smoke-frontend-funnel.js",
     "smoke:frontend:deployed": "node scripts/smoke-frontend-deployed.js",
+    "smoke:api:deployed": "node scripts/smoke-api-deployed.js",
     "test": "jest --detectOpenHandles"
   },
   "dependencies": {

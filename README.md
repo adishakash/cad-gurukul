@@ -236,6 +236,34 @@ $env:SMOKE_DEPLOYED_BASE_URL = 'https://staging.cadgurukul.com'
 npm run smoke:frontend:deployed
 ```
 
+### Deployed API Smoke Test
+```bash
+# End-to-end API smoke test against a live backend or app domain.
+# This checks health, CORS preflight, validation, register, login, refresh, and logout.
+cd backend
+SMOKE_API_BASE_URL=https://backend-vsrii.ondigitalocean.app/api/v1 npm run smoke:api:deployed
+
+# Test the app/custom domain after App Platform ingress rules are live
+SMOKE_API_BASE_URL=https://cadgurukul.com/api/v1 \
+SMOKE_FRONTEND_ORIGIN=https://cadgurukul.com \
+npm run smoke:api:deployed
+
+# Skip the side-effectful auth create/login flow if you only want routing and validation checks
+SMOKE_AUTH_FLOW=false npm run smoke:api:deployed
+```
+
+PowerShell examples:
+```powershell
+cd backend
+$env:SMOKE_API_BASE_URL = 'https://backend-vsrii.ondigitalocean.app/api/v1'
+$env:SMOKE_FRONTEND_ORIGIN = 'https://frontend-jyvsf.ondigitalocean.app'
+npm run smoke:api:deployed
+
+$env:SMOKE_API_BASE_URL = 'https://cadgurukul.com/api/v1'
+$env:SMOKE_FRONTEND_ORIGIN = 'https://cadgurukul.com'
+npm run smoke:api:deployed
+```
+
 ### Docker Compose (recommended for full-stack local)
 ```bash
 # 1. Configure backend secrets
