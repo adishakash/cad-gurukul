@@ -57,7 +57,9 @@ export default function PlanSelection() {
     // Fire-and-forget lead update so funnel status advances
     leadApi.update({ selectedPlan: planKey, status: 'plan_selected' }).catch(() => {})
     navigate(plan.action)
-  }  return (
+  }
+
+  return (
     <div className="min-h-screen bg-gray-50 py-16 px-4">
       <div className="max-w-4xl mx-auto text-center mb-12">
         <span className="text-xs font-bold uppercase tracking-widest text-brand-red">Pricing</span>
