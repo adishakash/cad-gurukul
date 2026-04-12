@@ -227,7 +227,7 @@ export default function Home() {
               <button onClick={() => setShowLeadModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
             </div>
             <div className="p-6">
-              <LeadCaptureForm selectedPlan={capturePlan} onSuccess={() => setShowLeadModal(false)} />
+              <LeadCaptureForm selectedPlan={capturePlan} />
             </div>
           </div>
         </div>

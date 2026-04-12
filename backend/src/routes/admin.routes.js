@@ -17,6 +17,7 @@ router.get('/payments', adminController.listPayments);
 router.get('/reports', adminController.listReports);
 router.get('/ai-usage', adminController.getAIUsage);
 router.get('/export/leads', adminController.exportLeads);
+router.get('/export/payments', adminController.exportPayments);
 
 // Lead management
 router.get('/leads',              validate(leadListQuerySchema, 'query'), adminController.listLeads);

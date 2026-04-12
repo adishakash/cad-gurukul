@@ -186,6 +186,35 @@ const exportLeads = async (req, res) => {
 };
 
 /**
+ * GET /admin/export/payments – CSV export
+ */
+const exportPayments = async (req, res) => {
+  try {
+    const payments = await prisma.payment.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { user: { select: { email: true } } },
+    });
+
+    const csvRows = [
+      'Payment ID,User Email,Amount (INR),Status,Provider,Razorpay Order ID,Razorpay Payment ID,Paid At,Created At',
+      ...payments.map((p) =>
+        `"${p.id}","${p.user?.email || ''}","${(p.amountPaise || 0) / 100}","${p.status}","${p.provider}","${p.razorpayOrderId || ''}","${p.razorpayPaymentId || ''}","${p.paidAt ? p.paidAt.toISOString() : ''}","${p.createdAt.toISOString()}"`
+      ),
+    ];
+
+    res.set({
+      'Content-Type': 'text/csv',
+      'Content-Disposition': 'attachment; filename="cad-gurukul-payments.csv"',
+    });
+
+    return res.send(csvRows.join('\n'));
+  } catch (err) {
+    logger.error('[Admin] exportPayments error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
  * PUT /admin/users/:id/toggle-status
  */
 const toggleUserStatus = async (req, res) => {
@@ -488,4 +517,18 @@ const triggerAdminAction = async (req, res) => {
   }
 };
 
-module.exports = { listUsers, getAnalytics, listPayments, listReports, getAIUsage, exportLeads, toggleUserStatus, listLeads, getLeadDetail, getFunnelMetrics, updateLeadAdmin, triggerAdminAction };
+module.exports = {
+  listUsers,
+  getAnalytics,
+  listPayments,
+  listReports,
+  getAIUsage,
+  exportLeads,
+  exportPayments,
+  toggleUserStatus,
+  listLeads,
+  getLeadDetail,
+  getFunnelMetrics,
+  updateLeadAdmin,
+  triggerAdminAction,
+};

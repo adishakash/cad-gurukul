@@ -11,8 +11,8 @@
  */
 
 const crypto = require('crypto');
-const prisma = require('../../../config/database');
-const logger = require('../../../utils/logger');
+const prisma = require('../../config/database');
+const logger = require('../../utils/logger');
 
 /**
  * Track an analytics event.

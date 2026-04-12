@@ -7,6 +7,9 @@ const { validate } = require('../middleware/validate');
 const paymentController = require('../controllers/payment.controller');
 const { createOrderSchema, verifyPaymentSchema } = require('../validators/payment.validator');
 
+// Razorpay server-to-server webhook (no user JWT)
+router.post('/webhook', paymentController.handleWebhook);
+
 router.use(authenticate);
 
 router.post('/create-order', validate(createOrderSchema), paymentController.createOrder);

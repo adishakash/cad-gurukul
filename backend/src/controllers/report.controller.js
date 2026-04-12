@@ -15,6 +15,7 @@ const getMyReports = async (req, res) => {
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
+        assessmentId: true,
         accessLevel: true,
         status: true,
         topCareers: true,
@@ -60,6 +61,7 @@ const getReport = async (req, res) => {
     if (report.accessLevel === 'FREE') {
       const freeView = {
         id: report.id,
+        assessmentId: report.assessmentId,
         accessLevel: 'FREE',
         status: report.status,
         generatedAt: report.generatedAt,
@@ -77,7 +79,13 @@ const getReport = async (req, res) => {
     }
 
     // Full paid report
-    return successResponse(res, { id: report.id, accessLevel: 'PAID', ...reportData, generatedAt: report.generatedAt });
+    return successResponse(res, {
+      id: report.id,
+      assessmentId: report.assessmentId,
+      accessLevel: 'PAID',
+      ...reportData,
+      generatedAt: report.generatedAt,
+    });
   } catch (err) {
     logger.error('[Report] getReport error', { error: err.message });
     throw err;

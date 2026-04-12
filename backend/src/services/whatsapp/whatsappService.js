@@ -13,8 +13,8 @@
  */
 
 const crypto  = require('crypto');
-const prisma  = require('../../../config/database');
-const logger  = require('../../../utils/logger');
+const prisma  = require('../../config/database');
+const logger  = require('../../utils/logger');
 
 const PROVIDER     = process.env.WHATSAPP_PROVIDER || 'stub';
 const API_URL      = process.env.WHATSAPP_API_URL;

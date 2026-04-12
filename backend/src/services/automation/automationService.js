@@ -17,8 +17,8 @@
  *   counselling_cta_clicked
  */
 
-const prisma  = require('../../../config/database');
-const logger  = require('../../../utils/logger');
+const prisma  = require('../../config/database');
+const logger  = require('../../utils/logger');
 const whatsappService = require('../whatsapp/whatsappService');
 
 // ── Template map: event → WhatsApp template name ─────────────────────────────
@@ -137,6 +137,13 @@ async function _updateLeadStatus(eventName, payload) {
   if (!leadId || !newStatus) return;
 
   try {
+    const currentLead = await prisma.lead.findUnique({ where: { id: leadId }, select: { status: true } });
+
+    // Avoid downgrading premium generation state back to paid during payment_success automation.
+    if (eventName === 'payment_success' && currentLead?.status === 'premium_report_generating') {
+      return;
+    }
+
     await prisma.lead.update({
       where: { id: leadId },
       data: { status: newStatus, updatedAt: new Date() },

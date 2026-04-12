@@ -217,6 +217,136 @@ const verifyPayment = async (req, res) => {
 };
 
 /**
+ * POST /payments/webhook
+ * Razorpay server webhook (idempotent backup capture flow).
+ */
+const handleWebhook = async (req, res) => {
+  try {
+    if (!config.razorpay.webhookSecret) {
+      logger.warn('[Payment] webhookSecret missing, webhook ignored');
+      return successResponse(res, { received: true, ignored: true }, 'Webhook ignored');
+    }
+
+    const signature = req.headers['x-razorpay-signature'];
+    const bodyBuffer = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(JSON.stringify(req.body || {}));
+
+    const expected = crypto
+      .createHmac('sha256', config.razorpay.webhookSecret)
+      .update(bodyBuffer)
+      .digest('hex');
+
+    if (!signature || signature !== expected) {
+      logger.warn('[Payment] Webhook signature mismatch');
+      return errorResponse(res, 'Invalid webhook signature', 400, 'INVALID_SIGNATURE');
+    }
+
+    const payload = JSON.parse(bodyBuffer.toString('utf8'));
+    if (payload.event !== 'payment.captured') {
+      return successResponse(res, { received: true, ignored: true }, 'Webhook ignored');
+    }
+
+    const paymentEntity = payload.payload?.payment?.entity;
+    const razorpayOrderId = paymentEntity?.order_id;
+    const razorpayPaymentId = paymentEntity?.id;
+
+    if (!razorpayOrderId) {
+      return errorResponse(res, 'Missing order reference', 400, 'INVALID_WEBHOOK_PAYLOAD');
+    }
+
+    const payment = await prisma.payment.findUnique({ where: { razorpayOrderId } });
+    if (!payment) {
+      logger.warn('[Payment] Webhook for unknown order', { razorpayOrderId });
+      return successResponse(res, { received: true, ignored: true }, 'Unknown order');
+    }
+
+    if (payment.status !== 'CAPTURED') {
+      const updatedPayment = await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'CAPTURED',
+          razorpayPaymentId: razorpayPaymentId || payment.razorpayPaymentId,
+          paidAt: payment.paidAt || new Date(),
+        },
+      });
+
+      const assessmentId = payment.metadata?.assessmentId;
+      let reportIdForGeneration = null;
+      let assessmentForGeneration = null;
+      let profileForGeneration = null;
+
+      if (assessmentId) {
+        await prisma.assessment.updateMany({
+          where: { id: assessmentId, userId: payment.userId },
+          data: { accessLevel: 'PAID', totalQuestions: 30 },
+        });
+
+        const existingReport = await prisma.careerReport.findFirst({ where: { assessmentId } });
+        if (existingReport) {
+          await prisma.careerReport.update({
+            where: { id: existingReport.id },
+            data: { accessLevel: 'PAID', status: 'GENERATING' },
+          });
+
+          await prisma.payment.update({
+            where: { id: updatedPayment.id },
+            data: { reportId: existingReport.id },
+          });
+
+          reportIdForGeneration = existingReport.id;
+
+          [assessmentForGeneration, profileForGeneration] = await Promise.all([
+            prisma.assessment.findUnique({
+              where: { id: assessmentId },
+              include: { questions: true, answers: true },
+            }),
+            prisma.studentProfile.findUnique({
+              where: { userId: payment.userId },
+              include: { parentDetail: true },
+            }),
+          ]);
+        }
+      }
+
+      const lead = await prisma.lead.findFirst({ where: { userId: payment.userId } });
+      if (lead) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: {
+            paymentId: updatedPayment.id,
+            status: reportIdForGeneration ? 'premium_report_generating' : 'paid',
+          },
+        });
+
+        await triggerAutomation('payment_success', {
+          leadId:       lead.id,
+          userId:       payment.userId,
+          amountRupees: PAID_REPORT_PRICE_RUPEES,
+          paymentId:    updatedPayment.id,
+        });
+      }
+
+      analytics.track('payment_success', null, {
+        userId: payment.userId,
+        amountRupees: PAID_REPORT_PRICE_RUPEES,
+        source: 'webhook',
+      });
+
+      if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
+        const { generateReportAsync } = require('./assessment.controller');
+        generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration);
+      }
+    }
+
+    return successResponse(res, { received: true }, 'Webhook processed');
+  } catch (err) {
+    logger.error('[Payment] handleWebhook error', { error: err.message });
+    return errorResponse(res, 'Webhook processing failed', 500, 'WEBHOOK_ERROR');
+  }
+};
+
+/**
  * GET /payments/history
  */
 const getPaymentHistory = async (req, res) => {
@@ -263,4 +393,4 @@ const getPaymentStatus = async (req, res) => {
   }
 };
 
-module.exports = { createOrder, verifyPayment, getPaymentHistory, getPaymentStatus };
+module.exports = { createOrder, verifyPayment, handleWebhook, getPaymentHistory, getPaymentStatus };

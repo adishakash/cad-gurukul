@@ -62,6 +62,8 @@ app.use((req, res, next) => {
 });
 
 // ─── Body Parsing ─────────────────────────────────────────────────────────────
+// Razorpay webhook needs raw body for signature verification.
+app.use('/api/v1/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 
