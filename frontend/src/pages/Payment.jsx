@@ -60,10 +60,10 @@ export default function Payment() {
         currency: data.data.currency,
         name: 'CAD Gurukul',
         description: 'Premium Career Report',
-        image: '/logo.png',
+        image: '/logo.svg',
         order_id: data.data.razorpayOrderId,
         prefill: {
-          name: user?.name || '',
+          name: user?.fullName || user?.email?.split('@')[0] || '',
           email: user?.email || '',
         },
         theme: { color: '#e53e3e' },

@@ -18,4 +18,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          redux: ['@reduxjs/toolkit', 'react-redux'],
+          charts: ['recharts'],
+          forms: ['react-hook-form', 'react-hot-toast'],
+        },
+      },
+    },
+  },
 })

@@ -133,8 +133,17 @@ static_sites:
     value: "${api.PUBLIC_URL}/api/v1"
   - key: VITE_RAZORPAY_KEY_ID
     scope: BUILD_TIME
-    type: SECRET
-    value: CHANGE_ME_rzp_live_xxxxxxxxxxxx
+    value: rzp_live_ScUZQAwAFkKCqD
+  - key: VITE_APP_NAME
+    scope: BUILD_TIME
+    value: CAD Gurukul
+  domains:
+  - domain: cadgurukul.com
+    type: PRIMARY
+    zone: cadgurukul.com
+  - domain: www.cadgurukul.com
+    type: ALIAS
+    zone: cadgurukul.com
 
 databases:
 - name: db
