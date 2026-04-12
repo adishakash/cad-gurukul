@@ -36,6 +36,11 @@ start().catch((err) => {
 // Graceful shutdown
 const shutdown = async (signal) => {
   logger.info(`[Server] ${signal} received. Shutting down gracefully...`);
+  if (!server) {
+    await prisma.$disconnect();
+    process.exit(0);
+    return;
+  }
   server.close(async () => {
     await prisma.$disconnect();
     logger.info('[Server] Server closed. DB disconnected.');

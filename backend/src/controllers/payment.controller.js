@@ -8,46 +8,65 @@ const config = require('../config');
 const { triggerAutomation } = require('../services/automation/automationService');
 const analytics = require('../services/analytics/analyticsService');
 
-const PAID_REPORT_PRICE_RUPEES = 499;
+// ── Value Ladder pricing ─────────────────────────────────────────────────────
+const PLAN_PRICES = {
+  standard:     499,    // Full report — stream + career suggestions
+  premium:      1999,   // Deep AI analysis — personalised roadmap + subject strategy
+  consultation: 9999,   // 1:1 Career Blueprint Session with Adish Gupta
+};
+
+// Back-compat: keep the old constant so webhook path doesn't break
+const PAID_REPORT_PRICE_RUPEES = PLAN_PRICES.standard;
 
 /**
  * POST /payments/create-order
  * Creates a Razorpay order and a pending payment record.
+ * Body: { assessmentId, planType? }  — planType: "standard" | "premium" | "consultation"
  */
 const createOrder = async (req, res) => {
   try {
-    const { assessmentId } = req.body;
+    const { assessmentId, planType = 'standard' } = req.body;
 
-    // Validate assessment belongs to user
-    const assessment = await prisma.assessment.findFirst({
-      where: { id: assessmentId, userId: req.user.id },
-    });
-
-    if (!assessment) {
-      return errorResponse(res, 'Assessment not found', 404, 'NOT_FOUND');
+    // Validate planType
+    if (!PLAN_PRICES[planType]) {
+      return errorResponse(res, 'Invalid plan type', 400, 'INVALID_PLAN');
     }
 
-    // Prevent duplicate payment for the same assessment
-    const existingPayment = await prisma.payment.findFirst({
-      where: {
-        userId: req.user.id,
-        status: 'CAPTURED',
-        metadata: { path: ['assessmentId'], equals: assessmentId },
-      },
-    });
-
-    if (existingPayment) {
-      return errorResponse(res, 'Payment already completed for this assessment', 409, 'CONFLICT');
+    // CONSULTATION orders don't require an assessment
+    if (planType !== 'consultation') {
+      const assessment = await prisma.assessment.findFirst({
+        where: { id: assessmentId, userId: req.user.id },
+      });
+      if (!assessment) {
+        return errorResponse(res, 'Assessment not found', 404, 'NOT_FOUND');
+      }
     }
 
-    const amountPaise = rupeesToPaise(PAID_REPORT_PRICE_RUPEES);
+    // Prevent duplicate captured payment for the same assessment + planType
+    if (assessmentId) {
+      const existingPayment = await prisma.payment.findFirst({
+        where: {
+          userId: req.user.id,
+          status: 'CAPTURED',
+          metadata: { path: ['assessmentId'], equals: assessmentId },
+          ...(planType !== 'standard' ? { metadata: { path: ['planType'], equals: planType } } : {}),
+        },
+      });
+      if (existingPayment) {
+        return errorResponse(res, 'Payment already completed for this plan', 409, 'CONFLICT');
+      }
+    }
+
+    const amountRupees = PLAN_PRICES[planType];
+    const amountPaise = rupeesToPaise(amountRupees);
 
     // Create Razorpay order
+    const receiptBase = assessmentId ? assessmentId.slice(0, 12) : req.user.id.slice(0, 12);
     const order = await razorpayService.createOrder({
       amount: amountPaise,
       currency: 'INR',
-      receipt: `cg_${assessmentId.slice(0, 12)}`,
-      notes: { userId: req.user.id, assessmentId },
+      receipt: `cg_${planType[0]}_${receiptBase}`,
+      notes: { userId: req.user.id, assessmentId: assessmentId || null, planType },
     });
 
     // Save payment record
@@ -58,24 +77,25 @@ const createOrder = async (req, res) => {
         currency: 'INR',
         status: 'CREATED',
         razorpayOrderId: order.id,
-        metadata: { assessmentId },
+        metadata: { assessmentId: assessmentId || null, planType },
       },
     });
 
-    // Track analytics + trigger automation
-    analytics.track('payment_initiated', req, { userId: req.user.id });
+    // Track analytics
+    analytics.track('payment_initiated', req, { userId: req.user.id, planType, amountRupees });
+    analytics.track('plan_selected', req, { userId: req.user.id, planType, amountRupees });
 
-    // Link lead to payment_pending if lead exists
+    // Link lead to payment_pending
     const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
     if (lead) {
       await prisma.lead.update({
         where: { id: lead.id },
-        data: { status: 'payment_pending' },
+        data: { status: 'payment_pending', planType },
       });
-      await triggerAutomation('payment_initiated', { leadId: lead.id, userId: req.user.id });
+      await triggerAutomation('payment_initiated', { leadId: lead.id, userId: req.user.id, planType });
     }
 
-    logger.info('[Payment] Order created', { paymentId: payment.id, orderId: order.id });
+    logger.info('[Payment] Order created', { paymentId: payment.id, orderId: order.id, planType });
 
     return successResponse(res, {
       orderId: order.id,
@@ -83,6 +103,7 @@ const createOrder = async (req, res) => {
       currency: 'INR',
       keyId: config.razorpay.keyId,
       paymentId: payment.id,
+      planType,
     }, 'Order created', 201);
   } catch (err) {
     logger.error('[Payment] createOrder error', { error: err.message });
@@ -133,13 +154,17 @@ const verifyPayment = async (req, res) => {
       },
     });
 
-    // Upgrade the assessment and report to PAID
+    // ─── Determine plan type from metadata ────────────────────────────────────
+    const planType    = payment.metadata?.planType || 'standard';
     const assessmentId = payment.metadata?.assessmentId;
+    const amountRupees = PLAN_PRICES[planType] || PAID_REPORT_PRICE_RUPEES;
+
     let reportIdForGeneration = null;
     let assessmentForGeneration = null;
     let profileForGeneration = null;
 
-    if (assessmentId) {
+    // CONSULTATION: no report generation — just flag the lead
+    if (planType !== 'consultation' && assessmentId) {
       await prisma.assessment.updateMany({
         where: { id: assessmentId, userId: req.user.id },
         data: { accessLevel: 'PAID', totalQuestions: 30 },
@@ -153,7 +178,11 @@ const verifyPayment = async (req, res) => {
       if (existingReport) {
         await prisma.careerReport.update({
           where: { id: existingReport.id },
-          data: { accessLevel: 'PAID', status: 'GENERATING' },
+          data: {
+            accessLevel: 'PAID',
+            status: 'GENERATING',
+            reportType: planType, // "standard" | "premium"
+          },
         });
 
         await prisma.payment.update({
@@ -163,7 +192,6 @@ const verifyPayment = async (req, res) => {
 
         reportIdForGeneration = existingReport.id;
 
-        // Fetch full assessment + student profile for report regeneration
         [assessmentForGeneration, profileForGeneration] = await Promise.all([
           prisma.assessment.findUnique({
             where: { id: assessmentId },
@@ -177,39 +205,56 @@ const verifyPayment = async (req, res) => {
       }
     }
 
-    logger.info('[Payment] Payment verified', { paymentId: payment.id, razorpayPaymentId });
+    logger.info('[Payment] Payment verified', { paymentId: payment.id, razorpayPaymentId, planType });
 
     // ─── Automation hooks post-payment ────────────────────────────────────────
-    analytics.track('payment_success', req, {
-      userId: req.user.id,
-      amountRupees: PAID_REPORT_PRICE_RUPEES,
-    });
+    analytics.track('payment_success', req, { userId: req.user.id, planType, amountRupees });
 
-    // Update lead: status → premium_report_generating (if report queued) or paid, link paymentId
     const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
     if (lead) {
+      const nextStatus = planType === 'consultation'
+        ? 'counselling_interested'
+        : reportIdForGeneration
+          ? 'premium_report_generating'
+          : 'paid';
+
       await prisma.lead.update({
         where: { id: lead.id },
         data: {
           paymentId: updatedPayment.id,
-          status: reportIdForGeneration ? 'premium_report_generating' : 'paid',
+          planType,
+          status: nextStatus,
+          ...(planType === 'consultation' ? { counsellingInterested: true } : {}),
         },
       });
-      await triggerAutomation('payment_success', {
-        leadId:       lead.id,
-        userId:       req.user.id,
-        amountRupees: PAID_REPORT_PRICE_RUPEES,
-        paymentId:    updatedPayment.id,
+
+      // Per-tier automation event
+      const automationEvent = planType === 'consultation'
+        ? 'consultation_booked'
+        : planType === 'premium'
+          ? 'premium_ai_purchased'
+          : 'payment_success';
+
+      await triggerAutomation(automationEvent, {
+        leadId:      lead.id,
+        userId:      req.user.id,
+        planType,
+        amountRupees,
+        paymentId:   updatedPayment.id,
       });
     }
 
-    // Fire-and-forget premium report generation (updates lead.status → premium_report_ready on completion)
+    // Fire-and-forget report generation
     if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
       const { generateReportAsync } = require('./assessment.controller');
-      generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration);
+      generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
     }
 
-    return successResponse(res, { paymentId: payment.id, status: 'CAPTURED' }, 'Payment successful! Your full report is being generated.');
+    const successMsg = planType === 'consultation'
+      ? 'Booking confirmed! Our team will call you within 24 hours.'
+      : 'Payment successful! Your report is being generated.';
+
+    return successResponse(res, { paymentId: payment.id, status: 'CAPTURED', planType }, successMsg);
   } catch (err) {
     logger.error('[Payment] verifyPayment error', { error: err.message });
     throw err;

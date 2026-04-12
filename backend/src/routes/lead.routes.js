@@ -1,20 +1,14 @@
 'use strict';
 const express = require('express');
 const router  = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, optionalAuthenticate } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const leadController  = require('../controllers/lead.controller');
 const { createLeadSchema, updateLeadSchema, appendEventSchema } = require('../validators/lead.validator');
 
 // Public — create/upsert a lead (can be called before auth)
-// Optional auth: if user is logged in, link lead to their account automatically
-router.post('/', (req, res, next) => {
-  // Attempt to authenticate but don't block on failure
-  authenticate(req, res, (err) => {
-    if (err) { req.user = null; }
-    next();
-  });
-}, validate(createLeadSchema), leadController.createOrUpdateLead);
+// If user is logged in, link lead to their account automatically
+router.post('/', optionalAuthenticate, validate(createLeadSchema), leadController.createOrUpdateLead);
 
 // Authenticated routes
 router.get('/me',           authenticate, leadController.getMyLead);

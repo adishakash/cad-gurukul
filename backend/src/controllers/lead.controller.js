@@ -50,8 +50,9 @@ const createOrUpdateLead = async (req, res) => {
 
     if (existing) {
       // Update attributable fields (don't downgrade plan)
+      // Use { id } not { email } — existing may have been found by phone with a different email
       lead = await prisma.lead.update({
-        where: { email },
+        where: { id: existing.id },
         data: {
           fullName:      rest.fullName      || existing.fullName,
           mobileNumber:  rest.mobileNumber  || existing.mobileNumber,

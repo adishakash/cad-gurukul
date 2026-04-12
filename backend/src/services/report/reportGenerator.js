@@ -10,10 +10,11 @@ const logger = require('../../utils/logger');
  * 2. Evaluate responses through AI (scoring + personality)
  * 3. Generate appropriate report based on access level
  */
-const generateReport = async ({ assessment, profile, accessLevel }) => {
+const generateReport = async ({ assessment, profile, accessLevel, reportType = 'standard' }) => {
   logger.info('[ReportGenerator] Starting report generation', {
     assessmentId: assessment.id,
     accessLevel,
+    reportType,
   });
 
   // Step 1: Prepare context
@@ -50,8 +51,19 @@ const generateReport = async ({ assessment, profile, accessLevel }) => {
       strengthAreas: strengthAreas || [],
       userId: profile.userId,
     });
+  } else if (reportType === 'premium') {
+    logger.info('[ReportGenerator] Generating PREMIUM AI report with deep analysis...');
+    reportContent = await aiOrchestrator.generatePremiumReport({
+      profile,
+      scores,
+      personalityType,
+      learningStyle,
+      strengthAreas: strengthAreas || [],
+      improvementAreas: improvementAreas || [],
+      userId: profile.userId,
+    });
   } else {
-    logger.info('[ReportGenerator] Generating PAID report with GPT-4o...');
+    logger.info('[ReportGenerator] Generating PAID (standard) report with GPT-4o...');
     reportContent = await aiOrchestrator.generatePaidReport({
       profile,
       scores,

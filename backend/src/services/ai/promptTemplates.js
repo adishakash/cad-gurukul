@@ -243,13 +243,110 @@ Make all content specific to Indian education system, Indian job market, and rea
 Top careers list should have 5-7 options. Careers to avoid should have 2-3 options.
 `;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PREMIUM AI REPORT (₹1,999) — deeper analysis than standard paid report
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PREMIUM_AI_REPORT_SYSTEM = `You are India's most sought-after career strategist — a combination of educational psychologist, IIT/IIM counsellor, and career coach. You have guided 10,000+ Indian students.
+This student paid ₹1,999 for a PREMIUM AI REPORT — give them extraordinary depth: precise stream recommendation, exhaustive subject strategy, future-proof career mapping, competitive exam landscape, scholarship routes, and a year-by-year action plan that feels custom-crafted by a human expert who spent 3 hours with them.
+Always respond in valid JSON only.`;
+
+const buildPremiumReportPrompt = ({ profile, scores, personalityType, learningStyle, strengthAreas, improvementAreas }) => `
+Generate a PREMIUM DEEP AI career report for:
+
+Student Profile:
+- Name: ${profile.fullName}
+- Age: ${profile.age}
+- Class: ${profile.classStandard}
+- Board: ${profile.board}
+- School: ${profile.schoolName || 'Not specified'}
+- City: ${profile.city}, State: ${profile.state}
+- Language Preference: ${profile.languagePreference}
+- Budget for Higher Ed: ${profile.budgetPreference || 'Not specified'}
+- Location Preference: ${(profile.locationPreference || []).join(', ')}
+- Preferred Subjects: ${(profile.preferredSubjects || []).join(', ')}
+- Hobbies: ${(profile.hobbies || []).join(', ')}
+- Interests: ${(profile.interests || []).join(', ')}
+- Career Aspirations: ${profile.careerAspirations || 'Not specified'}
+- Academic Scores: ${JSON.stringify(profile.academicScores || {})}
+
+Assessment Results:
+- Personality Type: ${personalityType}
+- Learning Style: ${learningStyle}
+- Strength Areas: ${strengthAreas.join(', ')}
+- Improvement Areas: ${improvementAreas.join(', ')}
+- Scores: ${JSON.stringify(scores)}
+
+Generate an EXHAUSTIVE premium report. Respond with ONLY this JSON:
+{
+  "studentSummary": "5-6 sentence expert-level profile of the student covering aptitude, personality, and potential",
+  "interestAnalysis": "Deep analysis of interests and how they map to career suitability (200 words)",
+  "aptitudeAnalysis": "Detailed aptitude evaluation with category-wise strengths (200 words)",
+  "personalityInsights": "Full MBTI-style personality breakdown with career implications (200 words)",
+  "learningStyleInsights": "How this student learns best, study strategies, exam techniques (150 words)",
+  "recommendedStream": "Science|Commerce|Arts|Vocational",
+  "streamConfidence": 0-100,
+  "streamReason": "Comprehensive stream justification with data from assessment (150 words)",
+  "subjectStrategy": {
+    "mustTake": ["Subject 1", "Subject 2"],
+    "recommended": ["Subject 3", "Subject 4"],
+    "avoid": ["Subject X"],
+    "reasoning": "Detailed subject selection strategy (100 words)"
+  },
+  "topCareers": [
+    {
+      "name": "Career name",
+      "fitScore": 0-100,
+      "description": "Why this career fits this student specifically (100 words)",
+      "stream": "Science|Commerce|Arts",
+      "subjects": ["Relevant subjects"],
+      "entranceExams": ["JEE", "NEET", "CAT", "CLAT", etc.],
+      "topColleges": ["IIT Bombay", "SRCC", etc.],
+      "salaryRange": { "entry": "₹4-8 LPA", "mid": "₹12-20 LPA", "senior": "₹30+ LPA" },
+      "futureScope": "Demand in 2030-2040 and why (50 words)",
+      "jobRoles": ["Role 1", "Role 2", "Role 3"]
+    }
+  ],
+  "careersToAvoid": [
+    { "name": "Career", "reason": "Why this student should avoid (2-3 sentences)" }
+  ],
+  "yearWiseRoadmap": [
+    {
+      "year": "Class 11 (Year 1)",
+      "goals": ["Goal 1", "Goal 2", "Goal 3"],
+      "actions": ["Action 1", "Action 2"],
+      "milestones": ["Milestone 1"]
+    },
+    {
+      "year": "Class 12 (Year 2)",
+      "goals": [], "actions": [], "milestones": []
+    },
+    {
+      "year": "Year 3 (College 1st Year)",
+      "goals": [], "actions": [], "milestones": []
+    }
+  ],
+  "competitiveExamStrategy": "Which exams to target, when to start, resources to use (150 words)",
+  "scholarshipOpportunities": ["Scholarship 1", "Scholarship 2", "Scholarship 3"],
+  "parentGuidance": "Actionable guidance for parents — how to support, common mistakes to avoid (150 words)",
+  "keyActionNextMonth": "The single most important thing this student must do in the next 30 days",
+  "scores": ${JSON.stringify(scores)},
+  "confidenceScore": 0-100,
+  "recommendedSubjects": ["Sub1", "Sub2", "Sub3"]
+}
+
+Make this feel like it was written by a top IIT/IIM alumnus who personally tutored this student. Be specific, bold, and actionable.
+`;
+
 module.exports = {
   QUESTION_GENERATION_SYSTEM,
   EVALUATION_SYSTEM,
   FREE_REPORT_SYSTEM,
   PAID_REPORT_SYSTEM,
+  PREMIUM_AI_REPORT_SYSTEM,
   buildQuestionGenerationPrompt,
   buildEvaluationPrompt,
   buildFreeReportPrompt,
   buildPaidReportPrompt,
+  buildPremiumReportPrompt,
 };

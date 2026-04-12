@@ -293,14 +293,21 @@ const completeAssessment = async (req, res) => {
 
 /**
  * Async report generation — runs in background after assessment completion.
+ * @param {object} assessment
+ * @param {object} profile
+ * @param {string} reportId
+ * @param {string} [reportType]  "standard" | "premium" — defaults to assessment accessLevel
  */
-const generateReportAsync = async (assessment, profile, reportId) => {
+const generateReportAsync = async (assessment, profile, reportId, reportType) => {
+  // Resolve report type: explicit arg > paid = standard, free = free
+  const resolvedType = reportType || (assessment.accessLevel === 'PAID' ? 'standard' : 'free');
   try {
     const reportService = require('../services/report/reportGenerator');
     const reportData = await reportService.generateReport({
       assessment,
       profile,
       accessLevel: assessment.accessLevel,
+      reportType: resolvedType,
     });
 
     await prisma.careerReport.update({
@@ -308,6 +315,7 @@ const generateReportAsync = async (assessment, profile, reportId) => {
       data: {
         reportData,
         status: 'COMPLETED',
+        reportType: resolvedType,
         topCareers: reportData.topCareers || [],
         recommendedStream: reportData.recommendedStream || null,
         recommendedSubjects: reportData.recommendedSubjects || [],

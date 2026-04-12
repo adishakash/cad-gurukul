@@ -78,7 +78,44 @@ const authenticateAdmin = async (req, res, next) => {
     next();
   } catch (err) {
     logger.error('[Auth] authenticateAdmin error', { error: err.message });
+
     return errorResponse(res, 'Admin authentication failed', 500);
+  }
+};
+
+/**
+ * Optional authenticate — sets req.user if a valid bearer token is present,
+ * sets req.user = null (and continues) if the token is missing or invalid.
+ * Never sends a 401. Use this for public endpoints that benefit from auth context.
+ */
+const optionalAuthenticate = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      req.user = null;
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, config.jwt.secret);
+    } catch {
+      req.user = null;
+      return next();
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, role: true, isActive: true },
+    });
+
+    req.user = (user && user.isActive) ? user : null;
+    next();
+  } catch (err) {
+    logger.error('[Auth] optionalAuthenticate error', { error: err.message });
+    req.user = null;
+    next();
   }
 };
 
@@ -102,4 +139,4 @@ const requireSuperAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, authenticateAdmin, requireRole, requireSuperAdmin };
+module.exports = { authenticate, authenticateAdmin, optionalAuthenticate, requireRole, requireSuperAdmin };

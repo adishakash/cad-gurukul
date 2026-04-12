@@ -95,16 +95,16 @@ export default function Report() {
     return () => pollRef.current && clearInterval(pollRef.current)
   }, [id])
 
-  // Track free report view
+  // Track free report view + analytics
   useEffect(() => {
     if (report && report.accessLevel === 'FREE' && report.status === 'COMPLETED') {
-      trackEvent('free_report_viewed', { reportId: id })
-      // Show upsell 3s after free report loads
+      trackEvent('report_viewed', { reportId: id, type: 'free' })
+      // Show upsell modal 3s after free report loads
       const t = setTimeout(() => setShowUpsell(true), 3000)
       return () => clearTimeout(t)
     }
     if (report && report.accessLevel === 'PAID') {
-      trackEvent('premium_report_viewed', { reportId: id })
+      trackEvent('report_viewed', { reportId: id, type: report.reportType || 'standard' })
     }
   }, [report])
 
@@ -151,12 +151,19 @@ export default function Report() {
 
   if (!report) return <div className="text-center py-20 text-gray-400">Report not found.</div>
 
-  const isPaid = report.accessLevel === 'PAID'
-  const evaluation = report.evaluation || {}
-  const careers = report.topCareers || report.careers || []
-  const roadmaps = report.roadmaps || []
+  const isPaid       = report.accessLevel === 'PAID'
+  const reportType   = report.reportType || (isPaid ? 'standard' : 'free')
+  const isPremium    = reportType === 'premium'
+  const isStandard   = isPaid && !isPremium
+  const evaluation   = report.evaluation || {}
+  const careers      = report.topCareers || report.careers || []
+  const roadmaps     = report.roadmaps || report.yearWiseRoadmap || []
   const parentGuidance = report.parentGuidance
-  const streamRec = report.streamRecommendation || report.recommendedStream || evaluation.recommendedStream
+  const streamRec    = report.streamRecommendation || report.recommendedStream || evaluation.recommendedStream
+  const subjectStrategy = report.subjectStrategy
+
+  // Header label
+  const reportLabel = isPremium ? '🚀 Premium AI Report' : isPaid ? '💎 Full Report' : '🆓 Free Preview'
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -166,7 +173,7 @@ export default function Report() {
           <div className="text-5xl mb-2">📊</div>
           <h1 className="text-2xl font-extrabold text-brand-dark">Your Career Report</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {isPaid ? '💎 Premium Report' : '🆓 Free Report'} · Generated {new Date(report.generatedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
+            {reportLabel} · Generated {new Date(report.generatedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
           </p>
           {streamRec && (
             <div className="mt-4 inline-block bg-red-50 text-brand-red font-bold px-5 py-2 rounded-full text-sm">
@@ -189,24 +196,60 @@ export default function Report() {
         {/* Radar chart (paid only) */}
         {isPaid && <ScoreRadar evaluation={evaluation} />}
 
-        {/* 🔐 FREE REPORT: Urgency lock banner */}
+        {/* Subject Strategy — premium only */}
+        {isPremium && subjectStrategy && (
+          <div className="card mb-6 border-l-4 border-purple-500 bg-purple-50">
+            <h2 className="section-title mb-3">📚 Subject Strategy</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {subjectStrategy.mustTake?.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-green-700 uppercase mb-1">Must Take</div>
+                  {subjectStrategy.mustTake.map((s) => <div key={s} className="text-sm text-gray-700 bg-green-50 px-2 py-1 rounded mb-1">✓ {s}</div>)}
+                </div>
+              )}
+              {subjectStrategy.recommended?.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-blue-700 uppercase mb-1">Recommended</div>
+                  {subjectStrategy.recommended.map((s) => <div key={s} className="text-sm text-gray-700 bg-blue-50 px-2 py-1 rounded mb-1">→ {s}</div>)}
+                </div>
+              )}
+              {subjectStrategy.avoid?.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-red-700 uppercase mb-1">Reconsider</div>
+                  {subjectStrategy.avoid.map((s) => <div key={s} className="text-sm text-gray-500 bg-red-50 px-2 py-1 rounded mb-1">⚠ {s}</div>)}
+                </div>
+              )}
+            </div>
+            {subjectStrategy.reasoning && <p className="text-xs text-gray-600 mt-3 leading-relaxed">{subjectStrategy.reasoning}</p>}
+          </div>
+        )}
+
+        {/* 🔐 FREE REPORT: dual-CTA lock banner */}
         {!isPaid && (
           <div className="mb-6 rounded-2xl bg-gradient-to-r from-brand-dark to-brand-navy text-white p-5 shadow-xl">
             <div className="flex items-start gap-3">
               <span className="text-3xl shrink-0">🔐</span>
-              <div>
+              <div className="w-full">
                 <p className="font-bold text-base leading-snug">
-                  Your exact career path is hidden below
+                  Your strongest career path is locked 🔒
                 </p>
                 <p className="text-gray-300 text-sm mt-1">
                   You've seen 3 careers. Based on your answers, you are <strong className="text-yellow-300">NOT suited for random stream selection</strong>. 47 students from your city unlocked clarity this week.
                 </p>
-                <button
-                  onClick={() => navigate(`/payment?assessmentId=${report.assessmentId}`)}
-                  className="mt-3 bg-brand-red text-white font-bold px-5 py-2 rounded-xl text-sm hover:bg-red-700 transition"
-                >
-                  Unlock Your Exact Career Path — ₹499 →
-                </button>
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => { trackEvent('premium_clicked', { source: 'lock_banner', plan: 'standard' }); navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`) }}
+                    className="bg-white text-brand-dark font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-100 transition"
+                  >
+                    Full Report — ₹499 →
+                  </button>
+                  <button
+                    onClick={() => { trackEvent('premium_clicked', { source: 'lock_banner', plan: 'premium' }); navigate(`/payment?plan=premium&assessmentId=${report.assessmentId}`) }}
+                    className="bg-brand-red text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-red-700 transition border border-red-400"
+                  >
+                    🚀 Premium AI Report — ₹1,999 ⭐
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -232,7 +275,7 @@ export default function Report() {
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
                 <button
-                  onClick={() => navigate(`/payment?assessmentId=${report.assessmentId}`)}
+                  onClick={() => navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`)}
                   className="bg-brand-red text-white font-bold px-6 py-3 rounded-xl shadow-2xl text-sm hover:bg-red-700 transition"
                 >
                   🔓 Unlock 4 More Career Matches →
@@ -272,12 +315,70 @@ export default function Report() {
           </div>
         )}
 
-        {/* Premium CTA for free users — shown immediately inline */}
+        {/* Key action — premium only */}
+        {isPremium && report.keyActionNextMonth && (
+          <div className="card mb-6 border-2 border-brand-red bg-red-50 text-center">
+            <div className="text-3xl mb-2">🎯</div>
+            <h3 className="font-bold text-brand-dark mb-1">Your #1 Priority This Month</h3>
+            <p className="text-gray-700 text-sm">{report.keyActionNextMonth}</p>
+          </div>
+        )}
+
+        {/* Standard-paid → Premium upsell */}
+        {isStandard && report.premiumUpsell?.show && (
+          <div className="card mb-6 border-2 border-purple-400 bg-gradient-to-br from-purple-50 to-white">
+            <div className="flex items-start gap-3">
+              <span className="text-3xl">🚀</span>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest text-purple-600 mb-1">Level Up Your Report</div>
+                <h3 className="font-extrabold text-brand-dark text-lg">{report.premiumUpsell.headline}</h3>
+                <ul className="mt-2 space-y-1">
+                  {report.premiumUpsell.benefits.map((b) => (
+                    <li key={b} className="text-sm text-gray-700 flex items-start gap-2">
+                      <span className="text-purple-500 mt-0.5 shrink-0">✓</span>{b}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => { trackEvent('premium_clicked', { source: 'standard_report_upsell' }); navigate(`/payment?plan=premium&assessmentId=${report.assessmentId}`) }}
+                  className="mt-4 bg-purple-600 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-purple-700 transition"
+                >
+                  Upgrade to Premium AI Report — ₹1,999 →
+                </button>
+                <p className="text-xs text-gray-400 mt-2">One-time · Instant upgrade · Lifetime access</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Consultation CTA — shown for premium report holders */}
+        {isPremium && (
+          <div className="card mb-6 border-2 border-orange-400 bg-gradient-to-br from-orange-50 to-white">
+            <div className="flex items-start gap-3">
+              <span className="text-3xl">📞</span>
+              <div>
+                <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">🔥 Limited — Only 3 slots/day</div>
+                <h3 className="font-extrabold text-brand-dark text-lg">1:1 Career Blueprint Session with Adish Gupta</h3>
+                <p className="text-sm text-gray-600 mt-1">45-minute personalised session · Parents can join · Session recording included · 30-day email support</p>
+                <button
+                  onClick={() => { trackEvent('premium_clicked', { source: 'premium_report_consultation' }); navigate(`/payment?plan=consultation`) }}
+                  className="mt-4 bg-orange-500 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-orange-600 transition"
+                >
+                  Book My Slot — ₹9,999 →
+                </button>
+                <p className="text-xs text-gray-400 mt-2">This decision impacts your next 5 years. Invest 45 mins with India's expert.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Inline upsell for free users */}
         {!isPaid && (
           <div className="space-y-4">
             <PremiumUpsell
               assessmentId={report.assessmentId}
               inline
+              fromPlan="free"
             />
           </div>
         )}
@@ -287,11 +388,11 @@ export default function Report() {
       {!isPaid && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-brand-red text-white px-4 py-3 flex items-center justify-between shadow-2xl md:hidden">
           <div>
-            <div className="font-bold text-sm">Unlock Full Report</div>
-            <div className="text-xs text-red-200">7 careers · roadmap · PDF · ₹499</div>
+            <div className="font-bold text-sm">Unlock My Career Path 🔓</div>
+            <div className="text-xs text-red-200">Full Report ₹499 · Premium AI ₹1,999</div>
           </div>
           <button
-            onClick={() => { trackEvent('premium_cta_clicked', { source: 'sticky_bar' }); navigate(`/payment?assessmentId=${report.assessmentId}`) }}
+            onClick={() => { trackEvent('premium_cta_clicked', { source: 'sticky_bar' }); navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`) }}
             className="bg-white text-brand-red font-bold text-sm px-4 py-2 rounded-lg shrink-0"
           >
             Upgrade →
@@ -304,6 +405,7 @@ export default function Report() {
         <PremiumUpsell
           assessmentId={report.assessmentId}
           onClose={() => setShowUpsell(false)}
+          fromPlan="free"
         />
       )}
     </div>

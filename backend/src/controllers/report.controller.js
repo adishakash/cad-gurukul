@@ -64,7 +64,6 @@ const getReport = async (req, res) => {
       try {
         const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
         if (lead && lead.status !== 'paid' && lead.status !== 'premium_report_generating' && lead.status !== 'premium_report_ready') {
-          // Trigger async — don't await (fire-and-forget re-engagement)
           triggerAutomation('free_report_viewed', { leadId: lead.id, userId: req.user.id }).catch(() => {});
         }
       } catch (_) { /* non-fatal */ }
@@ -73,6 +72,7 @@ const getReport = async (req, res) => {
         id: report.id,
         assessmentId: report.assessmentId,
         accessLevel: 'FREE',
+        reportType: 'free',
         status: report.status,
         generatedAt: report.generatedAt,
         studentSummary: reportData?.studentSummary,
@@ -82,7 +82,8 @@ const getReport = async (req, res) => {
         confidenceScore: report.confidenceScore,
         upgradeCTA: {
           message: 'Based on your answers, you are NOT suited for random stream selection. Unlock your exact career path — stream, subjects, 3-year roadmap, and top colleges.',
-          price: '₹499',
+          standard: { price: '₹499', label: 'Full Report' },
+          premium:  { price: '₹1,999', label: 'Premium AI Report' },
           urgency: '47 students from your city upgraded this week.',
           lockedSections: ['4 more career matches', 'Aptitude radar chart', '3-year career roadmap', 'Subject recommendations', 'College suggestions', 'Parent guidance', 'PDF download'],
         },
@@ -90,12 +91,32 @@ const getReport = async (req, res) => {
       return successResponse(res, freeView);
     }
 
-    // Full paid report
+    // PAID report (standard ₹499 or premium ₹1,999)
+    const reportType = report.reportType || 'standard';
+
+    // For standard-paid users: add upsell nudge to upgrade to premium
+    const premiumUpsell = reportType === 'standard'
+      ? {
+          show: true,
+          price: '₹1,999',
+          headline: 'Unlock your Deep AI Career Blueprint',
+          benefits: [
+            'Year-by-year roadmap from Class 11 → first job',
+            'Subject strategy with must-take vs avoid list',
+            'Competitive exam timeline (JEE/NEET/CAT)',
+            'Scholarship opportunities',
+            'Exhaustive 7+ career matches with salary outlook',
+          ],
+        }
+      : null;
+
     return successResponse(res, {
       id: report.id,
       assessmentId: report.assessmentId,
       accessLevel: 'PAID',
+      reportType,
       ...reportData,
+      premiumUpsell,
       generatedAt: report.generatedAt,
     });
   } catch (err) {

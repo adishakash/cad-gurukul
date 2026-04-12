@@ -23,14 +23,16 @@ const whatsappService = require('../whatsapp/whatsappService');
 
 // ── Template map: event → WhatsApp template name ─────────────────────────────
 const WA_TEMPLATE_MAP = {
-  lead_created:          'cg_welcome',
-  assessment_completed:  'cg_assessment_done',
-  free_report_ready:     'cg_free_report_ready',
-  free_report_viewed:    'cg_upgrade_nudge',       // Re-engagement: seen report but not paid
-  payment_initiated:     'cg_payment_reminder',    // Abandoned payment reminder
-  payment_success:       'cg_payment_success',
-  premium_report_ready:  'cg_premium_report_ready',
-  assessment_abandoned:  'cg_resume_assessment',
+  lead_created:           'cg_welcome',
+  assessment_completed:   'cg_assessment_done',
+  free_report_ready:      'cg_free_report_ready',
+  free_report_viewed:     'cg_upgrade_nudge',        // Re-engagement: seen report but not paid
+  payment_initiated:      'cg_payment_reminder',     // Abandoned payment reminder
+  payment_success:        'cg_payment_success',      // Standard ₹499 purchase
+  premium_ai_purchased:   'cg_premium_ai_upsell',    // ₹1,999 → upsell ₹9,999 session
+  consultation_booked:    'cg_consultation_confirm', // ₹9,999 session confirmed
+  premium_report_ready:   'cg_premium_report_ready',
+  assessment_abandoned:   'cg_resume_assessment',
 };
 
 // ── Internal: enrich lead data for WhatsApp payload ──────────────────────────
@@ -124,13 +126,15 @@ async function _handleEvent(eventName, payload, jobId) {
 
 // ── Lead status mapping ───────────────────────────────────────────────────────
 const EVENT_TO_LEAD_STATUS = {
-  assessment_started:    'assessment_started',
-  assessment_completed:  'assessment_completed',
-  free_report_ready:     'free_report_ready',
-  free_report_viewed:    'free_report_ready',      // Keeps status, triggers WhatsApp nudge
-  payment_initiated:     'payment_pending',
-  payment_success:       'paid',
-  premium_report_ready:  'premium_report_ready',
+  assessment_started:      'assessment_started',
+  assessment_completed:    'assessment_completed',
+  free_report_ready:       'free_report_ready',
+  free_report_viewed:      'free_report_ready',      // Keeps status, triggers WhatsApp nudge
+  payment_initiated:       'payment_pending',
+  payment_success:         'paid',
+  premium_ai_purchased:    'paid',                   // Also paid; differentiated by planType
+  consultation_booked:     'counselling_interested',
+  premium_report_ready:    'premium_report_ready',
   counselling_cta_clicked: 'counselling_interested',
 };
 

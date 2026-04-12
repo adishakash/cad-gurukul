@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+logs
+uploads
+dist
+.git
+.gitignore
+*.md
+.eslintrc*
+.prettierrc*
+jest.config*
+coverage
+.nyc_output
+prisma/migrations/dev_*

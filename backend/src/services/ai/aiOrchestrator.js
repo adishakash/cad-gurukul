@@ -214,4 +214,23 @@ const generatePaidReport = async ({ profile, scores, personalityType, learningSt
   return result;
 };
 
-module.exports = { generateNextQuestion, evaluateAssessment, generateFreeReport, generatePaidReport };
+/**
+ * Generate PREMIUM AI career report (₹1,999) — exhaustive deep analysis
+ */
+const generatePremiumReport = async ({ profile, scores, personalityType, learningStyle, strengthAreas, improvementAreas, userId }) => {
+  const systemPrompt = prompts.PREMIUM_AI_REPORT_SYSTEM;
+  const userPrompt   = prompts.buildPremiumReportPrompt({ profile, scores, personalityType, learningStyle, strengthAreas, improvementAreas });
+
+  const { result } = await callAI({
+    provider: 'openai', // Always GPT-4o for premium depth
+    systemPrompt,
+    userPrompt,
+    options: { temperature: 0.5, maxTokens: 9000 }, // More tokens for premium depth
+    userId,
+    purpose: 'paidReport',
+  });
+
+  return result;
+};
+
+module.exports = { generateNextQuestion, evaluateAssessment, generateFreeReport, generatePaidReport, generatePremiumReport };

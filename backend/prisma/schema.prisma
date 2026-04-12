@@ -318,6 +318,9 @@ model CareerReport {
   // Report Content (stored as JSON for flexibility)
   reportData   Json?             // Full structured report
 
+  // Report tier
+  reportType   String  @default("standard")  // "standard" (₹499) | "premium" (₹1,999)
+
   // Key Scores (indexed for analytics)
   confidenceScore Float?         // 0-100
   stemScore       Float?
@@ -537,6 +540,10 @@ model Lead {
   utmCampaign    String?
   utmContent     String?
   referralCode   String?
+
+  // Value ladder tracking
+  planType              String?  @default("standard") // "standard" | "premium" | "consultation"
+  qualificationScore    Int?     @default(0)           // 0-100; gates ₹9,999 session offer
 
   // Counselling flag
   counsellingInterested Boolean @default(false)

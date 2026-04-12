@@ -157,19 +157,34 @@ const getAIUsage = async (req, res) => {
 };
 
 /**
- * GET /admin/export/leads – CSV export
+ * GET /admin/export/leads – CSV export of lead funnel records
  */
 const exportLeads = async (req, res) => {
   try {
-    const profiles = await prisma.studentProfile.findMany({
-      include: { user: { select: { email: true, createdAt: true } } },
+    const leads = await prisma.lead.findMany({
       orderBy: { createdAt: 'desc' },
     });
 
+    const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
     const csvRows = [
-      'Name,Email,Class,Board,City,State,Mobile,Created At',
-      ...profiles.map((p) =>
-        `"${p.fullName}","${p.user.email}","${p.classStandard || ''}","${p.board || ''}","${p.city || ''}","${p.state || ''}","${p.mobileNumber || ''}","${p.user.createdAt.toISOString()}"`
+      'Name,Email,Mobile,Class,Stream,City,Plan,Status,Lead Source,UTM Source,UTM Campaign,Counselling Interested,Created At',
+      ...leads.map((l) =>
+        [
+          escape(l.fullName),
+          escape(l.email),
+          escape(l.mobileNumber),
+          escape(l.classStandard || ''),
+          escape(l.stream || ''),
+          escape(l.city || ''),
+          escape(l.selectedPlan),
+          escape(l.status),
+          escape(l.leadSource),
+          escape(l.utmSource || ''),
+          escape(l.utmCampaign || ''),
+          escape(l.counsellingInterested ? 'Yes' : 'No'),
+          escape(l.createdAt.toISOString()),
+        ].join(',')
       ),
     ];
 

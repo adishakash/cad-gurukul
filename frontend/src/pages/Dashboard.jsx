@@ -91,6 +91,9 @@ export default function Dashboard() {
   const generatingReports = reports.filter((r) => r.status === 'GENERATING')
   const freeReport        = completedReports.find((r) => r.accessLevel === 'FREE')
   const paidReport        = completedReports.find((r) => r.accessLevel === 'PAID')
+  const planType          = lead?.planType || 'free'   // "free" | "standard" | "premium" | "consultation"
+  const hasPremium        = planType === 'premium' || planType === 'consultation'
+  const hasStandard       = planType === 'standard'
 
   if (isLoading) {
     return (
@@ -128,23 +131,62 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ── Revenue upsell banners ─────────────────────────────────────────────── */}
+
+        {/* Paid ₹499 → Upsell ₹1,999 */}
+        {hasStandard && paidReport && (
+          <div className="mb-6 rounded-2xl border-2 border-purple-400 bg-gradient-to-r from-purple-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1">🚀 Unlock Deeper Clarity</div>
+              <div className="font-bold text-brand-dark">Upgrade to Premium AI Report — ₹1,999</div>
+              <p className="text-sm text-gray-600 mt-0.5">Year-by-year roadmap · Subject strategy · Exam timeline · Scholarship list</p>
+            </div>
+            <button
+              onClick={() => navigate(`/payment?plan=premium&assessmentId=${paidReport.assessmentId || ''}`)}
+              className="bg-purple-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-purple-700 transition shrink-0"
+            >
+              Upgrade Now →
+            </button>
+          </div>
+        )}
+
+        {/* Paid ₹1,999 → Upsell ₹9,999 session */}
+        {hasPremium && planType !== 'consultation' && (
+          <div className="mb-6 rounded-2xl border-2 border-orange-400 bg-gradient-to-r from-orange-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">🔥 Limited — 3 slots/day</div>
+              <div className="font-bold text-brand-dark">Book 1:1 Session with Adish Gupta — ₹9,999</div>
+              <p className="text-sm text-gray-600 mt-0.5">45-min personalised session · Recording included · Parents can join</p>
+            </div>
+            <button
+              onClick={() => navigate('/payment?plan=consultation')}
+              className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-orange-600 transition shrink-0"
+            >
+              Book My Slot →
+            </button>
+          </div>
+        )}
+
         {/* Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <button
             onClick={() => navigate('/assessment?plan=FREE')}
+            className="card hover:shadow-lg transition-shadow text-left border-l-4 border-brand-red cursor-pointer"
+          >
+            <div className="text-3xl mb-2">📝</div>
             <div className="font-bold text-brand-dark">Free Assessment</div>
             <div className="text-sm text-gray-500 mt-1">10 AI questions · Basic report</div>
             <div className="mt-3 text-brand-red text-sm font-semibold">Start Now →</div>
           </button>
 
           <button
-            onClick={() => navigate('/plans')}
+            onClick={() => navigate('/payment?plan=standard')}
             className="card hover:shadow-lg transition-shadow text-left border-l-4 border-green-500 cursor-pointer"
           >
             <div className="text-3xl mb-2">💎</div>
-            <div className="font-bold text-brand-dark">Premium Report</div>
-            <div className="text-sm text-gray-500 mt-1">30 questions · Full analysis · ₹499</div>
-            <div className="mt-3 text-green-600 text-sm font-semibold">Get Premium →</div>
+            <div className="font-bold text-brand-dark">Full Report</div>
+            <div className="text-sm text-gray-500 mt-1">7 careers · roadmap · PDF · ₹499</div>
+            <div className="mt-3 text-green-600 text-sm font-semibold">Get Report →</div>
           </button>
 
           <button
@@ -224,7 +266,7 @@ export default function Dashboard() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${report.accessLevel === 'PAID' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600'}`}>
-                            {report.accessLevel === 'PAID' ? '💎 Premium' : '🆓 Free'}
+                            {report.accessLevel === 'PAID' ? '💎 Paid' : '🆓 Free'}
                           </span>
                           {report.confidenceScore && (
                             <span className="text-xs text-green-600 font-semibold">✓ {report.confidenceScore}% fit score</span>
@@ -243,28 +285,36 @@ export default function Dashboard() {
                     </div>
                   ))}
 
-                  {/* Upsell nudge: has free report but no paid */}
+                  {/* Conversion: has free report but no paid */}
                   {freeReport && !paidReport && (
                     <div className="bg-gradient-to-r from-brand-dark to-brand-navy text-white rounded-xl p-5 mt-2">
                       <div className="flex items-start gap-3">
                         <span className="text-3xl shrink-0">🔐</span>
                         <div className="flex-1">
-                          <div className="font-bold text-base">Your full career path is locked</div>
+                          <div className="font-bold text-base">Unlock your full career blueprint 🔓</div>
                           <p className="text-gray-300 text-sm mt-1">
-                            You've seen 3 careers. 4 more high-fit matches, your 3-year roadmap, subject recommendations, and a downloadable PDF are all waiting.
+                            4 more high-fit career matches · 3-year roadmap · Subject strategy · Downloadable PDF
                           </p>
                           <p className="text-yellow-300 text-xs mt-1 font-semibold">
-                            One wrong stream choice can cost 3 years. Unlock clarity for ₹499.
+                            ⚠️ One wrong stream can cost 3 years. Unlock clarity today.
                           </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => navigate(`/payment?assessmentId=${freeReport.assessmentId || ''}`)}
-                        className="w-full mt-4 bg-brand-red text-white font-bold py-3 rounded-xl text-sm hover:bg-red-700 transition"
-                      >
-                        🔓 Unlock My Exact Career Path — ₹499
-                      </button>
-                      <p className="text-center text-xs text-gray-400 mt-2">🔒 Razorpay · UPI, Cards, Net Banking</p>
+                      <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={() => navigate(`/payment?plan=standard&assessmentId=${freeReport.assessmentId || ''}`)}
+                          className="flex-1 bg-white text-brand-dark font-bold py-2.5 rounded-xl text-sm hover:bg-gray-100 transition"
+                        >
+                          Full Report — ₹499
+                        </button>
+                        <button
+                          onClick={() => navigate(`/payment?plan=premium&assessmentId=${freeReport.assessmentId || ''}`)}
+                          className="flex-1 bg-brand-red text-white font-bold py-2.5 rounded-xl text-sm hover:bg-red-700 transition"
+                        >
+                          🚀 Premium AI — ₹1,999 ⭐
+                        </button>
+                      </div>
+                      <p className="text-center text-xs text-gray-400 mt-2">🔒 Secured by Razorpay</p>
                     </div>
                   )}
                 </div>

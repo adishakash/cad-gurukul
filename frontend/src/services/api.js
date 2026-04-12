@@ -77,7 +77,7 @@ export const reportApi = {
 
 // ─── Payment API ──────────────────────────────────────────────────────────────
 export const paymentApi = {
-  createOrder:  (assessmentId) => api.post('/payments/create-order', { assessmentId }),
+  createOrder:  (assessmentId, planType = 'standard') => api.post('/payments/create-order', { assessmentId, planType }),
   verify:       (data)         => api.post('/payments/verify', data),
   getHistory:   ()             => api.get('/payments/history'),
   getStatus:    (orderId)      => api.get(`/payments/status/${orderId}`),
