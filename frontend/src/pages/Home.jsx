@@ -33,7 +33,7 @@ export default function Home() {
               <br />Path with AI
             </h1>
             <p className="text-lg md:text-xl text-gray-300 mb-8 leading-relaxed max-w-2xl">
-              Designed specifically for Indian students in Class 10, 11, and 12. Our adaptive AI assessment 
+              Designed specifically for Indian students in Class 8, 9, 10, 11, and 12. Our adaptive AI assessment 
               analyzes your aptitude, personality, and interests to give you a personalized career roadmap.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">

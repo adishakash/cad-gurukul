@@ -12,7 +12,7 @@ const STEPS = [
   { id: 4, title: 'Parent Details', icon: '👨‍👩‍👧' },
 ]
 
-const CLASSES = ['CLASS_9', 'CLASS_10', 'CLASS_11', 'CLASS_12']
+const CLASSES = ['CLASS_8', 'CLASS_9', 'CLASS_10', 'CLASS_11', 'CLASS_12']
 const BOARDS = ['CBSE', 'ICSE', 'STATE_BOARD', 'IGCSE', 'IB', 'OTHER']
 const SUBJECTS = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'History', 'Geography', 'Economics', 'Commerce', 'Computer Science', 'English', 'Hindi', 'Psychology', 'Sociology', 'Political Science', 'Physical Education', 'Fine Arts', 'Music']
 const HOBBIES = ['Reading', 'Sports', 'Coding', 'Painting', 'Music', 'Dance', 'Cooking', 'Gaming', 'Photography', 'Writing', 'Gardening', 'Travelling', 'Volunteering', 'Robotics', 'Debate', 'Theatre']

@@ -15,7 +15,7 @@ export default {
         brand: {
           dark:  '#1a1a2e',
           navy:  '#0f3460',
-          red:   '#e94560',
+          red:   '#FF9933',
           light: '#ccd6f6',
         },
       },

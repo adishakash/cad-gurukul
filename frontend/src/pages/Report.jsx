@@ -43,7 +43,7 @@ const CareerCard = ({ career, index }) => (
     </div>
     {career.stream && (
       <div className="mt-3 flex flex-wrap gap-2">
-        <span className="bg-red-50 text-brand-red text-xs font-semibold px-3 py-1 rounded-full">
+        <span className="bg-orange-50 text-brand-red text-xs font-semibold px-3 py-1 rounded-full">
           Stream: {career.stream}
         </span>
         {career.subjects?.slice(0, 3).map((s) => (

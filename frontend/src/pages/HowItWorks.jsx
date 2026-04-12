@@ -30,7 +30,7 @@ const steps = [
 ]
 
 const faqs = [
-  { q: 'Is this for Class 10, 11, or 12 students?', a: 'Yes — all three. We tailor the report to your stage. Class 10 students get stream selection guidance; Class 11/12 get subject and career deepening.' },
+  { q: 'Is this for Class 8, 9, 10, 11, or 12 students?', a: 'Yes — all five. We tailor the report to your stage. Class 8 & 9 students get early interest and aptitude mapping; Class 10 students get stream selection guidance; Class 11/12 get subject and career deepening.' },
   { q: 'How is this different from generic career tests?', a: 'Most tests give you a fixed list of careers without reasoning. CAD Gurukul uses live AI that understands your specific answers and generates a personalised, contextual report — not a template.' },
   { q: 'What does the free report include?', a: 'Top 3 career matches, a stream recommendation, and a personality overview. It\'s genuinely useful — not a teaser.' },
   { q: 'What does the premium report include?', a: '15+ careers, full scoring across 9 aptitude categories, roadmap for each career, parent guidance, college suggestions, entrance exam timeline, and a PDF to share.' },

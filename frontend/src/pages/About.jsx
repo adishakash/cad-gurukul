@@ -18,7 +18,7 @@ export default function About() {
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">About CAD Gurukul</h1>
         <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto">
-          We believe every Class 10–12 student in India deserves clarity about their future — not confusion, not peer pressure.
+          We believe every Class 8–12 student in India deserves clarity about their future — not confusion, not peer pressure.
         </p>
       </section>
 

@@ -51,7 +51,7 @@ export default function Contact() {
               </div>
             ))}
           </div>
-          <div className="card bg-red-50 border border-brand-red/20">
+          <div className="card bg-orange-50 border border-brand-red/20">
             <h3 className="font-bold text-brand-dark mb-1">For Students & Parents</h3>
             <p className="text-sm text-gray-600">
               If you have a question about your report or assessment, mention your registered email so we can look up your account faster.
