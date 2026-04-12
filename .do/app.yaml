@@ -145,6 +145,8 @@ static_sites:
   index_document: index.html
   catchall_document: index.html
   envs:
+  # Keep this absolute for App Platform static_sites.
+  # Using /api/v1 here would send POST requests to the frontend host and return 405.
   - key: VITE_API_BASE_URL
     scope: BUILD_TIME
     value: "${api.PUBLIC_URL}/api/v1"

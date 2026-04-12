@@ -28,17 +28,17 @@ ARG NGINX_USE_PROXY=false
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/nginx.conf.template
 COPY nginx.http.conf /etc/nginx/templates/nginx.http.conf.template
+COPY docker-entrypoint.sh /docker-entrypoint.sh
 
-RUN if [ "$NGINX_USE_PROXY" = "true" ]; then \
-		cp /etc/nginx/templates/nginx.http.conf.template /etc/nginx/templates/default.conf.template; \
-	else \
-		cp /etc/nginx/templates/nginx.conf.template /etc/nginx/templates/default.conf.template; \
-	fi
-
-ENV PORT=8080
+ENV PORT=8080 \
+	NGINX_USE_PROXY=${NGINX_USE_PROXY} \
+	API_PROXY_TARGET=http://backend:5000 \
+	API_BASE_URL=
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/healthz" || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+RUN chmod +x /docker-entrypoint.sh
+
+ENTRYPOINT ["sh", "/docker-entrypoint.sh"]

@@ -260,6 +260,7 @@ docker exec cadgurukul_backend node prisma/seed.js
 ```
 
 App available at `http://localhost` (frontend) and `http://localhost:5000` (API).
+Keep `VITE_API_BASE_URL=/api/v1` only when the deployed frontend host proxies `/api` to the backend. For App Platform or any split frontend/backend deploy, use the backend's absolute `/api/v1` URL instead.
 
 ---
 
@@ -290,7 +291,7 @@ App available at `http://localhost` (frontend) and `http://localhost:5000` (API)
 
 | Variable               | Description                               |
 |------------------------|-------------------------------------------|
-| `VITE_API_BASE_URL`    | API base URL (`/api/v1` or absolute URL)  |
+| `VITE_API_BASE_URL`    | API base URL (`/api/v1` only behind a proxy, otherwise absolute) |
 | `VITE_RAZORPAY_KEY_ID` | Razorpay publishable key                  |
 
 ---

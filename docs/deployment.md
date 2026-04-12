@@ -113,6 +113,11 @@ Replace all `CHANGE_ME_*` values in App Platform settings before first productio
 - Backend CORS: `FRONTEND_URLS` includes `${frontend.PUBLIC_URL}` plus custom domains
 - Frontend build-time: `VITE_API_BASE_URL=${api.PUBLIC_URL}/api/v1`
 
+If the frontend ever sends requests to `${frontend.PUBLIC_URL}/api/v1/...`, App Platform will answer from the frontend host and POST requests will fail with `405 Not Allowed`. On App Platform, the frontend must either:
+
+- use an absolute backend URL such as `${api.PUBLIC_URL}/api/v1`, or
+- run as a Docker service with explicit runtime `API_BASE_URL` injected into the container
+
 ### 4. Deploy and verify
 
 - API health: `${api.PUBLIC_URL}/api/v1/health`
@@ -121,16 +126,18 @@ Replace all `CHANGE_ME_*` values in App Platform settings before first productio
 
 ### If using frontend as a Docker service on App Platform
 
-If you deploy `frontend/` with its `Dockerfile` (instead of `static_sites`), set build args:
+If you deploy `frontend/` with its `Dockerfile` (instead of `static_sites`), keep `NGINX_USE_PROXY=false` and set runtime environment variables:
 
 ```text
 NGINX_USE_PROXY=false
-VITE_API_BASE_URL=https://<your-api-domain>/api/v1
+API_BASE_URL=https://<your-api-domain>/api/v1
 VITE_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx
 VITE_APP_NAME=CAD Gurukul
 ```
 
-This avoids Nginx upstream failures like `host not found in upstream backend`.
+Optional build args are still supported, but `API_BASE_URL` is the safer App Platform setting because it prevents shipping a stale baked-in API domain.
+
+Only use `NGINX_USE_PROXY=true` when the frontend container should intentionally proxy `/api/*` itself, for example in local Docker Compose. In that mode, set `API_PROXY_TARGET` to the backend origin and keep `VITE_API_BASE_URL=/api/v1`.
 
 ---
 

@@ -1,17 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
 import toast from 'react-hot-toast'
-import { adminLeadApi } from '../../services/api'
-
-const BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1')
-
-const adminApi = axios.create({ baseURL: BASE })
-adminApi.interceptors.request.use((cfg) => {
-  const token = localStorage.getItem('cg_admin_token')
-  if (token) cfg.headers.Authorization = `Bearer ${token}`
-  return cfg
-})
+import { adminLeadApi, adminApiClient as adminApi } from '../../services/api'
 
 const StatCard = ({ icon, label, value, sub, highlight }) => (
   <div className={`card text-center hover:shadow-lg transition-shadow ${highlight ? 'border-2 border-brand-red bg-red-50' : ''}`}>

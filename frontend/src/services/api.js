@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { apiBaseUrl } from '../config/apiBaseUrl'
 
 // Injected lazily to break circular dependency:
 // store → authSlice → api → store
@@ -8,7 +9,7 @@ export function injectStore(s) {
 }
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+  baseURL: apiBaseUrl,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })
@@ -35,7 +36,7 @@ api.interceptors.response.use(
       if (refreshToken) {
         try {
           const res = await axios.post(
-            `${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/auth/refresh`,
+            `${apiBaseUrl}/auth/refresh`,
             { refreshToken }
           )
           const { accessToken, refreshToken: newRefreshToken } = res.data.data
@@ -84,8 +85,8 @@ export const paymentApi = {
 }
 
 // ─── Admin API client (uses cg_admin_token, separate from student API) ───────
-const adminApiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+export const adminApiClient = axios.create({
+  baseURL: apiBaseUrl,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })

@@ -1,0 +1,1 @@
+window.__CAD_GURUKUL_RUNTIME_CONFIG__ = window.__CAD_GURUKUL_RUNTIME_CONFIG__ || {}
