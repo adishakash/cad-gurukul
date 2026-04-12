@@ -57,10 +57,26 @@ const request = async (method, path, { headers = {}, body } = {}) => {
   };
 };
 
-const assertStatus = (label, actual, expected) => {
+const getResponseDetail = (response) => {
+  if (!response) {
+    return '';
+  }
+
+  if (response.json?.error?.message) {
+    return ` Response: ${response.json.error.message}`;
+  }
+
+  if (response.text) {
+    return ` Response: ${response.text.slice(0, 240)}`;
+  }
+
+  return '';
+};
+
+const assertStatus = (label, response, expected) => {
   const expectedValues = Array.isArray(expected) ? expected : [expected];
-  if (!expectedValues.includes(actual)) {
-    throw new Error(`${label} returned ${actual}. Expected ${expectedValues.join(' or ')}.`);
+  if (!expectedValues.includes(response.status)) {
+    throw new Error(`${label} returned ${response.status}. Expected ${expectedValues.join(' or ')}.${getResponseDetail(response)}`);
   }
 };
 
@@ -76,7 +92,7 @@ const main = async () => {
   logStep(`auth-flow=${runAuthFlow}`);
 
   const health = await request('GET', '/health');
-  assertStatus('GET /health', health.status, 200);
+  assertStatus('GET /health', health, 200);
   if (!health.json?.success || health.json?.data?.status !== 'ok') {
     throw new Error('GET /health did not return the expected success payload.');
   }
@@ -89,7 +105,7 @@ const main = async () => {
       'Access-Control-Request-Headers': 'Content-Type,Authorization',
     },
   });
-  assertStatus('OPTIONS /auth/register', preflight.status, [200, 204]);
+  assertStatus('OPTIONS /auth/register', preflight, [200, 204]);
   const allowOrigin = preflight.headers.get('access-control-allow-origin');
   if (allowOrigin !== frontendOrigin && allowOrigin !== '*') {
     throw new Error(`OPTIONS /auth/register returned unexpected access-control-allow-origin: ${allowOrigin || '<missing>'}`);
@@ -103,7 +119,7 @@ const main = async () => {
     },
     body: {},
   });
-  assertStatus('POST /auth/register invalid payload', invalidRegister.status, 422);
+  assertStatus('POST /auth/register invalid payload', invalidRegister, 422);
   logStep('register-validation-ok');
 
   if (!runAuthFlow) {
@@ -126,7 +142,7 @@ const main = async () => {
     },
     body: registerPayload,
   });
-  assertStatus('POST /auth/register valid payload', registerResponse.status, 201);
+  assertStatus('POST /auth/register valid payload', registerResponse, 201);
   assertTruthy('register accessToken', registerResponse.json?.data?.accessToken);
   assertTruthy('register refreshToken', registerResponse.json?.data?.refreshToken);
   logStep(`register-ok email=${uniqueEmail}`);
@@ -138,7 +154,7 @@ const main = async () => {
     },
     body: { email: uniqueEmail, password: smokePassword },
   });
-  assertStatus('POST /auth/login', loginResponse.status, 200);
+  assertStatus('POST /auth/login', loginResponse, 200);
   assertTruthy('login accessToken', loginResponse.json?.data?.accessToken);
   assertTruthy('login refreshToken', loginResponse.json?.data?.refreshToken);
   logStep('login-ok');
@@ -150,7 +166,7 @@ const main = async () => {
     },
     body: { refreshToken: loginResponse.json.data.refreshToken },
   });
-  assertStatus('POST /auth/refresh', refreshResponse.status, 200);
+  assertStatus('POST /auth/refresh', refreshResponse, 200);
   assertTruthy('refresh accessToken', refreshResponse.json?.data?.accessToken);
   assertTruthy('refresh refreshToken', refreshResponse.json?.data?.refreshToken);
   logStep('refresh-ok');
@@ -163,7 +179,7 @@ const main = async () => {
     },
     body: { refreshToken: loginResponse.json.data.refreshToken },
   });
-  assertStatus('POST /auth/logout', logoutResponse.status, 200);
+  assertStatus('POST /auth/logout', logoutResponse, 200);
   logStep('logout-ok');
 
   logStep('smoke-ok');
