@@ -22,7 +22,7 @@ const BENEFITS = [
   { icon: '💼', title: '7 Career Matches', desc: 'Ranked career fits with entrance exams, top colleges, and salary outlook.' },
   { icon: '📚', title: 'Subject Recommendations', desc: 'Exactly which subjects to pick and why, based on your aptitude.' },
   { icon: '📄', title: 'PDF Download', desc: 'Shareable PDF report to discuss with parents, teachers, and counsellors.' },
-  { icon: '👨‍👩‍👧', title: 'Parent Guidance Section', desc: 'How to support your child's career journey — specific to their profile.' },
+  { icon: '👨‍👩‍👧', title: 'Parent Guidance Section', desc: "How to support your child's career journey — specific to their profile." },
 ]
 
 const COMPARISON = [
