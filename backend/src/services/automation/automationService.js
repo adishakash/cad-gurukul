@@ -19,6 +19,7 @@
 
 const prisma  = require('../../config/database');
 const logger  = require('../../utils/logger');
+const { randomUUID } = require('crypto');
 const whatsappService = require('../whatsapp/whatsappService');
 
 // ── Template map: event → WhatsApp template name ─────────────────────────────
@@ -71,7 +72,7 @@ async function triggerAutomation(eventName, payload = {}) {
   try {
     job = await prisma.automationJob.create({
       data: {
-        id:        require('crypto').randomUUID(),
+        id:        randomUUID(),
         eventName,
         payload,
         status:    'pending',
@@ -167,7 +168,7 @@ async function _appendLeadEvent(eventName, payload) {
   try {
     await prisma.leadEvent.create({
       data: {
-        id:       require('crypto').randomUUID(),
+        id:       randomUUID(),
         leadId,
         event:    eventName,
         metadata: rest,

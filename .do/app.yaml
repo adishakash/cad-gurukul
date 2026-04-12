@@ -10,11 +10,14 @@ services:
   source_dir: backend
   dockerfile_path: Dockerfile
   http_port: 5000
-  instance_size_slug: basic-xs
+  # basic-s (1 GB RAM) is the minimum for Puppeteer/Chromium PDF generation.
+  # basic-xs (512 MB) causes OOM crashes during report generation.
+  instance_size_slug: basic-s
   instance_count: 1
   health_check:
     http_path: /api/v1/health
-    initial_delay_seconds: 60
+    # Allow extra time for `prisma migrate deploy` on cold starts.
+    initial_delay_seconds: 90
     period_seconds: 30
     timeout_seconds: 10
     failure_threshold: 3
@@ -41,10 +44,6 @@ services:
     scope: RUN_TIME
     type: SECRET
     value: CHANGE_ME_min64chars_random_hex_string_replace_before_deploy
-  - key: JWT_REFRESH_SECRET
-    scope: RUN_TIME
-    type: SECRET
-    value: CHANGE_ME_another_min64chars_random_hex_string_replace_before_deploy
   - key: JWT_ACCESS_EXPIRES_IN
     scope: RUN_TIME
     value: 15m
@@ -121,6 +120,18 @@ services:
   - key: LOG_LEVEL
     scope: RUN_TIME
     value: info
+  # WhatsApp — omit WHATSAPP_PROVIDER (or set to "stub") to disable sending
+  - key: WHATSAPP_PROVIDER
+    scope: RUN_TIME
+    value: stub
+  - key: WHATSAPP_API_URL
+    scope: RUN_TIME
+    type: SECRET
+    value: CHANGE_ME_https://live-mt-server.wati.io
+  - key: WHATSAPP_API_TOKEN
+    scope: RUN_TIME
+    type: SECRET
+    value: CHANGE_ME_your_wati_or_interakt_bearer_token
 
 static_sites:
 - name: frontend

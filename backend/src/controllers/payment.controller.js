@@ -48,8 +48,12 @@ const createOrder = async (req, res) => {
         where: {
           userId: req.user.id,
           status: 'CAPTURED',
-          metadata: { path: ['assessmentId'], equals: assessmentId },
-          ...(planType !== 'standard' ? { metadata: { path: ['planType'], equals: planType } } : {}),
+          AND: [
+            { metadata: { path: ['assessmentId'], equals: assessmentId } },
+            ...(planType !== 'standard'
+              ? [{ metadata: { path: ['planType'], equals: planType } }]
+              : []),
+          ],
         },
       });
       if (existingPayment) {

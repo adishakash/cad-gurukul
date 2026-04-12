@@ -93,7 +93,6 @@ async function _sendViaProvider(toNumber, templateName, variables) {
 
 /** WATI implementation — https://docs.wati.io */
 async function _sendWati(toNumber, templateName, variables) {
-  const { default: fetch } = await import('node-fetch');
   const parameters = Object.entries(variables).map(([, value]) => ({ name: 'text', value: String(value) }));
 
   const res = await fetch(`${API_URL}/api/v1/sendTemplateMessage?whatsappNumber=${toNumber}`, {
@@ -108,7 +107,6 @@ async function _sendWati(toNumber, templateName, variables) {
 
 /** Interakt implementation — https://developers.interakt.ai */
 async function _sendInterakt(toNumber, templateName, variables) {
-  const { default: fetch } = await import('node-fetch');
   const res = await fetch('https://api.interakt.ai/v1/public/message/', {
     method: 'POST',
     headers: { Authorization: `Basic ${API_TOKEN}`, 'Content-Type': 'application/json' },
