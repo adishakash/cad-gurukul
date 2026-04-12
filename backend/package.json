@@ -12,6 +12,8 @@
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio",
     "lint": "eslint src/",
+    "smoke:frontend": "node scripts/smoke-frontend-funnel.js",
+    "smoke:frontend:deployed": "node scripts/smoke-frontend-deployed.js",
     "test": "jest --detectOpenHandles"
   },
   "dependencies": {

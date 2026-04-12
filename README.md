@@ -201,6 +201,41 @@ npm install
 npm run dev
 ```
 
+### Frontend Smoke Test
+```bash
+# Start the frontend locally in one terminal
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+
+# Run the guest funnel smoke test from the backend directory
+cd ../backend
+npm run smoke:frontend
+
+# Optional: target a different frontend URL
+SMOKE_BASE_URL=http://127.0.0.1:4173 npm run smoke:frontend
+```
+
+### Deployed Frontend Smoke Test
+```bash
+# Production-safe smoke test against the live frontend.
+# This only checks navigation, guest assessment steps, and auth handoff links.
+cd backend
+npm run smoke:frontend:deployed
+
+# Target a staging or preview frontend instead of production
+SMOKE_DEPLOYED_BASE_URL=https://staging.cadgurukul.com npm run smoke:frontend:deployed
+```
+
+PowerShell examples:
+```powershell
+cd backend
+$env:SMOKE_BASE_URL = 'http://127.0.0.1:4173'
+npm run smoke:frontend
+
+$env:SMOKE_DEPLOYED_BASE_URL = 'https://staging.cadgurukul.com'
+npm run smoke:frontend:deployed
+```
+
 ### Docker Compose (recommended for full-stack local)
 ```bash
 # 1. Configure backend secrets
