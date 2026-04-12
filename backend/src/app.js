@@ -22,8 +22,25 @@ app.use(helmet({
   },
 }));
 
+const ALLOWED_ORIGINS = [
+  'https://cadgurukul.com',
+  'https://www.cadgurukul.com',
+  ...(config.frontendUrl ? [config.frontendUrl] : []),
+];
+
 app.use(cors({
-  origin: config.frontendUrl,
+  origin: (origin, callback) => {
+    // Allow server-to-server / curl requests with no Origin header
+    if (!origin) return callback(null, true);
+    // Allow any subdomain of cadgurukul.com  (e.g. app.cadgurukul.com)
+    if (/^https:\/\/([a-z0-9-]+\.)*cadgurukul\.com$/.test(origin)) {
+      return callback(null, true);
+    }
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
