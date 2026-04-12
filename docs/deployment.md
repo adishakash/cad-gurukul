@@ -124,6 +124,8 @@ If the frontend ever sends requests to `${frontend.PUBLIC_URL}/api/v1/...`, App 
 - Frontend app loads from `${frontend.PUBLIC_URL}`
 - Register/login/payment/report flows work end-to-end
 
+If you want one public domain to serve both the SPA and the API, use App Platform `ingress.rules` and test against the app/custom domain, not the component preview domain. A preview domain like `frontend-xxxx.ondigitalocean.app` always points directly to the frontend component and `/api/*` requests on that host will still return `405 Not Allowed`.
+
 ### If using frontend as a Docker service on App Platform
 
 If you deploy `frontend/` with its `Dockerfile` (instead of `static_sites`), keep `NGINX_USE_PROXY=false` and set runtime environment variables:

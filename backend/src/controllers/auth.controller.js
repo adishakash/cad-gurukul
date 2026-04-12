@@ -20,6 +20,14 @@ const saveRefreshToken = async (userId, token) => {
   await prisma.refreshToken.create({ data: { userId, token, expiresAt } });
 };
 
+const buildInitialStudentProfile = (fullName) => ({
+  fullName,
+  preferredSubjects: [],
+  hobbies: [],
+  interests: [],
+  locationPreference: [],
+});
+
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
 const register = async (req, res) => {
@@ -38,7 +46,7 @@ const register = async (req, res) => {
         email,
         passwordHash,
         role: role || 'STUDENT',
-        studentProfile: role !== 'PARENT' ? { create: { fullName } } : undefined,
+        studentProfile: role !== 'PARENT' ? { create: buildInitialStudentProfile(fullName) } : undefined,
       },
       select: { id: true, email: true, role: true, createdAt: true },
     });

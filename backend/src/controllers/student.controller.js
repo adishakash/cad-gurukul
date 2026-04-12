@@ -3,6 +3,14 @@ const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
+const normalizeProfileData = (profileData) => ({
+  ...profileData,
+  preferredSubjects: profileData.preferredSubjects ?? [],
+  hobbies: profileData.hobbies ?? [],
+  interests: profileData.interests ?? [],
+  locationPreference: profileData.locationPreference ?? [],
+});
+
 /**
  * GET /students/me
  */
@@ -40,14 +48,14 @@ const completeOnboarding = async (req, res) => {
       parentName, parentContact, parentEmail, parentOccupation,
     } = req.body;
 
-    const profileData = {
+    const profileData = normalizeProfileData({
       fullName, age, classStandard, schoolName, board,
       city, state, pinCode, mobileNumber, address,
       languagePreference, academicScores, preferredSubjects,
       hobbies, interests, careerAspirations,
       budgetPreference, locationPreference, specialNotes,
       isOnboardingComplete: true,
-    };
+    });
 
     // Upsert student profile
     const profile = await prisma.studentProfile.upsert({

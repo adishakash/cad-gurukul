@@ -1,6 +1,20 @@
 ﻿name: cad-gurukul
 region: blr
 
+ingress:
+  rules:
+  - component:
+      name: api
+      preserve_path_prefix: true
+    match:
+      path:
+        prefix: /api
+  - component:
+      name: frontend
+    match:
+      path:
+        prefix: /
+
 services:
 - name: api
   github:
@@ -156,13 +170,6 @@ static_sites:
   - key: VITE_APP_NAME
     scope: BUILD_TIME
     value: CAD Gurukul
-  domains:
-  - domain: cadgurukul.com
-    type: PRIMARY
-    zone: cadgurukul.com
-  - domain: www.cadgurukul.com
-    type: ALIAS
-    zone: cadgurukul.com
 
 databases:
 - name: db
@@ -170,3 +177,11 @@ databases:
   version: "15"
   size: db-s-1vcpu-1gb
   num_nodes: 1
+
+domains:
+- domain: cadgurukul.com
+  type: PRIMARY
+  zone: cadgurukul.com
+- domain: www.cadgurukul.com
+  type: ALIAS
+  zone: cadgurukul.com

@@ -164,16 +164,16 @@ model StudentProfile {
 
   // Academic
   academicScores    Json?          // { subject: score } format
-  preferredSubjects String[]
+  preferredSubjects String[]       @default([])
 
   // Interests & Personality
-  hobbies           String[]
-  interests         String[]
+  hobbies           String[]       @default([])
+  interests         String[]       @default([])
   careerAspirations String?
 
   // Higher Education Preferences
   budgetPreference  String?        // "under-5L", "5-10L", "10-20L", "20L+"
-  locationPreference String[]      // ["local", "state", "national", "abroad"]
+  locationPreference String[]      @default([]) // ["local", "state", "national", "abroad"]
 
   // Flags
   isOnboardingComplete Boolean @default(false)
