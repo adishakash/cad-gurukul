@@ -10,6 +10,9 @@ const config = require('./config');
 
 const app = express();
 
+// ─── Trust Proxy (must be FIRST – before rate limiters & IP-dependent middleware) ──
+app.set('trust proxy', 1);
+
 // ─── Security Middleware ───────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
@@ -67,9 +70,6 @@ app.use(requestLogger);
 
 // ─── General Rate Limiting ────────────────────────────────────────────────────
 app.use(generalLimiter);
-
-// ─── Trust proxy (for correct IP behind reverse proxy / deployment) ───────────
-app.set('trust proxy', 1);
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/v1', routes);

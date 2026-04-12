@@ -13,18 +13,24 @@ const connectWithTimeout = (ms) =>
     ),
   ]);
 
-const server = app.listen(config.port, async () => {
-  try {
-    await connectWithTimeout(10000);
+let server;
+
+const start = async () => {
+  await connectWithTimeout(10000);
+  logger.info('[Server] Database connected');
+
+  server = app.listen(config.port, () => {
     logger.info(`[Server] CAD Gurukul API started`, {
       port: config.port,
       env: config.env,
       url: `http://localhost:${config.port}/api/v1/health`,
     });
-  } catch (err) {
-    logger.error('[Server] Database connection failed at startup', { error: err.message });
-    process.exit(1);
-  }
+  });
+};
+
+start().catch((err) => {
+  logger.error('[Server] Startup failed', { error: err.message });
+  process.exit(1);
 });
 
 // Graceful shutdown
