@@ -5,9 +5,17 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const prisma = require('./config/database');
 
+const connectWithTimeout = (ms) =>
+  Promise.race([
+    prisma.$connect(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`DB connect timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+
 const server = app.listen(config.port, async () => {
   try {
-    await prisma.$connect();
+    await connectWithTimeout(10000);
     logger.info(`[Server] CAD Gurukul API started`, {
       port: config.port,
       env: config.env,

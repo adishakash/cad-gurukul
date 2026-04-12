@@ -20,6 +20,7 @@ app.use(helmet({
       imgSrc: ["'self'", 'data:', 'https:'],
     },
   },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
 const ALLOWED_ORIGINS = [
@@ -45,6 +46,17 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// ─── Request Timeout (prevent hung DB queries returning "No Response") ─────────
+app.use((req, res, next) => {
+  res.setTimeout(30000, () => {
+    res.status(503).json({
+      success: false,
+      error: { code: 'TIMEOUT', message: 'Request timed out. Please try again.' },
+    });
+  });
+  next();
+});
 
 // ─── Body Parsing ─────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '2mb' }));
