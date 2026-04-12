@@ -71,7 +71,8 @@ export default function App() {
         {/* Protected student routes */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-        <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
+        {/* Assessment is public — guest mode (3 questions preview) handled inside the component */}
+        <Route path="/assessment" element={<PublicLayout><Assessment /></PublicLayout>} />
         <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
         <Route path="/reports/:id" element={<ProtectedRoute><Report /></ProtectedRoute>} />
 

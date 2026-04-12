@@ -34,8 +34,16 @@ const createOrUpdateLead = async (req, res) => {
   try {
     const { email, ...rest } = req.body;
 
-    // Deduplicate by email — upsert
-    const existing = await prisma.lead.findUnique({ where: { email } });
+    // Deduplicate by email first, then by phone — upsert
+    let existing = await prisma.lead.findUnique({ where: { email } });
+
+    // If no email match, check phone (handles mid-assessment temp email flow)
+    if (!existing && rest.mobileNumber) {
+      existing = await prisma.lead.findFirst({
+        where: { mobileNumber: rest.mobileNumber },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     let lead;
     let isNew = false;

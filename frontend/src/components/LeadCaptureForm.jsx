@@ -14,7 +14,7 @@ import { leadApi } from '../services/api'
  *   onSuccess     fn(leadId) => void
  *   compact       bool — show only essential fields (for landing page modal)
  */
-export default function LeadCaptureForm({ selectedPlan = 'free', defaultPlan, onSuccess, compact = false }) {
+export default function LeadCaptureForm({ selectedPlan = 'free', defaultPlan, onSuccess, compact = false, midAssessment = false }) {
   const navigate = useNavigate()
   const normalizedPlan = useMemo(() => {
     const raw = (selectedPlan || defaultPlan || 'free').toString().toLowerCase()
@@ -46,15 +46,18 @@ export default function LeadCaptureForm({ selectedPlan = 'free', defaultPlan, on
     const e = {}
     if (!form.fullName.trim() || form.fullName.trim().length < 2)
       e.fullName = 'Enter your full name'
-    if (!form.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
+    // Email required only when NOT in mid-assessment mode
+    if (!midAssessment && !form.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
       e.email = 'Enter a valid email address'
     if (!form.mobileNumber.match(/^[6-9]\d{9}$/))
       e.mobileNumber = 'Enter a valid 10-digit mobile number'
-    if (!compact && !form.classStandard)
+    if (!compact && !midAssessment && !form.classStandard)
+      e.classStandard = 'Select your class'
+    if (midAssessment && !form.classStandard)
       e.classStandard = 'Select your class'
     if (form.pincode && !form.pincode.match(/^\d{6}$/))
       e.pincode = 'Enter a valid 6-digit pincode'
-    if (!form.consent)
+    if (!midAssessment && !form.consent)
       e.consent = 'Please accept the privacy policy to continue'
     return e
   }
@@ -77,9 +80,14 @@ export default function LeadCaptureForm({ selectedPlan = 'free', defaultPlan, on
         ? (['meta_ads', 'instagram', 'facebook', 'google_ads'].includes(sourceFromUtm) ? sourceFromUtm : 'other')
         : 'direct'
 
+      // In mid-assessment mode, use phone-based placeholder email so dedup works
+      const effectiveEmail = midAssessment && !form.email.trim()
+        ? `${form.mobileNumber.trim()}@cadgurukul.temp`
+        : form.email.trim().toLowerCase()
+
       const payload = {
         fullName:      form.fullName.trim(),
-        email:         form.email.trim().toLowerCase(),
+        email:         effectiveEmail,
         mobileNumber:  form.mobileNumber.trim(),
         classStandard: form.classStandard || undefined,
         stream:        form.stream        || undefined,
@@ -119,7 +127,61 @@ export default function LeadCaptureForm({ selectedPlan = 'free', defaultPlan, on
       errors[field] ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white'
     }`
 
-  return (
+  // ── Simplified 3-field mid-assessment form ─────────────────────────────────
+  if (midAssessment) {
+    return (
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Your Name *</label>
+          <input
+            type="text" name="fullName" value={form.fullName}
+            onChange={handleChange} placeholder="Riya Sharma"
+            className={inputCls('fullName')} autoComplete="name"
+          />
+          {errors.fullName && <p className="text-xs text-red-500 mt-1">{errors.fullName}</p>}
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Mobile Number (WhatsApp) *</label>
+          <input
+            type="tel" name="mobileNumber" value={form.mobileNumber}
+            onChange={handleChange} placeholder="9876543210" maxLength={10}
+            className={inputCls('mobileNumber')} autoComplete="tel"
+          />
+          {errors.mobileNumber && <p className="text-xs text-red-500 mt-1">{errors.mobileNumber}</p>}
+          <p className="text-xs text-gray-400 mt-1">Your report will be sent on WhatsApp 📲</p>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Which class are you in? *</label>
+          <select name="classStandard" value={form.classStandard} onChange={handleChange} className={inputCls('classStandard')}>
+            <option value="">Select class</option>
+            {['8','9','10','11','12'].map((c) => (
+              <option key={c} value={c}>Class {c}</option>
+            ))}
+          </select>
+          {errors.classStandard && <p className="text-xs text-red-500 mt-1">{errors.classStandard}</p>}
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full btn-primary py-3 text-base font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              Saving…
+            </span>
+          ) : 'Continue & Unlock My Report 🎯'}
+        </button>
+        <p className="text-xs text-center text-gray-400">
+          🔒 No spam. We send only your career report and AI insights.
+        </p>
+      </form>
+    )
+  }
+  // ── END midAssessment form ─────────────────────────────────────────────────
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
       {/* Name */}
       <div>

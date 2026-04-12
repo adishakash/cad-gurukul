@@ -26,6 +26,8 @@ const WA_TEMPLATE_MAP = {
   lead_created:          'cg_welcome',
   assessment_completed:  'cg_assessment_done',
   free_report_ready:     'cg_free_report_ready',
+  free_report_viewed:    'cg_upgrade_nudge',       // Re-engagement: seen report but not paid
+  payment_initiated:     'cg_payment_reminder',    // Abandoned payment reminder
   payment_success:       'cg_payment_success',
   premium_report_ready:  'cg_premium_report_ready',
   assessment_abandoned:  'cg_resume_assessment',
@@ -125,6 +127,7 @@ const EVENT_TO_LEAD_STATUS = {
   assessment_started:    'assessment_started',
   assessment_completed:  'assessment_completed',
   free_report_ready:     'free_report_ready',
+  free_report_viewed:    'free_report_ready',      // Keeps status, triggers WhatsApp nudge
   payment_initiated:     'payment_pending',
   payment_success:       'paid',
   premium_report_ready:  'premium_report_ready',

@@ -131,13 +131,7 @@ export default function Dashboard() {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <button
-            onClick={() => {
-              if (!profile?.isOnboardingComplete) return toast.error('Complete your profile first!')
-              navigate('/assessment?plan=FREE')
-            }}
-            className="card hover:shadow-lg transition-shadow text-left border-l-4 border-brand-red cursor-pointer"
-          >
-            <div className="text-3xl mb-2">🧠</div>
+            onClick={() => navigate('/assessment?plan=FREE')}
             <div className="font-bold text-brand-dark">Free Assessment</div>
             <div className="text-sm text-gray-500 mt-1">10 AI questions · Basic report</div>
             <div className="mt-3 text-brand-red text-sm font-semibold">Start Now →</div>
@@ -251,17 +245,26 @@ export default function Dashboard() {
 
                   {/* Upsell nudge: has free report but no paid */}
                   {freeReport && !paidReport && (
-                    <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                      <div>
-                        <div className="font-semibold text-gray-800 text-sm">🔓 Ready for the full picture?</div>
-                        <div className="text-xs text-gray-500 mt-0.5">Unlock 7 career paths, 3-year roadmap, and PDF download for just ₹499.</div>
+                    <div className="bg-gradient-to-r from-brand-dark to-brand-navy text-white rounded-xl p-5 mt-2">
+                      <div className="flex items-start gap-3">
+                        <span className="text-3xl shrink-0">🔐</span>
+                        <div className="flex-1">
+                          <div className="font-bold text-base">Your full career path is locked</div>
+                          <p className="text-gray-300 text-sm mt-1">
+                            You've seen 3 careers. 4 more high-fit matches, your 3-year roadmap, subject recommendations, and a downloadable PDF are all waiting.
+                          </p>
+                          <p className="text-yellow-300 text-xs mt-1 font-semibold">
+                            One wrong stream choice can cost 3 years. Unlock clarity for ₹499.
+                          </p>
+                        </div>
                       </div>
                       <button
                         onClick={() => navigate(`/payment?assessmentId=${freeReport.assessmentId || ''}`)}
-                        className="btn-primary text-xs px-4 py-2 shrink-0"
+                        className="w-full mt-4 bg-brand-red text-white font-bold py-3 rounded-xl text-sm hover:bg-red-700 transition"
                       >
-                        Upgrade →  ₹499
+                        🔓 Unlock My Exact Career Path — ₹499
                       </button>
+                      <p className="text-center text-xs text-gray-400 mt-2">🔒 Razorpay · UPI, Cards, Net Banking</p>
                     </div>
                   )}
                 </div>

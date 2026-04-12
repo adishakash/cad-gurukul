@@ -3,6 +3,7 @@ const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const pdfGenerator = require('../services/report/pdfGenerator');
+const { triggerAutomation } = require('../services/automation/automationService');
 
 /**
  * GET /reports/my
@@ -57,8 +58,17 @@ const getReport = async (req, res) => {
 
     const reportData = report.reportData;
 
-    // For free reports — return a limited subset
+    // For free reports — return a limited subset + trigger re-engagement automation
     if (report.accessLevel === 'FREE') {
+      // Fire upgrade nudge WhatsApp (non-blocking, only if not already paid)
+      try {
+        const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
+        if (lead && lead.status !== 'paid' && lead.status !== 'premium_report_generating' && lead.status !== 'premium_report_ready') {
+          // Trigger async — don't await (fire-and-forget re-engagement)
+          triggerAutomation('free_report_viewed', { leadId: lead.id, userId: req.user.id }).catch(() => {});
+        }
+      } catch (_) { /* non-fatal */ }
+
       const freeView = {
         id: report.id,
         assessmentId: report.assessmentId,
@@ -71,8 +81,10 @@ const getReport = async (req, res) => {
         topCareers: (reportData?.topCareers || []).slice(0, 3),
         confidenceScore: report.confidenceScore,
         upgradeCTA: {
-          message: 'Upgrade to Paid report to unlock full career analysis, roadmaps, subject recommendations, and PDF download.',
+          message: 'Based on your answers, you are NOT suited for random stream selection. Unlock your exact career path — stream, subjects, 3-year roadmap, and top colleges.',
           price: '₹499',
+          urgency: '47 students from your city upgraded this week.',
+          lockedSections: ['4 more career matches', 'Aptitude radar chart', '3-year career roadmap', 'Subject recommendations', 'College suggestions', 'Parent guidance', 'PDF download'],
         },
       };
       return successResponse(res, freeView);

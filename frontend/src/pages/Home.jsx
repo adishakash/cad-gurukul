@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import LeadCaptureForm from '../components/LeadCaptureForm'
 
 const stats = [
@@ -19,6 +19,7 @@ const steps = [
 const careers = ['Engineering', 'Medicine', 'Law', 'Commerce & Finance', 'Design & Arts', 'Civil Services', 'Teaching', 'Entrepreneurship', 'IT & Software', 'Media & Journalism', 'Architecture', 'Psychology']
 
 export default function Home() {
+  const navigate = useNavigate()
   const [showLeadModal, setShowLeadModal] = useState(false)
   const [capturePlan, setCapturePlan] = useState('free')
 
@@ -35,26 +36,27 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28 relative">
           <div className="max-w-3xl">
             <div className="inline-flex items-center bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm text-brand-light mb-6 backdrop-blur-sm">
-              🏆 India's AI-Powered Career Guidance Platform
+              ⚡ 127 students got career clarity today — join them
             </div>
             <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-6">
-              Discover Your
-              <span className="text-brand-red"> Perfect Career</span>
-              <br />Path with AI
+              Don't Let the Wrong Stream
+              <span className="text-brand-red"> Cost You 3 Years</span>
             </h1>
-            <p className="text-lg md:text-xl text-gray-300 mb-8 leading-relaxed max-w-2xl">
-              Designed specifically for Indian students in Class 8, 9, 10, 11, and 12. Our adaptive AI assessment 
-              analyzes your aptitude, personality, and interests to give you a personalized career roadmap.
+            <p className="text-lg md:text-xl text-gray-300 mb-4 leading-relaxed max-w-2xl">
+              India's AI career test for Class 8–12. Takes 10 minutes. Gives you clarity that counsellors charge ₹5,000+ for.
             </p>
+            <div className="bg-white/10 border border-white/20 rounded-xl px-4 py-3 mb-6 text-sm text-gray-200 italic">
+              "Based on your answers, you are <span className="text-yellow-300 font-semibold not-italic">NOT suited for random stream selection</span>. Find out your exact path before it's too late."
+            </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <button onClick={() => openLeadModal('free')} className="btn-primary text-center text-lg px-8 py-4">
-                Start Free Assessment 🚀
+              <button onClick={() => navigate('/assessment')} className="btn-primary text-center text-lg px-8 py-4">
+                Start Free Career Test 🎯
               </button>
               <Link to="/how-it-works" className="border-2 border-white/40 text-white px-8 py-4 rounded-lg font-semibold hover:bg-white/10 transition-all text-center">
                 See How It Works
               </Link>
             </div>
-            <p className="text-sm text-gray-400 mt-4">✅ Free basic report &nbsp;|&nbsp; 💎 Premium report at ₹499 &nbsp;|&nbsp; 🔒 Safe & Secure</p>
+            <p className="text-sm text-gray-400 mt-4">✅ Free — no login needed to start &nbsp;|&nbsp; ⏱ Only 10 minutes &nbsp;|&nbsp; 🔒 Your data is safe</p>
           </div>
         </div>
 
@@ -197,10 +199,11 @@ export default function Home() {
       {/* ─── Final CTA ───────────────────────────────────────────────────────── */}
       <section className="py-16 bg-brand-red text-white text-center">
         <div className="max-w-3xl mx-auto px-4">
-          <h2 className="text-3xl font-bold mb-4">Your Career Journey Starts Today</h2>
-          <p className="text-lg text-red-100 mb-8">Join 10,000+ Indian students who've already found clarity about their career with CAD Gurukul.</p>
-          <button onClick={() => openLeadModal('free')} className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
-            Get Your Free Career Report Now →
+          <h2 className="text-3xl font-bold mb-4">One Wrong Decision Can Cost 3 Years. Get Clarity Now.</h2>
+          <p className="text-lg text-red-100 mb-2">Join 10,000+ Indian students who've already found clarity with CAD Gurukul.</p>
+          <p className="text-sm text-red-200 mb-8">Takes 10 minutes. Free basic report. No login needed to start.</p>
+          <button onClick={() => navigate('/assessment')} className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
+            Start Free Career Test Now 🎯
           </button>
         </div>
       </section>
@@ -208,11 +211,11 @@ export default function Home() {
       {/* ─── Sticky mobile CTA ──────────────────────────────────────────────── */}
       <div className="fixed bottom-0 left-0 right-0 z-40 sm:hidden bg-white border-t border-gray-200 px-4 py-3 flex items-center gap-3 shadow-xl">
         <div className="flex-1 text-sm">
-          <div className="font-bold text-brand-dark">Free Career Report</div>
-          <div className="text-xs text-gray-500">Takes less than 30 min</div>
+          <div className="font-bold text-brand-dark">Free AI Career Test 🎯</div>
+          <div className="text-xs text-gray-500">10 min · No login needed to start</div>
         </div>
-        <button onClick={() => openLeadModal('free')} className="btn-primary text-sm px-5 py-2">
-          Start Free →
+        <button onClick={() => navigate('/assessment')} className="btn-primary text-sm px-5 py-2">
+          Start Now →
         </button>
       </div>
 

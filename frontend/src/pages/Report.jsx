@@ -189,14 +189,57 @@ export default function Report() {
         {/* Radar chart (paid only) */}
         {isPaid && <ScoreRadar evaluation={evaluation} />}
 
+        {/* 🔐 FREE REPORT: Urgency lock banner */}
+        {!isPaid && (
+          <div className="mb-6 rounded-2xl bg-gradient-to-r from-brand-dark to-brand-navy text-white p-5 shadow-xl">
+            <div className="flex items-start gap-3">
+              <span className="text-3xl shrink-0">🔐</span>
+              <div>
+                <p className="font-bold text-base leading-snug">
+                  Your exact career path is hidden below
+                </p>
+                <p className="text-gray-300 text-sm mt-1">
+                  You've seen 3 careers. Based on your answers, you are <strong className="text-yellow-300">NOT suited for random stream selection</strong>. 47 students from your city unlocked clarity this week.
+                </p>
+                <button
+                  onClick={() => navigate(`/payment?assessmentId=${report.assessmentId}`)}
+                  className="mt-3 bg-brand-red text-white font-bold px-5 py-2 rounded-xl text-sm hover:bg-red-700 transition"
+                >
+                  Unlock Your Exact Career Path — ₹499 →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Careers */}
         <div className="mb-6">
           <h2 className="section-title mb-4">
-            {isPaid ? `Top ${careers.length} Career Paths` : 'Top 3 Career Suggestions'}
+            {isPaid ? `Top ${careers.length} Career Paths` : 'Top 3 Career Suggestions (Preview)'}
           </h2>
           {careers.slice(0, isPaid ? undefined : 3).map((career, i) => (
             <CareerCard key={career.name || i} career={career} index={i} />
           ))}
+
+          {/* Blurred locked careers preview for free users */}
+          {!isPaid && (
+            <div className="relative mt-2">
+              <div className="blur-sm pointer-events-none select-none">
+                {[
+                  { name: '🔒 Career Match #4', fitScore: 87, description: 'Unlock to see this high-fit career recommendation', stream: 'Hidden' },
+                  { name: '🔒 Career Match #5', fitScore: 82, description: 'Unlock to see this high-fit career recommendation', stream: 'Hidden' },
+                ].map((c, i) => <CareerCard key={i} career={c} index={i} />)}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <button
+                  onClick={() => navigate(`/payment?assessmentId=${report.assessmentId}`)}
+                  className="bg-brand-red text-white font-bold px-6 py-3 rounded-xl shadow-2xl text-sm hover:bg-red-700 transition"
+                >
+                  🔓 Unlock 4 More Career Matches →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Roadmaps (paid only) */}
@@ -229,15 +272,9 @@ export default function Report() {
           </div>
         )}
 
-        {/* Upgrade CTA (free users) */}
+        {/* Premium CTA for free users — shown immediately inline */}
         {!isPaid && (
           <div className="space-y-4">
-            {report.upgradeCTA?.message && (
-              <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900">
-                <p className="font-semibold">Upgrade Available</p>
-                <p className="mt-1">{report.upgradeCTA.message}</p>
-              </div>
-            )}
             <PremiumUpsell
               assessmentId={report.assessmentId}
               inline

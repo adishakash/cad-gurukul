@@ -17,10 +17,14 @@ const startAssessment = async (req, res) => {
   try {
     const { accessLevel = 'FREE' } = req.body;
 
-    // Verify student has completed onboarding
+    // Verify student has a profile (onboarding completion is preferred but not mandatory)
     const profile = await prisma.studentProfile.findUnique({ where: { userId: req.user.id } });
-    if (!profile || !profile.isOnboardingComplete) {
+    if (!profile) {
       return errorResponse(res, 'Please complete your profile before starting assessment', 400, 'INCOMPLETE_PROFILE');
+    }
+    // Soft warning if onboarding not complete — assessment can still proceed with partial data
+    if (!profile.isOnboardingComplete) {
+      logger.info('[Assessment] Starting with incomplete profile', { userId: req.user.id });
     }
 
     // Prevent multiple active assessments
