@@ -57,10 +57,6 @@ services:
       - ./certbot/www:/var/www/certbot:ro
     depends_on:
       - backend
-    # Reload nginx every 6 h so renewed certs are picked up without downtime
-    command: >
-      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done &
-      nginx -g 'daemon off;'"
 
   certbot:
     image: certbot/certbot:latest
