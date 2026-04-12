@@ -1,31 +1,33 @@
-# CAD Gurukul – AI-Powered Career Guidance SaaS for Indian Students
+﻿# CAD Gurukul — AI-Powered Career Guidance SaaS
 
-> **Conversion-optimised funnel** — Free → Paid target: 10%+  
+> Conversion-optimised funnel | Free → Paid target: 10%+  
 > Last updated: April 2026
-
-## Product Vision
-
-CAD Gurukul is a production-grade SaaS platform that helps Indian students in Class 8–12 discover the right career path, select the right stream, choose the right subjects, and plan their higher education journey — powered by adaptive AI assessment and personalised career guidance reports.
 
 ---
 
-## Conversion Funnel Overview
+## Product Vision
+
+CAD Gurukul helps Indian students in Class 8–12 discover the right career path, select the right stream, choose the right subjects, and plan their higher education journey — powered by adaptive AI assessment and personalised career guidance reports.
+
+---
+
+## Conversion Funnel
 
 ```
 Home (hero CTA)
-  ↓ "Start Free Career Test" — no login needed
+  ↓ "Start Free Career Test" — no login required
 Assessment (guest mode: 3 static hook questions)
-  ↓ After Q3 → inline LeadCaptureForm (name, phone, class — 3 fields only)
+  ↓ After Q3 → inline LeadCaptureForm (name, phone, class — 3 fields)
   ↓ Lead created in DB + WhatsApp welcome sent
 Register / Login
-  ↓ (leadId linked to user account)
+  ↓ leadId linked to user account
 Assessment continues (AI adaptive — Q4–Q10)
   ↓
 Free Report (teaser mode)
   — Top 3 careers shown
-  — 🔐 4 more careers blurred/locked
-  — Premium CTA visible immediately (no 3s delay)
-  — WhatsApp re-engagement sent after 30 min if no upgrade
+  — 4 more careers blurred/locked
+  — Premium CTA shown immediately
+  — WhatsApp re-engagement after 30 min if no upgrade
   ↓ "Unlock My Exact Career Path — ₹499"
 Payment (Razorpay)
   ↓ Payment success → lead.status = paid
@@ -38,126 +40,101 @@ Dashboard (conversion-focused)
 
 ### Key Metrics Targeted
 
-| Metric | Before | Target |
-|--------|--------|--------|
-| Assessment start rate | ~20% | 60%+ |
-| Assessment completion | ~40% | 70%+ |
-| Free → Paid conversion | ~2–3% | 10%+ |
-| Payment completion | ~60% | 80%+ |
+| Metric                   | Before | Target |
+|--------------------------|--------|--------|
+| Assessment start rate    | ~20%   | 60%+   |
+| Assessment completion    | ~40%   | 70%+   |
+| Free → Paid conversion   | ~2–3%  | 10%+   |
+| Payment completion       | ~60%   | 80%+   |
 
 ---
 
-## Architecture Overview
+## Pricing Tiers (Value Ladder)
+
+| Plan               | Price    | `planType`     | Notes                                    |
+|--------------------|----------|----------------|------------------------------------------|
+| Free Report        | ₹0       | `free`         | Top 3 careers, blurred premium teaser    |
+| Full Report        | ₹499     | `standard`     | 7 careers, PDF, 3-year roadmap           |
+| Premium AI Report  | ₹1,999   | `premium`      | GPT-4o priority, enhanced AI analysis   |
+| 1:1 Counselling    | ₹9,999   | `consultation` | No assessment required, WA confirm sent  |
+
+---
+
+## Architecture
 
 ```
 webapp/
-├── backend/                  # Node.js + Express API
-│   ├── prisma/               # Database schema & migrations
+├── backend/                    # Node.js 20 + Express API
+│   ├── prisma/                 # Schema, migrations, seed
 │   └── src/
-│       ├── config/           # App & DB configs
-│       ├── controllers/      # Route handlers
-│       ├── middleware/        # Auth, validation, rate limiting
-│       ├── routes/           # Express route definitions
-│       ├── services/         # Business logic
-│       │   ├── ai/           # OpenAI + Gemini orchestration
-│       │   ├── automation/   # Event-driven WhatsApp + lead automation
-│       │   ├── payment/      # Razorpay integration
-│       │   ├── report/       # PDF report generation
-│       │   └── whatsapp/     # Provider-agnostic WhatsApp service
-│       ├── utils/            # Helpers & logger
-│       └── validators/       # Joi validation schemas
-├── frontend/                 # React.js SPA
+│       ├── config/             # App & DB configuration
+│       ├── controllers/        # Route handlers
+│       ├── middleware/         # Auth, validation, rate limiting, logging
+│       ├── routes/             # Express route definitions
+│       ├── services/
+│       │   ├── ai/             # OpenAI + Gemini orchestration
+│       │   ├── analytics/      # Funnel tracking (fire-and-forget)
+│       │   ├── automation/     # Event-driven WhatsApp + lead automation
+│       │   ├── email/          # Nodemailer + SendGrid
+│       │   ├── payment/        # Razorpay integration
+│       │   ├── report/         # PDF generation (Puppeteer)
+│       │   └── whatsapp/       # Provider-agnostic WhatsApp service
+│       ├── utils/              # Helpers & Winston logger
+│       └── validators/         # Joi validation schemas
+├── frontend/                   # React 18 SPA (Vite)
 │   └── src/
-│       ├── components/       # LeadCaptureForm, PremiumUpsell, Layout
-│       ├── pages/            # Route-level pages
-│       ├── store/            # Redux Toolkit state
-│       └── services/         # API client layer
-└── docs/                     # Architecture & API docs
+│       ├── components/         # LeadCaptureForm, PremiumUpsell, Layout
+│       ├── pages/              # Route-level pages + Admin panel
+│       ├── store/              # Redux Toolkit slices
+│       └── services/           # Axios API client
+└── docs/                       # API reference, ERD, deployment guide
 ```
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technology                                                     |
-|-------------|----------------------------------------------------------------|
-| Frontend    | React 18, Redux Toolkit, React Router v6, Tailwind CSS         |
-| Backend     | Node.js 20, Express.js                                         |
-| Database    | PostgreSQL 15                                                  |
-| ORM         | Prisma                                                         |
-| Auth        | JWT (access + refresh tokens)                                  |
-| AI          | OpenAI GPT-4o + Google Gemini 1.5 Pro (orchestrated)          |
-| Payments    | Razorpay (UPI, Cards, Net Banking)                             |
-| WhatsApp    | WATI / Interakt (provider-agnostic, configure via `.env`)      |
-| PDF         | Puppeteer                                                      |
-| Email       | Nodemailer + SendGrid                                          |
-| Logging     | Winston                                                        |
-| Validation  | Joi                                                            |
+| Layer       | Technology                                                         |
+|-------------|--------------------------------------------------------------------|
+| Frontend    | React 18, Redux Toolkit, React Router v6, Tailwind CSS, Recharts  |
+| Backend     | Node.js 20, Express.js                                             |
+| Database    | PostgreSQL 15                                                      |
+| ORM         | Prisma 5                                                           |
+| Auth        | JWT (access + refresh tokens)                                      |
+| AI          | OpenAI GPT-4o + Google Gemini 1.5 Pro (orchestrated, fallback)    |
+| Payments    | Razorpay (UPI, Cards, Net Banking)                                 |
+| WhatsApp    | WATI / Interakt (provider-agnostic via `.env`; defaults to stub)  |
+| PDF         | Puppeteer                                                          |
+| Email       | Nodemailer + SendGrid                                              |
+| Logging     | Winston                                                            |
+| Validation  | Joi                                                                |
+| Containers  | Docker + Docker Compose                                            |
 
 ---
 
 ## User Roles
 
-1. **Student** – Primary user; takes assessment, views/downloads report
-2. **Parent** – Secondary; linked to student; views report
-3. **Admin** – Internal; manages users, reports, pricing, analytics
-4. **Counsellor** – Future role; assigned to students for guidance
+| Role          | Description                                                        |
+|---------------|--------------------------------------------------------------------|
+| `STUDENT`     | Primary user — takes assessment, views/downloads report            |
+| `PARENT`      | Linked to student — views report                                   |
+| `COUNSELLOR`  | Future role — assigned to students for guidance                    |
+| `ADMIN`       | Internal (separate JWT) — manages users, leads, analytics, pricing |
 
----
-
-## Quick Start
-
-### Prerequisites
-- Node.js 20+
-- PostgreSQL 15+
-- npm or yarn
-
-### Backend Setup
-```bash
-cd backend
-npm install
-cp .env.example .env
-# Fill in .env values
-npx prisma migrate dev --name init
-npx prisma generate
-npm run dev
-```
-
-### Frontend Setup
-```bash
-cd frontend
-npm install
-cp .env.example .env
-npm start
-```
-
----
-
-## Environment Variables (see `backend/.env.example`)
-
-- `DATABASE_URL` – PostgreSQL connection string
-- `JWT_SECRET` – JWT signing secret
-- `OPENAI_API_KEY` – OpenAI API key
-- `GEMINI_API_KEY` – Google Gemini API key
-- `RAZORPAY_KEY_ID` – Razorpay key ID
-- `RAZORPAY_KEY_SECRET` – Razorpay key secret
-- `SMTP_*` – Email service credentials
-- `WHATSAPP_PROVIDER` – `wati` | `interakt` | `stub` (default: stub)
-- `WHATSAPP_API_URL` – WhatsApp provider API base URL
-- `WHATSAPP_API_TOKEN` – Bearer token for WhatsApp provider
+Admin sub-roles: `SUPER_ADMIN`, `ADMIN`, `SUPPORT`.
 
 ---
 
 ## Key Features
 
 ### Free Plan
-- **No login needed to start** — 3 hook questions shown immediately
+- No login needed to start — 3 hook questions shown immediately
 - 10 adaptive AI questions after lead capture
 - Free report: top 3 career matches + stream recommendation
-- Locked teaser of premium sections (blurred UI)
+- Blurred teaser of premium sections with locked-career count
 - WhatsApp re-engagement after 30 min if no upgrade
 
-### Paid Plan – ₹499 (one-time)
+### Paid Plan — ₹499 (standard)
 - 30 adaptive AI questions
 - Full report: 7 ranked career matches + confidence scores
 - Aptitude radar chart
@@ -169,125 +146,31 @@ npm start
 - Downloadable PDF report (lifetime access)
 - Instant WhatsApp delivery notification
 
+### Admin Panel
+- Lead pipeline view with funnel metric cards
+- Paginated lead table with status filters and CSV export
+- Lead detail page: event timeline, inline status editor, manual action buttons
+- 30-day funnel metrics widget on dashboard
+- Funnel summary and traffic source breakdown analytics
+
 ---
 
 ## WhatsApp Automation Events
 
-| Event | Template | Trigger |
-|-------|----------|---------|
-| `lead_created` | `cg_welcome` | User fills lead form |
-| `assessment_completed` | `cg_assessment_done` | Assessment finished |
-| `free_report_ready` | `cg_free_report_ready` | Free report generated |
-| `free_report_viewed` | `cg_upgrade_nudge` | User views free report (re-engagement) |
-| `payment_initiated` | `cg_payment_reminder` | Abandoned payment re-engagement |
-| `payment_success` | `cg_payment_success` | Payment confirmed |
-| `premium_report_ready` | `cg_premium_report_ready` | Premium report delivered |
-| `assessment_abandoned` | `cg_resume_assessment` | Incomplete assessment follow-up |
+| Event                    | Template                  | Trigger                                  |
+|--------------------------|---------------------------|------------------------------------------|
+| `lead_created`           | `cg_welcome`              | User fills lead form                     |
+| `assessment_completed`   | `cg_assessment_done`      | Assessment finished                      |
+| `free_report_ready`      | `cg_free_report_ready`    | Free report generated                    |
+| `free_report_viewed`     | `cg_upgrade_nudge`        | User views free report (re-engagement)   |
+| `payment_initiated`      | `cg_payment_reminder`     | Abandoned payment re-engagement          |
+| `payment_success`        | `cg_payment_success`      | Payment confirmed                        |
+| `premium_report_ready`   | `cg_premium_report_ready` | Premium report delivered                 |
+| `assessment_abandoned`   | `cg_resume_assessment`    | Incomplete assessment follow-up          |
+| `premium_ai_purchased`   | `cg_premium_ai_upsell`    | ₹1,999 premium AI plan purchased         |
+| `consultation_booked`    | `cg_consultation_confirm` | ₹9,999 counselling session booked        |
 
----
-
-## Funnel Optimisation Changes (April 2026)
-
-### Diagnosis — Issues Fixed
-
-1. **Auth-gate before ANY question** → Removed. `/assessment` is now a public route. Guests see 3 hook questions with zero friction.
-2. **LeadCaptureForm with 7+ fields on first touch** → Added `midAssessment` mode: 3 fields only (name, phone, class).
-3. **No urgency on free report** → Added: locked career teaser (blurred), urgent banner, immediate inline premium CTA.
-4. **PremiumUpsell shown after 3-second delay** → Shown inline immediately.
-5. **Home CTA opened a form** → Now navigates directly to `/assessment` — users experience value before giving data.
-6. **Dashboard blocked assessment behind profile completion** → Restriction removed; assessment is accessible directly.
-7. **Lead dedup by email only** → Added phone-based dedup to catch mid-assessment temp-email leads.
-8. **Missing WhatsApp triggers** → Added `free_report_viewed` (upgrade nudge) and `payment_initiated` (abandoned payment) to automation map.
-9. **Onboarding required before assessment** → Backend now allows assessment start with partial profile (soft warning instead of hard block).
-
-### Files Changed
-
-**Frontend:**
-- `src/App.jsx` — moved `/assessment` to public route
-- `src/pages/Home.jsx` — urgency hero copy, CTA → `/assessment`
-- `src/pages/Assessment.jsx` — guest mode (3 questions + inline lead capture + motivational progress text)
-- `src/components/LeadCaptureForm.jsx` — `midAssessment` prop (3-field simplified mode)
-- `src/pages/Report.jsx` — lock banner, blurred career teaser, immediate premium CTA
-- `src/components/PremiumUpsell.jsx` — emotional Indian copy, urgency scarcity
-- `src/pages/Dashboard.jsx` — removed assessment block, premium teaser upgrade card
-
-**Backend:**
-- `src/controllers/assessment.controller.js` — relaxed onboarding requirement
-- `src/controllers/lead.controller.js` — phone-based dedup
-- `src/controllers/report.controller.js` — `free_report_viewed` automation trigger, richer lock CTA messages
-- `src/services/automation/automationService.js` — `free_report_viewed` + `payment_initiated` WhatsApp triggers
-
----
-
-## API Base URL
-
-`/api/v1`
-
-## Documentation
-
-- [API Reference](./docs/api.md)
-- [Database ERD](./docs/erd.md)
-- [Deployment Guide](./docs/deployment.md)
-
-
----
-
-## Architecture Overview
-
-```
-webapp/
-├── backend/                  # Node.js + Express API
-│   ├── prisma/               # Database schema & migrations
-│   └── src/
-│       ├── config/           # App & DB configs
-│       ├── controllers/      # Route handlers
-│       ├── middleware/       # Auth, validation, rate limiting
-│       ├── routes/           # Express route definitions
-│       ├── services/         # Business logic
-│       │   ├── ai/           # OpenAI + Gemini orchestration
-│       │   ├── payment/      # Razorpay integration
-│       │   ├── report/       # PDF report generation
-│       │   └── email/        # Email notifications
-│       ├── utils/            # Helpers & logger
-│       └── validators/       # Joi validation schemas
-├── frontend/                 # React.js SPA
-│   └── src/
-│       ├── assets/           # Images, fonts, icons
-│       ├── components/       # Reusable UI components
-│       ├── pages/            # Route-level pages
-│       ├── store/            # Redux Toolkit state
-│       ├── services/         # API client layer
-│       ├── hooks/            # Custom React hooks
-│       └── utils/            # Frontend utilities
-└── docs/                     # Architecture & API docs
-```
-
----
-
-## Tech Stack
-
-| Layer        | Technology               |
-|-------------|--------------------------|
-| Frontend    | React 18, Redux Toolkit, React Router v6, Tailwind CSS |
-| Backend     | Node.js 20, Express.js   |
-| Database    | PostgreSQL 15            |
-| ORM         | Prisma                   |
-| Auth        | JWT (access + refresh tokens) |
-| AI          | OpenAI GPT-4o + Google Gemini 1.5 Pro |
-| Payments    | Razorpay                 |
-| PDF         | Puppeteer                |
-| Email       | Nodemailer + SendGrid    |
-| Logging     | Winston                  |
-| Validation  | Joi                      |
-
----
-
-## User Roles
-
-1. **Student** – Primary user; registers, takes assessment, views/downloads report
-2. **Parent** – Secondary; linked to student; views report
-3. **Admin** – Internal; manages users, reports, pricing, analytics
-4. **Counsellor** – Future role; assigned to students for guidance
+> `automationService` never throws — safe to call from any controller without try/catch.
 
 ---
 
@@ -296,68 +179,149 @@ webapp/
 ### Prerequisites
 - Node.js 20+
 - PostgreSQL 15+
-- npm or yarn
+- npm
 
-### Backend Setup
+### Backend
 ```bash
 cd backend
 npm install
 cp .env.example .env
-# Fill in .env values
+# Fill in .env values (see Environment Variables below)
 npx prisma migrate dev --name init
 npx prisma generate
+node prisma/seed.js      # optional: seed sample data
 npm run dev
 ```
 
-### Frontend Setup
+### Frontend
 ```bash
 cd frontend
 npm install
-cp .env.example .env
-npm start
+# Create frontend/.env with VITE_API_BASE_URL=http://localhost:5000/api/v1
+npm run dev
 ```
 
----
+### Docker Compose (recommended for full-stack local)
+```bash
+# 1. Configure backend secrets
+cp backend/.env.example backend/.env
+# Edit backend/.env
 
-## Environment Variables (see backend/.env.example)
+# 2. Create root .env
+cat > .env <<EOF
+POSTGRES_USER=cadgurukul
+POSTGRES_PASSWORD=changeme
+POSTGRES_DB=cadgurukul
+VITE_API_BASE_URL=/api/v1
+VITE_RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxx
+EOF
 
-- `DATABASE_URL` – PostgreSQL connection string
-- `JWT_SECRET` – JWT signing secret
-- `OPENAI_API_KEY` – OpenAI API key
-- `GEMINI_API_KEY` – Google Gemini API key
-- `RAZORPAY_KEY_ID` – Razorpay key ID
-- `RAZORPAY_KEY_SECRET` – Razorpay key secret
-- `SMTP_*` – Email service credentials
+# 3. Build & start
+docker-compose up -d --build
 
----
+# 4. Run migrations
+docker exec cadgurukul_backend npx prisma migrate deploy
+docker exec cadgurukul_backend node prisma/seed.js
+```
 
-## Key Features
-
-### Free Plan
-- Basic student profile
-- 10 adaptive questions
-- Limited summary report
-- Stream recommendation only
-- Soft CTA to upgrade
-
-### Paid Plan – ₹499/-
-- Full 30+ question adaptive assessment
-- Comprehensive AI-generated report
-- Stream + subject + career recommendations
-- 1-year and 3-year roadmaps
-- Parent guidance notes
-- Downloadable PDF report
-- Priority AI model (GPT-4o)
+App available at `http://localhost` (frontend) and `http://localhost:5000` (API).
 
 ---
 
-## API Base URL
+## Environment Variables
 
-`/api/v1`
+### Backend (`backend/.env`)
+
+| Variable               | Description                                          |
+|------------------------|------------------------------------------------------|
+| `DATABASE_URL`         | PostgreSQL connection string                         |
+| `JWT_SECRET`           | JWT signing secret                                   |
+| `JWT_REFRESH_SECRET`   | Refresh token signing secret                         |
+| `PORT`                 | API port (default: `5000`)                           |
+| `NODE_ENV`             | `development` or `production`                        |
+| `OPENAI_API_KEY`       | OpenAI API key                                       |
+| `GEMINI_API_KEY`       | Google Gemini API key                                |
+| `RAZORPAY_KEY_ID`      | Razorpay key ID                                      |
+| `RAZORPAY_KEY_SECRET`  | Razorpay key secret                                  |
+| `SMTP_HOST`            | SMTP host (e.g. `smtp.sendgrid.net`)                 |
+| `SMTP_PORT`            | SMTP port                                            |
+| `SMTP_USER`            | SMTP username                                        |
+| `SMTP_PASS`            | SMTP password / API key                              |
+| `WHATSAPP_PROVIDER`    | `wati` / `interakt` / `stub` (default: `stub`)      |
+| `WHATSAPP_API_URL`     | WhatsApp provider API base URL                       |
+| `WHATSAPP_API_TOKEN`   | WhatsApp bearer token                                |
+
+### Frontend (`frontend/.env`)
+
+| Variable               | Description                               |
+|------------------------|-------------------------------------------|
+| `VITE_API_BASE_URL`    | API base URL (`/api/v1` or absolute URL)  |
+| `VITE_RAZORPAY_KEY_ID` | Razorpay publishable key                  |
+
+---
+
+## Database Schema (Key Models)
+
+| Model              | Purpose                                                      |
+|--------------------|--------------------------------------------------------------|
+| `User`             | Email/password auth, role (`STUDENT` / `PARENT` / `COUNSELLOR`) |
+| `StudentProfile`   | Class, board, subjects, parent details                       |
+| `Assessment`       | Adaptive question session per student, status tracking       |
+| `AssessmentResponse` | Per-question answers (MCQ, rating, text, ranking, yes/no) |
+| `CareerReport`     | AI-generated report, PDF URL, `reportType` (free/paid)      |
+| `Payment`          | Razorpay order/payment IDs, status lifecycle                 |
+| `Lead`             | Email-deduped, `planType`, `qualificationScore`, UTM data   |
+| `LeadEvent`        | Append-only event timeline per lead                          |
+| `WhatsappMessage`  | Outbound message log (provider-agnostic)                     |
+| `AutomationJob`    | Async job queue records                                      |
+| `AnalyticsEvent`   | Fire-and-forget funnel event log                             |
+| `Admin`            | Separate auth table with sub-roles                           |
+
+---
+
+## API Reference
+
+Base URL: `/api/v1`
+
+| Prefix       | Description                           |
+|--------------|---------------------------------------|
+| `/auth`      | Register, login, refresh, logout      |
+| `/assessment`| Start, submit answers, get status     |
+| `/report`    | Get free/paid report, download PDF    |
+| `/payment`   | Create order, verify payment          |
+| `/leads`     | Lead capture, link user               |
+| `/student`   | Profile CRUD                          |
+| `/admin`     | Dashboard, leads, funnel stats        |
+
+Full reference: [docs/api.md](./docs/api.md)
+
+---
+
+## Lead → User Linking Flow
+
+1. Guest fills `LeadCaptureForm` → `cg_lead_id` saved to `localStorage` + `?leadId=` appended to `/register` URL
+2. After `registerUser()` succeeds → `leadApi.linkUser(leadId)` called silently → `localStorage` cleared
+
+---
 
 ## Documentation
 
 - [API Reference](./docs/api.md)
 - [Database ERD](./docs/erd.md)
-- [AI Prompting Layer](./docs/ai-prompts.md)
 - [Deployment Guide](./docs/deployment.md)
+
+---
+
+## Funnel Optimisations (April 2026)
+
+| # | Issue | Fix Applied |
+|---|-------|-------------|
+| 1 | Auth-gate before any question | `/assessment` is now a public route; guests see 3 questions with zero friction |
+| 2 | Lead form had 7+ fields on first touch | `midAssessment` mode: 3 fields only (name, phone, class) |
+| 3 | No urgency on free report | Locked career teaser (blurred), urgent banner, immediate inline premium CTA |
+| 4 | `PremiumUpsell` shown after 3-second delay | Shown inline immediately |
+| 5 | Home CTA opened a form | Now navigates directly to `/assessment` — value before data |
+| 6 | Dashboard blocked assessment behind profile completion | Restriction removed |
+| 7 | Lead dedup by email only | Added phone-based dedup for mid-assessment temp-email leads |
+| 8 | Missing WhatsApp triggers | Added `free_report_viewed` (upgrade nudge) + `payment_initiated` (abandoned payment) |
+| 9 | Onboarding required before assessment | Soft warning instead of hard block |
