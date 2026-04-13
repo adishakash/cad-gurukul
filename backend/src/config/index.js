@@ -1,6 +1,67 @@
 'use strict';
 require('dotenv').config();
 
+const { URL } = require('url');
+
+const parseInteger = (value, fallbackValue) => {
+  const parsedValue = parseInt(value, 10);
+  return Number.isFinite(parsedValue) ? parsedValue : fallbackValue;
+};
+
+const setSearchParamIfMissing = (url, key, value) => {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  if (!url.searchParams.has(key)) {
+    url.searchParams.set(key, String(value).trim());
+  }
+};
+
+const normalizeDatabaseUrl = (rawValue) => {
+  if (!rawValue || typeof rawValue !== 'string') {
+    return rawValue;
+  }
+
+  const trimmedValue = rawValue.trim();
+  if (!trimmedValue) {
+    return trimmedValue;
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedValue);
+    const protocol = parsedUrl.protocol.replace(':', '');
+
+    if (protocol !== 'postgres' && protocol !== 'postgresql') {
+      return trimmedValue;
+    }
+
+    setSearchParamIfMissing(parsedUrl, 'connection_limit', process.env.PRISMA_CONNECTION_LIMIT);
+    setSearchParamIfMissing(parsedUrl, 'pool_timeout', process.env.PRISMA_POOL_TIMEOUT);
+    setSearchParamIfMissing(parsedUrl, 'connect_timeout', process.env.PRISMA_CONNECT_TIMEOUT);
+    setSearchParamIfMissing(parsedUrl, 'socket_timeout', process.env.PRISMA_SOCKET_TIMEOUT);
+
+    if (!parsedUrl.searchParams.has('pgbouncer') && process.env.PRISMA_PGBOUNCER === 'true') {
+      parsedUrl.searchParams.set('pgbouncer', 'true');
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return trimmedValue;
+  }
+};
+
+const directDatabaseUrl = (process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URL || '').trim();
+const runtimeDatabaseUrl = normalizeDatabaseUrl(process.env.DATABASE_POOL_URL || directDatabaseUrl);
+
+if (directDatabaseUrl && !process.env.DATABASE_DIRECT_URL) {
+  process.env.DATABASE_DIRECT_URL = directDatabaseUrl;
+}
+
+if (runtimeDatabaseUrl) {
+  process.env.DATABASE_URL = runtimeDatabaseUrl;
+}
+
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 5000,
@@ -14,6 +75,10 @@ const config = {
 
   db: {
     url: process.env.DATABASE_URL,
+    directUrl: process.env.DATABASE_DIRECT_URL,
+    poolUrl: process.env.DATABASE_POOL_URL,
+    writeProbeEnabled: process.env.SKIP_DB_WRITE_PROBE !== 'true' && (process.env.NODE_ENV || 'development') !== 'test',
+    writeProbeTimeoutMs: parseInteger(process.env.DB_WRITE_PROBE_TIMEOUT_MS, 8000),
   },
 
   jwt: {

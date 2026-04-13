@@ -4,6 +4,7 @@ const Joi = require('joi');
 const router = express.Router();
 const prisma = require('../config/database');
 const { validate } = require('../middleware/validate');
+const { getDatabaseReadinessSnapshot } = require('../utils/databaseReadiness');
 const { successResponse } = require('../utils/helpers');
 
 const authRoutes = require('./auth.routes');
@@ -18,7 +19,12 @@ const leadRoutes = require('./lead.routes');
 router.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    return successResponse(res, { status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+    return successResponse(res, {
+      status: 'ok',
+      db: 'connected',
+      ...getDatabaseReadinessSnapshot(),
+      timestamp: new Date().toISOString(),
+    });
   } catch {
     return res.status(503).json({ success: false, error: { code: 'DB_ERROR', message: 'Database unavailable' } });
   }

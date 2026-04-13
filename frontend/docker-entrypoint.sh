@@ -9,6 +9,10 @@ json_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+trim_whitespace() {
+    printf '%s' "$1" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+}
+
 if [ "${NGINX_USE_PROXY:-false}" = "true" ]; then
     : "${API_PROXY_TARGET:?API_PROXY_TARGET must be set when NGINX_USE_PROXY=true}"
     envsubst '${PORT} ${API_PROXY_TARGET}' < "$PROXY_CONF_TEMPLATE" > "$TARGET_CONF"
@@ -16,8 +20,10 @@ else
     envsubst '${PORT}' < "$DEFAULT_CONF_TEMPLATE" > "$TARGET_CONF"
 fi
 
-if [ -n "${API_BASE_URL:-}" ]; then
-    API_BASE_URL_JSON="\"$(json_escape "$API_BASE_URL")\""
+NORMALIZED_API_BASE_URL="$(trim_whitespace "${API_BASE_URL:-}")"
+
+if [ -n "$NORMALIZED_API_BASE_URL" ]; then
+    API_BASE_URL_JSON="\"$(json_escape "$NORMALIZED_API_BASE_URL")\""
 else
     API_BASE_URL_JSON='null'
 fi

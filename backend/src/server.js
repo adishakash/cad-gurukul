@@ -3,6 +3,7 @@ require('dotenv').config();
 const app = require('./app');
 const config = require('./config');
 const logger = require('./utils/logger');
+const { markDatabaseWriteProbeSkipped, runDatabaseWriteProbe } = require('./utils/databaseReadiness');
 const prisma = require('./config/database');
 
 const connectWithTimeout = (ms) =>
@@ -18,6 +19,14 @@ let server;
 const start = async () => {
   await connectWithTimeout(10000);
   logger.info('[Server] Database connected');
+
+  if (config.db.writeProbeEnabled) {
+    await runDatabaseWriteProbe({ timeoutMs: config.db.writeProbeTimeoutMs });
+    logger.info('[Server] Database write probe passed', { timeoutMs: config.db.writeProbeTimeoutMs });
+  } else {
+    markDatabaseWriteProbeSkipped();
+    logger.info('[Server] Database write probe skipped');
+  }
 
   server = app.listen(config.port, () => {
     logger.info(`[Server] CAD Gurukul API started`, {

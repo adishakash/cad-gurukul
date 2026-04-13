@@ -45,6 +45,9 @@ services:
   - key: DATABASE_URL
     scope: RUN_TIME
     value: "${db.DATABASE_URL}"
+  - key: DATABASE_DIRECT_URL
+    scope: RUN_TIME
+    value: "${db.DATABASE_URL}"
   - key: FRONTEND_URL
     scope: RUN_TIME
     value: "${frontend.PUBLIC_URL}"
@@ -134,6 +137,21 @@ services:
   - key: LOG_LEVEL
     scope: RUN_TIME
     value: info
+  - key: PRISMA_CONNECTION_LIMIT
+    scope: RUN_TIME
+    value: "3"
+  - key: PRISMA_POOL_TIMEOUT
+    scope: RUN_TIME
+    value: "10"
+  - key: PRISMA_CONNECT_TIMEOUT
+    scope: RUN_TIME
+    value: "10"
+  - key: PRISMA_SOCKET_TIMEOUT
+    scope: RUN_TIME
+    value: "25"
+  - key: DB_WRITE_PROBE_TIMEOUT_MS
+    scope: RUN_TIME
+    value: "8000"
   # WhatsApp — omit WHATSAPP_PROVIDER (or set to "stub") to disable sending
   - key: WHATSAPP_PROVIDER
     scope: RUN_TIME
@@ -147,22 +165,32 @@ services:
     type: SECRET
     value: CHANGE_ME_your_wati_or_interakt_bearer_token
 
-static_sites:
 - name: frontend
   github:
     repo: adishakash/cad-gurukul
     branch: main
     deploy_on_push: true
   source_dir: frontend
-  build_command: npm run build
-  output_dir: dist
-  index_document: index.html
-  catchall_document: index.html
+  dockerfile_path: Dockerfile
+  http_port: 8080
+  instance_size_slug: basic-xs
+  instance_count: 1
+  health_check:
+    http_path: /healthz
+    initial_delay_seconds: 15
+    period_seconds: 30
+    timeout_seconds: 5
+    failure_threshold: 3
   envs:
-  # Keep this absolute for App Platform static_sites.
-  # Using /api/v1 here would send POST requests to the frontend host and return 405.
-  - key: VITE_API_BASE_URL
-    scope: BUILD_TIME
+  - key: PORT
+    scope: RUN_TIME
+    value: "8080"
+  - key: NGINX_USE_PROXY
+    scope: RUN_TIME
+    value: "false"
+  # Runtime injection avoids stale baked-in API hosts across preview and custom domains.
+  - key: API_BASE_URL
+    scope: RUN_TIME
     value: "${api.PUBLIC_URL}/api/v1"
   - key: VITE_RAZORPAY_KEY_ID
     scope: BUILD_TIME

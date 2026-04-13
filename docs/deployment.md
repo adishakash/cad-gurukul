@@ -95,7 +95,7 @@ npm run build
 This repository already includes a deploy spec at `.do/app.yaml` with:
 
 - `api` as a Docker-based service from `backend/`
-- `frontend` as a static site from `frontend/`
+- `frontend` as a Docker-based Nginx service from `frontend/`
 - managed PostgreSQL (`db`) wired to backend `DATABASE_URL`
 
 ### 1. Create app from spec
@@ -109,11 +109,23 @@ Replace all `CHANGE_ME_*` values in App Platform settings before first productio
 
 ### 3. Confirm critical runtime variables
 
-- Backend: `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `RAZORPAY_*`, `SMTP_*`
+- Backend: `DATABASE_URL`, `DATABASE_DIRECT_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `RAZORPAY_*`, `SMTP_*`
 - Backend CORS: `FRONTEND_URLS` includes `${frontend.PUBLIC_URL}` plus custom domains
-- Frontend build-time: `VITE_API_BASE_URL=${api.PUBLIC_URL}/api/v1`
+- Frontend runtime: `API_BASE_URL=${api.PUBLIC_URL}/api/v1`
+- Frontend build-time: `VITE_RAZORPAY_KEY_ID`, `VITE_APP_NAME`
 
-If the frontend ever sends requests to `${frontend.PUBLIC_URL}/api/v1/...`, App Platform will answer from the frontend host and POST requests will fail with `405 Not Allowed`. On App Platform, the frontend must either:
+The backend container now verifies a safe database write probe before it starts listening. If reads succeed but inserts hang, the deployment fails fast instead of looking healthy while public POST routes time out.
+
+If you add a PostgreSQL connection pool later, keep Prisma migrations on the direct database URL and point runtime traffic at the pool:
+
+```text
+DATABASE_DIRECT_URL=${db.DATABASE_URL}
+DATABASE_URL=${db.DATABASE_URL}
+# Optional once a pool exists:
+DATABASE_POOL_URL=${db.<pool-name>.DATABASE_URL}
+```
+
+If the frontend ever falls back to same-origin `${frontend.PUBLIC_URL}/api/v1/...` without an ingress rule that routes `/api` to the backend, App Platform will answer from the frontend host and POST requests will fail with `405 Not Allowed`. The checked-in spec avoids that by injecting `API_BASE_URL` into the frontend container at runtime.
 
 - use an absolute backend URL such as `${api.PUBLIC_URL}/api/v1`, or
 - run as a Docker service with explicit runtime `API_BASE_URL` injected into the container
@@ -140,9 +152,9 @@ npm run smoke:api:deployed
 
 If you want one public domain to serve both the SPA and the API, use App Platform `ingress.rules` and test against the app/custom domain, not the component preview domain. A preview domain like `frontend-xxxx.ondigitalocean.app` always points directly to the frontend component and `/api/*` requests on that host will still return `405 Not Allowed`.
 
-### If using frontend as a Docker service on App Platform
+### Frontend service configuration in the checked-in spec
 
-If you deploy `frontend/` with its `Dockerfile` (instead of `static_sites`), keep `NGINX_USE_PROXY=false` and set runtime environment variables:
+The repo spec now deploys `frontend/` with its `Dockerfile`. Keep `NGINX_USE_PROXY=false` and set runtime environment variables like this:
 
 ```text
 NGINX_USE_PROXY=false
@@ -163,7 +175,9 @@ Only use `NGINX_USE_PROXY=true` when the frontend container should intentionally
 
 | Variable | Description | Required |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | ✅ |
+| `DATABASE_URL` | Runtime PostgreSQL connection string (direct URL by default, or pool URL if you attach one) | ✅ |
+| `DATABASE_DIRECT_URL` | Direct PostgreSQL connection string used for migrations and fail-safe startup | Recommended |
+| `DATABASE_POOL_URL` | Optional PgBouncer / pooled runtime URL | Optional |
 | `JWT_SECRET` | Random 64-char secret | ✅ |
 | `JWT_REFRESH_SECRET` | Random 64-char secret | ✅ |
 | `OPENAI_API_KEY` | GPT-4o key | ✅ |
@@ -175,6 +189,7 @@ Only use `NGINX_USE_PROXY=true` when the frontend container should intentionally
 | `SMTP_PASS` | SMTP password | ✅ |
 | `FRONTEND_URL` | Single fallback frontend origin for CORS | ✅ |
 | `FRONTEND_URLS` | Comma-separated frontend origins for CORS allowlist | Recommended |
+| `DB_WRITE_PROBE_TIMEOUT_MS` | Fail startup if the safe write probe does not complete in time | Recommended |
 
 Example:
 `FRONTEND_URLS=https://cadgurukul.com,https://www.cadgurukul.com,https://app.cadgurukul.com`

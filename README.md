@@ -289,6 +289,7 @@ docker exec cadgurukul_backend node prisma/seed.js
 
 App available at `http://localhost` (frontend) and `http://localhost:5000` (API).
 Keep `VITE_API_BASE_URL=/api/v1` only when the deployed frontend host proxies `/api` to the backend. For App Platform or any split frontend/backend deploy, use the backend's absolute `/api/v1` URL instead.
+For the Docker-based App Platform frontend in `.do/app.yaml`, prefer runtime `API_BASE_URL=${api.PUBLIC_URL}/api/v1` with `NGINX_USE_PROXY=false` so preview and custom-domain deploys do not ship a stale baked-in API host.
 
 ---
 
@@ -298,7 +299,9 @@ Keep `VITE_API_BASE_URL=/api/v1` only when the deployed frontend host proxies `/
 
 | Variable               | Description                                          |
 |------------------------|------------------------------------------------------|
-| `DATABASE_URL`         | PostgreSQL connection string                         |
+| `DATABASE_URL`         | Runtime PostgreSQL connection string                 |
+| `DATABASE_DIRECT_URL`  | Direct PostgreSQL URL for migrations / fail-safe startup |
+| `DATABASE_POOL_URL`    | Optional pooled PostgreSQL URL for runtime traffic   |
 | `JWT_SECRET`           | JWT signing secret                                   |
 | `JWT_REFRESH_SECRET`   | Refresh token signing secret                         |
 | `PORT`                 | API port (default: `5000`)                           |
@@ -314,6 +317,7 @@ Keep `VITE_API_BASE_URL=/api/v1` only when the deployed frontend host proxies `/
 | `WHATSAPP_PROVIDER`    | `wati` / `interakt` / `stub` (default: `stub`)      |
 | `WHATSAPP_API_URL`     | WhatsApp provider API base URL                       |
 | `WHATSAPP_API_TOKEN`   | WhatsApp bearer token                                |
+| `DB_WRITE_PROBE_TIMEOUT_MS` | Startup write-probe timeout in milliseconds     |
 
 ### Frontend (`frontend/.env`)
 
@@ -321,6 +325,8 @@ Keep `VITE_API_BASE_URL=/api/v1` only when the deployed frontend host proxies `/
 |------------------------|-------------------------------------------|
 | `VITE_API_BASE_URL`    | API base URL (`/api/v1` only behind a proxy, otherwise absolute) |
 | `VITE_RAZORPAY_KEY_ID` | Razorpay publishable key                  |
+| `API_BASE_URL`         | Runtime API base URL for the Docker/App Platform frontend |
+| `NGINX_USE_PROXY`      | `true` only when the frontend should proxy `/api/*` itself |
 
 ---
 
