@@ -18,7 +18,12 @@ export default function StaffLogin() {
       if (refreshToken) localStorage.setItem('cg_staff_refresh_token', refreshToken)
       localStorage.setItem('cg_staff', JSON.stringify(user))
       toast.success('Welcome, ' + (user.name || user.email))
-      navigate('/staff')
+      // Route based on role: CCL → staff portal, CC → counsellor portal
+      if (user.role === 'CAREER_COUNSELLOR') {
+        navigate('/counsellor')
+      } else {
+        navigate('/staff')
+      }
     } catch (err) {
       toast.error(err?.response?.data?.error?.message || 'Invalid credentials')
     } finally {
@@ -32,7 +37,7 @@ export default function StaffLogin() {
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">🎓</div>
           <h1 className="text-2xl font-extrabold text-white">Staff Access</h1>
-          <p className="text-gray-400 text-sm mt-1">Career Counsellor Lead Portal</p>
+          <p className="text-gray-400 text-sm mt-1">Career Counsellor Lead &amp; Counsellor Portal</p>
         </div>
 
         <div className="card shadow-2xl">
@@ -65,6 +70,12 @@ export default function StaffLogin() {
           </form>
         </div>
         <p className="text-center text-xs text-gray-600 mt-4">Unauthorised access is prohibited.</p>
+        <p className="text-center text-xs text-gray-500 mt-2">
+          Looking for the{' '}
+          <a href="/admin/login" className="text-brand-red hover:underline">
+            Admin Panel?
+          </a>
+        </p>
       </div>
     </div>
   )

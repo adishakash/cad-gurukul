@@ -15,6 +15,7 @@ const paymentRoutes = require('./payment.routes');
 const adminRoutes = require('./admin.routes');
 const leadRoutes  = require('./lead.routes');
 const staffRoutes = require('./staff.routes');
+const counsellorRoutes = require('./counsellor.routes');
 
 // Health check
 router.get('/health', async (req, res) => {
@@ -54,5 +55,6 @@ router.use('/payments', paymentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/leads', leadRoutes);
 router.use('/staff', staffRoutes);
+router.use('/counsellor', counsellorRoutes);
 
 module.exports = router;

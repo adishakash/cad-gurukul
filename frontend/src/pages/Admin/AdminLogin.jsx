@@ -65,6 +65,12 @@ export default function AdminLogin() {
           </form>
         </div>
         <p className="text-center text-xs text-gray-600 mt-4">Unauthorised access is prohibited.</p>
+        <p className="text-center text-xs text-gray-500 mt-2">
+          Looking for the{' '}
+          <a href="/staff/login" className="text-brand-red hover:underline">
+            Staff Portal (CCL Login)?
+          </a>
+        </p>
       </div>
     </div>
   )

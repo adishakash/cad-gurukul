@@ -154,6 +154,17 @@ export const staffLeadApi = {
   getDetail: (id)     => staffApiClient.get(`/staff/leads/${id}`),
 }
 
+// ─── Counsellor API (read-only scoped — for CC dashboard) ────────────────────
+// Uses the same staffApiClient (same cg_staff_token), but hits /counsellor/* routes.
+// /counsellor/leads is filtered to counsellingInterested:true on the backend.
+export const counsellorApi = {
+  getProfile: ()       => staffApiClient.get('/counsellor/profile'),
+  logout:     (data)   => staffApiClient.post('/counsellor/logout', data),
+  leads:      (params) => staffApiClient.get('/counsellor/leads',    { params }),
+  students:   (params) => staffApiClient.get('/counsellor/students', { params }),
+  reports:    (params) => staffApiClient.get('/counsellor/reports',  { params }),
+}
+
 // ─── Analytics helper (fire-and-forget from frontend) ────────────────────────
 export const trackEvent = (event, metadata = {}) => {
   leadApi.appendEvent(event, metadata).catch(() => {/* silent */})

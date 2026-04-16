@@ -32,6 +32,9 @@ import LeadDetail     from './pages/Admin/LeadDetail'
 import StaffLogin    from './pages/Staff/StaffLogin'
 import LeadDashboard from './pages/Staff/LeadDashboard'
 
+// Counsellor pages (Career Counsellor portal)
+import CounsellorDashboard from './pages/Counsellor/CounsellorDashboard'
+
 // Guards
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated)
@@ -51,6 +54,15 @@ const AdminRoute = ({ children }) => {
 
 // Staff guard — checks localStorage directly (staff auth is independent of Redux store)
 const StaffRoute = ({ children }) => {
+  const token = localStorage.getItem('cg_staff_token')
+  const staff = JSON.parse(localStorage.getItem('cg_staff') || '{}')
+  // Only CCL (and ADMIN via staff token, though rare) can access the staff portal
+  if (!token || staff.role === 'CAREER_COUNSELLOR') return <Navigate to="/staff/login" replace />
+  return children
+}
+
+// Counsellor guard — CC and CCL can both access counsellor routes
+const CounsellorRoute = ({ children }) => {
   const token = localStorage.getItem('cg_staff_token')
   return token ? children : <Navigate to="/staff/login" replace />
 }
@@ -97,6 +109,10 @@ export default function App() {
         <Route path="/staff/login" element={<StaffLogin />} />
         <Route path="/staff"           element={<StaffRoute><LeadDashboard /></StaffRoute>} />
         <Route path="/staff/dashboard" element={<StaffRoute><LeadDashboard /></StaffRoute>} />
+
+        {/* Counsellor (Career Counsellor) routes */}
+        <Route path="/counsellor"           element={<CounsellorRoute><CounsellorDashboard /></CounsellorRoute>} />
+        <Route path="/counsellor/dashboard" element={<CounsellorRoute><CounsellorDashboard /></CounsellorRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

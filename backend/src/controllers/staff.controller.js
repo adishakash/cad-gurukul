@@ -11,10 +11,10 @@ const logger = require('../utils/logger');
 
 /**
  * Roles allowed to use the staff login endpoint.
- * Phase 2: CAREER_COUNSELLOR_LEAD only.
- * Phase 3: add 'CAREER_COUNSELLOR' to this set — no other auth changes needed.
+ * Phase 2: CAREER_COUNSELLOR_LEAD.
+ * Phase 3: CAREER_COUNSELLOR added — no other auth changes needed.
  */
-const ALLOWED_STAFF_ROLES = new Set(['CAREER_COUNSELLOR_LEAD']);
+const ALLOWED_STAFF_ROLES = new Set(['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR']);
 
 // Structurally valid bcrypt hash — used as timing-safe dummy target.
 const DUMMY_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -329,6 +329,167 @@ const listReports = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNSELLOR-SCOPED ROUTES (CAREER_COUNSELLOR access level)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/counsellor/leads  (CC+ required)
+ *
+ * Scoped lead list for Career Counsellors — filters to counsellingInterested: true
+ * so counsellors only see leads that have opted in for counselling.
+ *
+ * Phase 4 NOTE: Full per-counsellor assignment (assignedCounsellorId field on Lead)
+ * is not yet in the schema. When added, filter by `assignedCounsellorId: req.user.id`
+ * here instead.
+ */
+const listCounsellorLeads = async (req, res) => {
+  try {
+    const {
+      page = 1, limit = 25,
+      status, classStandard, selectedPlan,
+      dateFrom, dateTo,
+      search, sortBy = 'createdAt', sortDir = 'desc',
+    } = req.query;
+
+    const skip  = (parseInt(page) - 1) * parseInt(limit);
+
+    // CC only sees counselling-interested leads (phase 3 scoping)
+    const where = { counsellingInterested: true };
+
+    if (status)        where.status        = status;
+    if (classStandard) where.classStandard = classStandard;
+    if (selectedPlan)  where.selectedPlan  = selectedPlan;
+
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo)   where.createdAt.lte = new Date(dateTo);
+    }
+
+    if (search) {
+      where.OR = [
+        { fullName:     { contains: search, mode: 'insensitive' } },
+        { email:        { contains: search, mode: 'insensitive' } },
+        { mobileNumber: { contains: search } },
+        { city:         { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [leads, total] = await Promise.all([
+      prisma.lead.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { [sortBy]: sortDir },
+        select: {
+          id: true, fullName: true, email: true, mobileNumber: true,
+          classStandard: true, stream: true, city: true, userType: true,
+          selectedPlan: true, status: true, leadSource: true,
+          counsellingInterested: true, counsellingNotes: true,
+          assessmentId: true, reportId: true, createdAt: true, updatedAt: true,
+        },
+      }),
+      prisma.lead.count({ where }),
+    ]);
+
+    return successResponse(res, { leads, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (err) {
+    logger.error('[Counsellor] listCounsellorLeads error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * GET /api/v1/counsellor/students  (CC+ required)
+ *
+ * Scoped student list — restricted to students who have at least one lead
+ * with counsellingInterested: true.  This is narrower than the CCL view
+ * (/staff/students), which returns all students regardless of counselling status.
+ *
+ * Phase 4 NOTE: Will further narrow to assignedCounsellorId once that field exists.
+ */
+const listCounsellorStudents = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Only students who have expressed interest in counselling via at least one lead
+    const where = {
+      role: 'STUDENT',
+      leads: { some: { counsellingInterested: true } },
+    };
+
+    if (search) {
+      where.OR = [{ email: { contains: search, mode: 'insensitive' } }];
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, email: true, role: true, isActive: true, createdAt: true,
+          studentProfile: {
+            select: { fullName: true, classStandard: true, city: true, isOnboardingComplete: true },
+          },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return successResponse(res, { users, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (err) {
+    logger.error('[Counsellor] listCounsellorStudents error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * GET /api/v1/counsellor/reports  (CC+ required)
+ *
+ * Scoped report list — restricted to reports belonging to students who have
+ * at least one lead with counsellingInterested: true.  Narrower than the CCL
+ * view (/staff/reports), which returns all career reports.
+ *
+ * Phase 4 NOTE: Will further narrow to assignedCounsellorId once that field exists.
+ */
+const listCounsellorReports = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Only reports for students who have counselling-interested leads
+    const where = {
+      ...(status ? { status } : {}),
+      user: { leads: { some: { counsellingInterested: true } } },
+    };
+
+    const [reports, total] = await Promise.all([
+      prisma.careerReport.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, accessLevel: true, status: true,
+          topCareers: true, recommendedStream: true,
+          confidenceScore: true, generatedAt: true, createdAt: true,
+          userId: true,
+        },
+      }),
+      prisma.careerReport.count({ where }),
+    ]);
+
+    return successResponse(res, { reports, total, page: parseInt(page) });
+  } catch (err) {
+    logger.error('[Counsellor] listCounsellorReports error', { error: err.message });
+    throw err;
+  }
+};
+
 module.exports = {
   loginStaff,
   logoutStaff,
@@ -337,4 +498,7 @@ module.exports = {
   getLeadDetail,
   listStudents,
   listReports,
+  listCounsellorLeads,
+  listCounsellorStudents,
+  listCounsellorReports,
 };
