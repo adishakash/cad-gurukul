@@ -35,6 +35,9 @@ import LeadDashboard from './pages/Staff/LeadDashboard'
 // Counsellor pages (Career Counsellor portal)
 import CounsellorDashboard from './pages/Counsellor/CounsellorDashboard'
 
+// Public joining page (no auth required)
+import JoinPage from './pages/Public/JoinPage'
+
 // Guards
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated)
@@ -97,6 +100,9 @@ export default function App() {
         <Route path="/assessment" element={<PublicLayout><Assessment /></PublicLayout>} />
         <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
         <Route path="/reports/:id" element={<ProtectedRoute><Report /></ProtectedRoute>} />
+
+        {/* Public joining page (no login required — candidate enrolment via CCL link) */}
+        <Route path="/join" element={<JoinPage />} />
 
         {/* Admin routes */}
         <Route path="/admin/login" element={<AdminLogin />} />

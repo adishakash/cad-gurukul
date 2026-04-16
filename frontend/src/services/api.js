@@ -154,6 +154,37 @@ export const staffLeadApi = {
   getDetail: (id)     => staffApiClient.get(`/staff/leads/${id}`),
 }
 
+// ─── Staff CCL Business API (CCL-specific business features) ─────────────────
+export const staffApi = {
+  // Account / income
+  getAccount:      ()             => staffApiClient.get('/staff/account'),
+  getTransactions: (params = {})  => staffApiClient.get('/staff/account/transactions', { params }),
+  // Joining links
+  getJoiningLinks: (params = {})  => staffApiClient.get('/staff/joining-links', { params }),
+  createJoiningLink: (data)       => staffApiClient.post('/staff/joining-links', data),
+  // Payouts
+  getPayouts:      ()             => staffApiClient.get('/staff/payouts'),
+  getPayoutDetail: (id)           => staffApiClient.get(`/staff/payouts/${id}`),
+  // Discount config
+  getDiscount:     ()             => staffApiClient.get('/staff/discount'),
+  updateDiscount:  (data)         => staffApiClient.put('/staff/discount', data),
+  // Training content
+  getTraining:     ()             => staffApiClient.get('/staff/training'),
+}
+
+// ─── Public Joining Link API (no auth required) ───────────────────────────────
+const publicApiClient = axios.create({
+  baseURL: apiBaseUrl,
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' },
+})
+
+export const joiningApi = {
+  resolve:     (code)       => publicApiClient.get(`/join/${code}`),
+  createOrder: (code, data) => publicApiClient.post(`/join/${code}/create-order`, data),
+  verify:      (code, data) => publicApiClient.post(`/join/${code}/verify`, data),
+}
+
 // ─── Counsellor API (read-only scoped — for CC dashboard) ────────────────────
 // Uses the same staffApiClient (same cg_staff_token), but hits /counsellor/* routes.
 // /counsellor/leads is filtered to counsellingInterested:true on the backend.

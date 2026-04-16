@@ -139,6 +139,13 @@ model User {
   refreshTokens   RefreshToken[]
   leads           Lead[]
 
+  // CCL business layer relations
+  cclJoiningLinks    CclJoiningLink[]    @relation("CclJoiningLinks")
+  cclAttributedSales CclAttributedSale[] @relation("CclAttributedSales")
+  cclCommissions     CclCommission[]     @relation("CclCommissions")
+  cclPayouts         CclPayout[]         @relation("CclPayouts")
+  cclDiscount        CclDiscount?        @relation("CclDiscount")
+
   @@index([email])
   @@map("users")
 }
@@ -683,4 +690,148 @@ model AnalyticsEvent {
   @@index([leadId])
   @@index([createdAt])
   @@map("analytics_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CCL BUSINESS LAYER — Phase 4
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Joining links created by a CCL to onboard new counsellor candidates.
+/// Each link carries a unique code; clicking it starts the ₹12,000 joining flow
+/// and attributes the sale back to the originating CCL.
+model CclJoiningLink {
+  id             String    @id @default(cuid())
+  cclUserId      String
+  code           String    @unique
+
+  candidateName  String?
+  candidateEmail String?
+  candidatePhone String?
+
+  feeAmountPaise Int       @default(1200000) // ₹12,000
+
+  // Payment tracking for the candidate's joining payment
+  joiningOrderId         String?   @unique  // Razorpay order ID created for this link
+  joiningPaymentId       String?            // Razorpay payment ID after capture
+  joiningPaymentStatus   String    @default("pending") // "pending" | "initiated" | "captured" | "failed"
+  joiningNetAmountPaise  Int?               // Effective amount after discount (stored at order creation)
+
+  isUsed         Boolean   @default(false)
+  usedAt         DateTime?
+  expiresAt      DateTime?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  cclUser        User               @relation("CclJoiningLinks", fields: [cclUserId], references: [id], onDelete: Cascade)
+  attributedSale CclAttributedSale?
+
+  @@index([cclUserId])
+  @@index([code])
+  @@index([joiningOrderId])
+  @@map("ccl_joining_links")
+}
+
+/// Ledger record for every sale attributed to a CCL — whether via joining link
+/// or referral code. Commission is always 10% of netAmountPaise.
+model CclAttributedSale {
+  id                  String   @id @default(cuid())
+  cclUserId           String
+  joiningLinkId       String?  @unique   // populated for joining-link sales
+  paymentId           String?  @unique   // FK to platform Payment row, if available
+  saleType            String             // "joining" | "referral" | "other"
+
+  grossAmountPaise    Int
+  discountAmountPaise Int      @default(0)
+  netAmountPaise      Int
+  commissionPaise     Int                // 10% of netAmountPaise
+
+  status              String   @default("pending") // "pending" | "confirmed" | "refunded"
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  cclUser      User            @relation("CclAttributedSales", fields: [cclUserId], references: [id])
+  joiningLink  CclJoiningLink? @relation(fields: [joiningLinkId], references: [id])
+  commission   CclCommission?
+
+  @@index([cclUserId])
+  @@index([status])
+  @@map("ccl_attributed_sales")
+}
+
+/// One commission record per attributed sale. Aggregated into a CclPayout when
+/// the weekly Thursday transfer is processed.
+model CclCommission {
+  id               String   @id @default(cuid())
+  cclUserId        String
+  attributedSaleId String   @unique
+  amountPaise      Int
+
+  status           String   @default("pending") // "pending" | "paid" | "cancelled"
+  payoutId         String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  cclUser        User              @relation("CclCommissions", fields: [cclUserId], references: [id])
+  attributedSale CclAttributedSale @relation(fields: [attributedSaleId], references: [id])
+  payout         CclPayout?        @relation(fields: [payoutId], references: [id])
+
+  @@index([cclUserId])
+  @@index([status])
+  @@map("ccl_commissions")
+}
+
+/// Weekly payout record — one per CCL per Thursday cycle. Groups commissions.
+model CclPayout {
+  id           String    @id @default(cuid())
+  cclUserId    String
+  amountPaise  Int
+  status       String    @default("pending") // "pending" | "processing" | "paid" | "failed"
+  scheduledFor DateTime                        // always a Thursday
+  processedAt  DateTime?
+  reference    String?   // bank transfer reference once paid
+  notes        String?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  cclUser     User            @relation("CclPayouts", fields: [cclUserId], references: [id])
+  commissions CclCommission[]
+
+  @@index([cclUserId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@map("ccl_payouts")
+}
+
+/// Optional per-CCL discount configuration. Cap enforced at 20% in the backend.
+model CclDiscount {
+  id          String   @id @default(cuid())
+  cclUserId   String   @unique
+  discountPct Float    @default(0)   // 0–20
+  isActive    Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  cclUser User @relation("CclDiscount", fields: [cclUserId], references: [id], onDelete: Cascade)
+
+  @@map("ccl_discounts")
+}
+
+/// Training content items visible to CCL (videos, books, documents).
+/// Managed by Admin; read-only for CCL.
+model CclTrainingContent {
+  id           String   @id @default(cuid())
+  title        String
+  type         String              // "video" | "book" | "document"
+  url          String?
+  description  String?
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("ccl_training_content")
 }

@@ -311,8 +311,47 @@ const handleWebhook = async (req, res) => {
 
     const payment = await prisma.payment.findUnique({ where: { razorpayOrderId } });
     if (!payment) {
-      logger.warn('[Payment] Webhook for unknown order', { razorpayOrderId });
-      return successResponse(res, { received: true, ignored: true }, 'Unknown order');
+      // Check if this is a joining link payment (stored on CclJoiningLink, not Payment table)
+      const joiningLink = await prisma.cclJoiningLink.findFirst({
+        where: { joiningOrderId: razorpayOrderId },
+      });
+
+      if (!joiningLink) {
+        logger.warn('[Payment] Webhook for unknown order', { razorpayOrderId });
+        return successResponse(res, { received: true, ignored: true }, 'Unknown order');
+      }
+
+      // Idempotency: if already captured, return success
+      if (joiningLink.joiningPaymentStatus === 'captured') {
+        return successResponse(res, { received: true, ignored: true }, 'Joining payment already processed');
+      }
+
+      // Delegate to the shared CCL payment service
+      try {
+        const { createCclSaleAndCommission } = require('../services/ccl/cclPaymentService');
+        const grossAmountPaise = joiningLink.feeAmountPaise;
+        const netAmountPaise   = joiningLink.joiningNetAmountPaise ?? joiningLink.feeAmountPaise;
+        const discountAmountPaise = grossAmountPaise - netAmountPaise;
+
+        await createCclSaleAndCommission({
+          cclUserId:         joiningLink.cclUserId,
+          joiningLinkId:     joiningLink.id,
+          paymentId:         razorpayPaymentId,
+          razorpayPaymentId,
+          grossAmountPaise,
+          discountAmountPaise,
+          netAmountPaise,
+        });
+
+        logger.info('[Payment] Joining link payment processed via webhook', {
+          code: joiningLink.code,
+          paymentId: razorpayPaymentId,
+        });
+      } catch (err) {
+        logger.error('[Payment] Webhook joining payment error', { error: err.message, razorpayOrderId });
+      }
+
+      return successResponse(res, { received: true }, 'Joining payment processed');
     }
 
     if (payment.status !== 'CAPTURED') {

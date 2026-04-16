@@ -6,6 +6,7 @@ const { authenticate, authorizeRoles } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { authLimiter } = require('../middleware/rateLimiter');
 const adminController = require('../controllers/admin.controller');
+const cclAdminController = require('../controllers/ccl.admin.controller');
 const {
   adminLoginSchema,
   leadListQuerySchema,
@@ -14,11 +15,6 @@ const {
 
 // ─── Public routes (no auth) ──────────────────────────────────────────────────
 
-/**
- * POST /api/v1/admin/login
- * Unified admin login. Validates email/password, enforces role = ADMIN,
- * returns a standard JWT that works with the `authenticate` middleware.
- */
 router.post(
   '/login',
   authLimiter,
@@ -27,10 +23,6 @@ router.post(
 );
 
 // ─── Protected routes (ADMIN role required) ───────────────────────────────────
-// All routes below this point require a valid JWT with role = ADMIN.
-// When CAREER_COUNSELLOR_LEAD / CAREER_COUNSELLOR are implemented in a future
-// phase, add their routes ABOVE the middleware below or use per-route
-// authorizeRoles() calls with the appropriate minimum role.
 
 router.use(authenticate, authorizeRoles('ADMIN'));
 
@@ -62,5 +54,29 @@ router.get('/funnel', adminController.getFunnelMetrics);
 router.get('/leads/:id', adminController.getLeadDetail);
 router.patch('/leads/:id', adminController.updateLeadAdmin);
 router.post('/leads/:id/actions', validate(triggerActionSchema), adminController.triggerAdminAction);
+
+// ─── CCL Business Layer Oversight ────────────────────────────────────────────
+// Admin can inspect and manage the entire CCL financial layer.
+
+// Joining links
+router.get('/ccl/joining-links', cclAdminController.listAllJoiningLinks);
+
+// Attributed sales
+router.get('/ccl/sales', cclAdminController.listAllSales);
+
+// Commissions
+router.get('/ccl/commissions', cclAdminController.listAllCommissions);
+
+// Payouts: view, generate batch, update status
+router.get('/ccl/payouts',              cclAdminController.listAllPayouts);
+router.post('/ccl/payouts/generate',    cclAdminController.generatePayoutBatch);
+router.get('/ccl/payouts/:id',          cclAdminController.getPayoutDetail);
+router.patch('/ccl/payouts/:id',        cclAdminController.updatePayoutStatus);
+
+// Training content CRUD
+router.get('/ccl/training',          cclAdminController.listAllTraining);
+router.post('/ccl/training',         cclAdminController.createTrainingContent);
+router.patch('/ccl/training/:id',    cclAdminController.updateTrainingContent);
+router.delete('/ccl/training/:id',   cclAdminController.deleteTrainingContent);
 
 module.exports = router;

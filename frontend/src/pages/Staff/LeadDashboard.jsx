@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { staffApiClient, staffLeadApi } from '../../services/api'
+import { staffApiClient, staffLeadApi, staffApi } from '../../services/api'
 
 const StatCard = ({ icon, label, value }) => (
   <div className="card text-center hover:shadow-lg transition-shadow">
@@ -58,6 +58,21 @@ export default function LeadDashboard() {
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+
+  // ── Phase 4: CCL business layer state ──────────────────────────────────────
+  const [account, setAccount]         = useState(null)
+  const [transactions, setTransactions] = useState([])
+  const [txPage, setTxPage]           = useState(1)
+  const [txTotalPages, setTxTotalPages] = useState(1)
+  const [joiningLinks, setJoiningLinks] = useState([])
+  const [payouts, setPayouts]         = useState([])
+  const [training, setTraining]       = useState([])
+  const [discountConfig, setDiscountConfig] = useState({ discountPct: 0, isActive: false })
+  const [discountForm, setDiscountForm]     = useState({ discountPct: 0, isActive: false })
+  const [bizLoading, setBizLoading]   = useState(false)
+  const [linkFormOpen, setLinkFormOpen] = useState(false)
+  const [newLink, setNewLink] = useState({ candidateName: '', candidateEmail: '', candidatePhone: '', expiresInDays: '' })
+  const [linkCreating, setLinkCreating] = useState(false)
 
   const staff = JSON.parse(localStorage.getItem('cg_staff') || '{}')
 
@@ -118,7 +133,116 @@ export default function LeadDashboard() {
     navigate('/staff/login')
   }
 
-  const tabs = ['leads', 'students', 'reports']
+  // ── Phase 4: load CCL business data ────────────────────────────────────────
+  const loadBizData = useCallback(async (tab) => {
+    setBizLoading(true)
+    try {
+      if (tab === 'account') {
+        const [accRes, txRes] = await Promise.all([
+          staffApi.getAccount(),
+          staffApi.getTransactions({ page: 1, limit: 15 }),
+        ])
+        setAccount(accRes.data.data)
+        const txData = txRes.data.data
+        setTransactions(Array.isArray(txData) ? txData : txData?.items || [])
+        setTxPage(txData?.page || 1)
+        setTxTotalPages(txData?.totalPages || 1)
+      } else if (tab === 'joining-links') {
+        const res = await staffApi.getJoiningLinks()
+        setJoiningLinks(res.data.data?.items || res.data.data || [])
+      } else if (tab === 'payouts') {
+        const res = await staffApi.getPayouts()
+        setPayouts(res.data.data || [])
+      } else if (tab === 'training') {
+        const res = await staffApi.getTraining()
+        setTraining(res.data.data || [])
+      } else if (tab === 'discount') {
+        const res = await staffApi.getDiscount()
+        const cfg = res.data.data
+        setDiscountConfig(cfg)
+        setDiscountForm({ discountPct: cfg.discountPct, isActive: cfg.isActive })
+      }
+    } catch {
+      toast.error('Failed to load data.')
+    } finally {
+      setBizLoading(false)
+    }
+  }, [])
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    const bizTabs = ['account', 'joining-links', 'payouts', 'training', 'discount']
+    if (bizTabs.includes(tab)) loadBizData(tab)
+  }
+
+  const loadTxPage = async (page) => {
+    setBizLoading(true)
+    try {
+      const res = await staffApi.getTransactions({ page, limit: 15 })
+      const txData = res.data.data
+      setTransactions(Array.isArray(txData) ? txData : txData?.items || [])
+      setTxPage(txData?.page || page)
+      setTxTotalPages(txData?.totalPages || 1)
+    } catch {
+      toast.error('Failed to load transactions.')
+    } finally {
+      setBizLoading(false)
+    }
+  }
+
+  const handleCreateLink = async (e) => {
+    e.preventDefault()
+    setLinkCreating(true)
+    try {
+      const payload = {}
+      if (newLink.candidateName)  payload.candidateName  = newLink.candidateName
+      if (newLink.candidateEmail) payload.candidateEmail = newLink.candidateEmail
+      if (newLink.candidatePhone) payload.candidatePhone = newLink.candidatePhone
+      if (newLink.expiresInDays)  payload.expiresInDays  = Number(newLink.expiresInDays)
+      const res = await staffApi.createJoiningLink(payload)
+      setJoiningLinks((prev) => [res.data.data, ...prev])
+      setNewLink({ candidateName: '', candidateEmail: '', candidatePhone: '', expiresInDays: '' })
+      setLinkFormOpen(false)
+      toast.success('Joining link created!')
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to create link.')
+    } finally {
+      setLinkCreating(false)
+    }
+  }
+
+  const handleSaveDiscount = async (e) => {
+    e.preventDefault()
+    try {
+      const res = await staffApi.updateDiscount({
+        discountPct: Number(discountForm.discountPct),
+        isActive: discountForm.isActive,
+      })
+      setDiscountConfig(res.data.data)
+      toast.success('Discount settings saved.')
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to save discount.')
+    }
+  }
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => toast.success('Link copied!')).catch(() => toast.error('Copy failed.'))
+  }
+
+  const formatPaise = (paise) => `₹${((paise || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+
+  const tabs = ['leads', 'students', 'reports', 'account', 'joining-links', 'payouts', 'training', 'discount']
+
+  const TAB_LABELS = {
+    leads: '👥 Leads',
+    students: '🎓 Students',
+    reports: '📄 Reports',
+    account: '💰 Account',
+    'joining-links': '🔗 Joining Links',
+    payouts: '💳 Payouts',
+    training: '📚 Training',
+    discount: '🏷️ Discount',
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -147,12 +271,12 @@ export default function LeadDashboard() {
           {tabs.map((t) => (
             <button
               key={t}
-              onClick={() => setActiveTab(t)}
-              className={`px-5 py-2 rounded-full text-sm font-semibold capitalize whitespace-nowrap transition-all ${
+              onClick={() => handleTabChange(t)}
+              className={`px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
                 activeTab === t ? 'bg-brand-red text-white' : 'bg-white text-gray-600 hover:bg-gray-100 border'
               }`}
             >
-              {t}
+              {TAB_LABELS[t] || t}
             </button>
           ))}
         </div>
@@ -243,6 +367,328 @@ export default function LeadDashboard() {
                   ])}
                   emptyText="No reports found."
                 />
+              </div>
+            )}
+
+            {/* ── Phase 4: Account ─────────────────────────────────────── */}
+            {activeTab === 'account' && (
+              <div className="space-y-6">
+                {bizLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <StatCard icon="💼" label="Total Sales"       value={formatPaise(account?.totalSalesPaise)} />
+                      <StatCard icon="💸" label="Total Commission"  value={formatPaise(account?.totalCommissionPaise)} />
+                      <StatCard icon="⏳" label="Pending Payout"    value={formatPaise(account?.pendingPayoutPaise)} />
+                      <StatCard icon="✅" label="Paid Out"          value={formatPaise(account?.paidAmountPaise)} />
+                    </div>
+
+                    {account?.nextPayoutDate && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 text-sm text-blue-700 font-medium">
+                        📅 Next payout scheduled: <strong>{account.nextPayoutDate}</strong> (Thursday)
+                      </div>
+                    )}
+
+                    <div className="card">
+                      <h3 className="font-bold text-brand-dark text-lg mb-4">Transaction History</h3>
+                      {transactions.length === 0 ? (
+                        <p className="text-gray-400 text-sm py-6 text-center">No transactions yet. Sales attributed to you will appear here.</p>
+                      ) : (
+                        <>
+                          <Table
+                            headers={['Date', 'Type', 'Gross', 'Commission', 'Status']}
+                            rows={transactions.map((t) => [
+                              new Date(t.createdAt).toLocaleDateString('en-IN'),
+                              t.saleType,
+                              formatPaise(t.grossAmountPaise),
+                              formatPaise(t.commission?.amountPaise),
+                              <span key="s" className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                t.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                t.status === 'refunded'  ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>{t.status}</span>,
+                            ])}
+                            emptyText="No transactions."
+                          />
+                          {txTotalPages > 1 && (
+                            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                              <button
+                                disabled={txPage <= 1 || bizLoading}
+                                onClick={() => loadTxPage(txPage - 1)}
+                                className="btn-secondary text-xs disabled:opacity-40"
+                              >
+                                ← Prev
+                              </button>
+                              <span className="text-xs text-gray-500">Page {txPage} of {txTotalPages}</span>
+                              <button
+                                disabled={txPage >= txTotalPages || bizLoading}
+                                onClick={() => loadTxPage(txPage + 1)}
+                                className="btn-secondary text-xs disabled:opacity-40"
+                              >
+                                Next →
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Phase 4: Joining Links ───────────────────────────────── */}
+            {activeTab === 'joining-links' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-brand-dark text-lg">Joining Links</h3>
+                    <p className="text-sm text-gray-500 mt-1">Each link carries a ₹12,000 joining fee. All payments go to the platform; your commission is credited automatically.</p>
+                  </div>
+                  <button
+                    onClick={() => setLinkFormOpen((o) => !o)}
+                    className="btn-primary text-sm"
+                  >
+                    {linkFormOpen ? 'Cancel' : '+ New Link'}
+                  </button>
+                </div>
+
+                {linkFormOpen && (
+                  <form onSubmit={handleCreateLink} className="card space-y-4">
+                    <h4 className="font-semibold text-brand-dark">Create Joining Link</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Candidate Name</label>
+                        <input
+                          className="input-field text-sm"
+                          placeholder="Optional"
+                          value={newLink.candidateName}
+                          onChange={(e) => setNewLink((p) => ({ ...p, candidateName: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Candidate Email</label>
+                        <input
+                          type="email"
+                          className="input-field text-sm"
+                          placeholder="Optional"
+                          value={newLink.candidateEmail}
+                          onChange={(e) => setNewLink((p) => ({ ...p, candidateEmail: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Candidate Phone</label>
+                        <input
+                          className="input-field text-sm"
+                          placeholder="10-digit mobile (optional)"
+                          value={newLink.candidatePhone}
+                          onChange={(e) => setNewLink((p) => ({ ...p, candidatePhone: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Expires in (days)</label>
+                        <input
+                          type="number"
+                          className="input-field text-sm"
+                          placeholder="e.g. 30 (optional)"
+                          min={1}
+                          max={90}
+                          value={newLink.expiresInDays}
+                          onChange={(e) => setNewLink((p) => ({ ...p, expiresInDays: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" disabled={linkCreating} className="btn-primary text-sm">
+                      {linkCreating ? 'Creating…' : 'Create Link'}
+                    </button>
+                  </form>
+                )}
+
+                {bizLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
+                  </div>
+                ) : (
+                  <div className="card">
+                    {joiningLinks.length === 0 ? (
+                      <p className="text-gray-400 text-sm py-6 text-center">No joining links yet. Create one above.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {joiningLinks.map((l) => (
+                          <div key={l.id} className="border rounded-xl p-4 flex items-start justify-between gap-3 bg-white">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono text-sm font-bold text-brand-dark">{l.code}</span>
+                                {l.isExpired ? (
+                                  <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-gray-100 text-gray-500">Expired</span>
+                                ) : l.isUsed ? (
+                                  <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-green-100 text-green-700">Used ✓</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-yellow-100 text-yellow-700">Active</span>
+                                )}
+                              </div>
+                              {l.candidateName  && <p className="text-xs text-gray-600">👤 {l.candidateName}</p>}
+                              {l.candidateEmail && <p className="text-xs text-gray-500">✉️ {l.candidateEmail}</p>}
+                              <p className="text-xs text-gray-400 mt-1 font-mono truncate">{l.joinUrl}</p>
+                              <p className="text-xs text-gray-400">Created: {new Date(l.createdAt).toLocaleDateString('en-IN')}{l.expiresAt ? ` · Expires: ${new Date(l.expiresAt).toLocaleDateString('en-IN')}` : ''}</p>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(l.joinUrl)}
+                              className="shrink-0 text-xs btn-secondary"
+                            >
+                              Copy Link
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Phase 4: Payouts ─────────────────────────────────────── */}
+            {activeTab === 'payouts' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-bold text-brand-dark text-lg">My Payouts</h3>
+                  <p className="text-sm text-gray-500 mt-1">Commissions are batched every Thursday and paid out to your registered bank account.</p>
+                </div>
+                {bizLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
+                  </div>
+                ) : payouts.length === 0 ? (
+                  <div className="card text-center py-12">
+                    <div className="text-4xl mb-3">💳</div>
+                    <p className="font-semibold text-gray-600">No payouts yet.</p>
+                    <p className="text-sm text-gray-400 mt-1">Payouts are generated every Thursday based on your attributed sales commissions.</p>
+                  </div>
+                ) : (
+                  <div className="card">
+                    <Table
+                      headers={['Payout Date', 'Amount', 'Commissions', 'Scheduled For', 'Status']}
+                      rows={payouts.map((p) => [
+                        new Date(p.createdAt).toLocaleDateString('en-IN'),
+                        formatPaise(p.amountPaise),
+                        p._count?.commissions ?? p.commissions?.length ?? '—',
+                        p.scheduledFor ? new Date(p.scheduledFor).toLocaleDateString('en-IN') : '—',
+                        <span key="s" className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          p.status === 'paid'       ? 'bg-green-100 text-green-700' :
+                          p.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                          p.status === 'failed'     ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>{p.status}</span>,
+                      ])}
+                      emptyText="No payouts."
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Phase 4: Training ────────────────────────────────────── */}
+            {activeTab === 'training' && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-bold text-brand-dark text-lg">Training Material</h3>
+                  <p className="text-sm text-gray-500 mt-1">Books, videos, and documents shared by the admin team.</p>
+                </div>
+                {bizLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
+                  </div>
+                ) : training.length === 0 ? (
+                  <div className="card text-center py-12">
+                    <div className="text-4xl mb-3">📚</div>
+                    <p className="font-semibold text-gray-600">No training content yet.</p>
+                    <p className="text-sm text-gray-400 mt-1">Your admin team will add books and videos here.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {training.map((item) => (
+                      <div key={item.id} className="card hover:shadow-md transition-shadow">
+                        <div className="text-2xl mb-2">
+                          {item.type === 'video' ? '🎬' : item.type === 'book' ? '📖' : '📄'}
+                        </div>
+                        <h4 className="font-bold text-brand-dark">{item.title}</h4>
+                        {item.description && <p className="text-sm text-gray-500 mt-1">{item.description}</p>}
+                        {item.url && (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-3 text-sm text-blue-600 hover:underline font-medium"
+                          >
+                            Open →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Phase 4: Discount ────────────────────────────────────── */}
+            {activeTab === 'discount' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-bold text-brand-dark text-lg">Discount Settings</h3>
+                  <p className="text-sm text-gray-500 mt-1">You can offer an optional discount on counsellor plans, capped at 20%.</p>
+                </div>
+
+                {bizLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveDiscount} className="card max-w-md space-y-5">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Discount Percentage: <span className="text-brand-red">{discountForm.discountPct}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={0.5}
+                        value={discountForm.discountPct}
+                        onChange={(e) => setDiscountForm((p) => ({ ...p, discountPct: Number(e.target.value) }))}
+                        className="w-full accent-red-600"
+                      />
+                      <div className="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>0%</span><span>10%</span><span>20% (max)</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="discountActive"
+                        type="checkbox"
+                        checked={discountForm.isActive}
+                        onChange={(e) => setDiscountForm((p) => ({ ...p, isActive: e.target.checked }))}
+                        className="w-4 h-4 accent-red-600"
+                      />
+                      <label htmlFor="discountActive" className="text-sm font-medium text-gray-700">
+                        Enable discount for candidates
+                      </label>
+                    </div>
+
+                    {discountConfig.isActive && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700">
+                        ✅ Currently active: <strong>{discountConfig.discountPct}% off</strong>
+                      </div>
+                    )}
+
+                    <button type="submit" className="btn-primary text-sm w-full">
+                      Save Discount Settings
+                    </button>
+                  </form>
+                )}
               </div>
             )}
           </>

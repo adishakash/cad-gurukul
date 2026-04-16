@@ -6,7 +6,9 @@ const { authenticate, authorizeRoles } = require('../middleware/auth');
 const { validate }                     = require('../middleware/validate');
 const { authLimiter }                  = require('../middleware/rateLimiter');
 const staffController                  = require('../controllers/staff.controller');
+const cclController                    = require('../controllers/ccl.controller');
 const { staffLoginSchema, staffLeadListQuerySchema } = require('../validators/staff.validator');
+const { createJoiningLinkSchema, updateDiscountSchema } = require('../validators/ccl.validator');
 
 // ─── Public route ─────────────────────────────────────────────────────────────
 
@@ -47,5 +49,28 @@ router.get('/students', staffController.listStudents);
 
 // Reports — read-only
 router.get('/reports', staffController.listReports);
+
+// ─── CCL Business Layer ────────────────────────────────────────────────────────
+// All routes below require CAREER_COUNSELLOR_LEAD (already enforced by the
+// router.use() middleware above). ADMIN (level 4) also passes through.
+
+// Account & income summary
+router.get('/account',              cclController.getAccountSummary);
+router.get('/account/transactions', cclController.listTransactions);
+
+// Joining links — CCL creates and shares these to recruit counsellor candidates
+router.get('/joining-links',  cclController.listJoiningLinks);
+router.post('/joining-links', validate(createJoiningLinkSchema), cclController.createJoiningLink);
+
+// Discount configuration — optional, capped at 20%
+router.get('/discount', cclController.getDiscount);
+router.put('/discount', validate(updateDiscountSchema), cclController.updateDiscount);
+
+// Training content — read-only for CCL, managed by Admin
+router.get('/training', cclController.listTraining);
+
+// Payouts — CCL can view their own payout batches
+router.get('/payouts',     cclController.listPayouts);
+router.get('/payouts/:id', cclController.getPayoutDetail);
 
 module.exports = router;
