@@ -1,6 +1,14 @@
 'use strict';
 const Joi = require('joi');
 
+/**
+ * Admin login — email + password, same password strength as student registration.
+ */
+const adminLoginSchema = Joi.object({
+  email:    Joi.string().email().lowercase().trim().required(),
+  password: Joi.string().required(),
+});
+
 const leadListQuerySchema = Joi.object({
   page:     Joi.number().integer().min(1).default(1),
   limit:    Joi.number().integer().min(1).max(100).default(20),
@@ -50,6 +58,7 @@ const retriggerSchema = Joi.object({
 });
 
 module.exports = {
+  adminLoginSchema,
   leadListQuerySchema,
   adminActionSchema,
   markCounsellingSchema,

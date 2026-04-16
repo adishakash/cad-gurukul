@@ -1,24 +1,11 @@
 'use strict';
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/database');
-const config = require('../config');
 const { successResponse, errorResponse } = require('../utils/helpers');
+const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../utils/token');
 const logger = require('../utils/logger');
 
-// ─── Token Helpers ────────────────────────────────────────────────────────────
-
-const signAccessToken = (userId, role) =>
-  jwt.sign({ userId, role }, config.jwt.secret, { expiresIn: config.jwt.accessExpiresIn });
-
-const signRefreshToken = () => uuidv4();
-
-const saveRefreshToken = async (userId, token) => {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-  await prisma.refreshToken.create({ data: { userId, token, expiresAt } });
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const buildInitialStudentProfile = (fullName) => ({
   fullName,

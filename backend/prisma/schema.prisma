@@ -16,9 +16,18 @@ datasource db {
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum UserRole {
+  // ── Existing roles (kept for backward compatibility) ──
   STUDENT
   PARENT
   COUNSELLOR
+
+  // ── New hierarchical roles ──────────────────────────
+  // Phase 1: ADMIN login is implemented now.
+  // CAREER_COUNSELLOR_LEAD and CAREER_COUNSELLOR are schema-ready
+  // but their login/endpoints are NOT implemented yet (Phase 2+).
+  ADMIN
+  CAREER_COUNSELLOR_LEAD
+  CAREER_COUNSELLOR
 }
 
 enum Board {
@@ -109,6 +118,11 @@ model User {
   email           String   @unique
   passwordHash    String
   role            UserRole @default(STUDENT)
+
+  // Display name — required for ADMIN/COUNSELLOR roles;
+  // optional for STUDENT/PARENT (they use StudentProfile.fullName).
+  name            String?
+
   isEmailVerified Boolean  @default(false)
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())

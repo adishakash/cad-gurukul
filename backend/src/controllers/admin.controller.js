@@ -1,13 +1,125 @@
 'use strict';
+const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
+const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../utils/token');
 const logger = require('../utils/logger');
 const { triggerAutomation } = require('../services/automation/automationService');
 const { generateReportAsync } = require('./assessment.controller');
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * GET /admin/users
+ * POST /api/v1/admin/login  (public — no auth required)
+ *
+ * Unified login for admin roles.  Looks up the User model (not AdminUser),
+ * enforces role = ADMIN, and issues a standard JWT `{ userId, role }` so that
+ * the same `authenticate` middleware works for all roles.
+ *
+ * Returns: accessToken (JWT) + refreshToken (opaque UUID, stored in DB).
+ *
+ * Security notes:
+ *  - Always runs bcrypt.compare() regardless of whether the user exists,
+ *    to prevent user-enumeration via response timing.
+ *  - Non-existent user, wrong password, and wrong role all return the
+ *    same 401 INVALID_CREDENTIALS to prevent information leakage.
+ */
+
+// Structurally valid bcrypt hash (cost 12, 60 chars).
+// Used as a dummy target when no real user is found so that
+// bcrypt still performs its full work-factor computation.
+const DUMMY_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+const loginAdmin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true, email: true, passwordHash: true,
+        role: true, name: true, isActive: true,
+      },
+    });
+
+    // Always run bcrypt to prevent timing-based user enumeration.
+    const hashToCompare = (user && user.isActive) ? user.passwordHash : DUMMY_HASH;
+    const isPasswordValid = await bcrypt.compare(password, hashToCompare);
+
+    // Generic error for: user not found | inactive | wrong password | wrong role.
+    // All cases return identical 401 — no information leakage.
+    if (!user || !user.isActive || !isPasswordValid || user.role !== 'ADMIN') {
+      return errorResponse(res, 'Invalid credentials', 401, 'INVALID_CREDENTIALS');
+    }
+
+    const accessToken = signAccessToken(user.id, user.role);
+    const refreshToken = signRefreshToken();
+    await saveRefreshToken(user.id, refreshToken);
+
+    logger.info('[Admin] Admin logged in', { userId: user.id, email: user.email });
+
+    return successResponse(res, {
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      accessToken,
+      refreshToken,
+    }, 'Login successful');
+  } catch (err) {
+    logger.error('[Admin] loginAdmin error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * POST /api/v1/admin/logout  (ADMIN only)
+ * Revokes the admin's refresh token so it cannot be used to get new access tokens.
+ */
+const logoutAdmin = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+      await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+    }
+    logger.info('[Admin] Admin logged out', { userId: req.user.id });
+    return successResponse(res, null, 'Logged out successfully');
+  } catch (err) {
+    logger.error('[Admin] logoutAdmin error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * GET /api/v1/admin/profile  (ADMIN only)
+ * Returns the authenticated admin's own user record.
+ */
+const getAdminProfile = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true, email: true, name: true, role: true,
+        isActive: true, createdAt: true, updatedAt: true,
+      },
+    });
+
+    if (!user) return errorResponse(res, 'Admin not found', 404, 'NOT_FOUND');
+
+    return successResponse(res, { user });
+  } catch (err) {
+    logger.error('[Admin] getAdminProfile error', { error: err.message });
+    throw err;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/users  —  paginated user list with optional search.
+ * Alias: getAllUsers
  */
 const listUsers = async (req, res) => {
   try {
@@ -455,7 +567,7 @@ const updateLeadAdmin = async (req, res) => {
       data,
     });
 
-    logger.info('[Admin] Lead updated', { leadId: req.params.id, adminId: req.admin.id });
+    logger.info('[Admin] Lead updated', { leadId: req.params.id, adminId: req.user.id });
     return successResponse(res, updated);
   } catch (err) {
     logger.error('[Admin] updateLeadAdmin error', { error: err.message });
@@ -497,7 +609,7 @@ const triggerAdminAction = async (req, res) => {
         data: { status: 'GENERATING' },
       });
       await prisma.leadEvent.create({
-        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_regenerate_report', metadata: { adminId: req.admin.id } },
+        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_regenerate_report', metadata: { adminId: req.user.id } },
       });
 
       // Fire-and-forget — never throws
@@ -509,7 +621,7 @@ const triggerAdminAction = async (req, res) => {
     if (action === 'resend_report_link') {
       await triggerAutomation('premium_report_ready', { leadId: lead.id, reportId: lead.reportId });
       await prisma.leadEvent.create({
-        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_resend_report_link', metadata: { adminId: req.admin.id } },
+        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_resend_report_link', metadata: { adminId: req.user.id } },
       });
       return successResponse(res, null, 'Report link resent via WhatsApp');
     }
@@ -520,7 +632,7 @@ const triggerAdminAction = async (req, res) => {
         data: { counsellingInterested: true, status: 'counselling_interested' },
       });
       await prisma.leadEvent.create({
-        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_mark_counselling', metadata: { adminId: req.admin.id } },
+        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_mark_counselling', metadata: { adminId: req.user.id } },
       });
       return successResponse(res, null, 'Lead marked as counselling interested');
     }
@@ -533,15 +645,36 @@ const triggerAdminAction = async (req, res) => {
 };
 
 module.exports = {
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  loginAdmin,
+  logoutAdmin,
+  getAdminProfile,
+
+  // ── Users ──────────────────────────────────────────────────────────────────
   listUsers,
+  getAllUsers: listUsers,   // spec alias
+  toggleUserStatus,
+
+  // ── Analytics ──────────────────────────────────────────────────────────────
   getAnalytics,
+
+  // ── Payments ───────────────────────────────────────────────────────────────
   listPayments,
+
+  // ── Reports ────────────────────────────────────────────────────────────────
   listReports,
+  getAllReports: listReports, // spec alias
+
+  // ── AI ─────────────────────────────────────────────────────────────────────
   getAIUsage,
+
+  // ── Exports ────────────────────────────────────────────────────────────────
   exportLeads,
   exportPayments,
-  toggleUserStatus,
+
+  // ── Leads / CRM ────────────────────────────────────────────────────────────
   listLeads,
+  getAllLeads: listLeads,   // spec alias
   getLeadDetail,
   getFunnelMetrics,
   updateLeadAdmin,

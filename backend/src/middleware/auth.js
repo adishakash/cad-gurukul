@@ -2,6 +2,7 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/database');
 const config = require('../config');
+const { getRoleLevel } = require('../config/roles');
 const { errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
@@ -139,4 +140,45 @@ const requireSuperAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, authenticateAdmin, optionalAuthenticate, requireRole, requireSuperAdmin };
+/**
+ * Hierarchy-aware role authorization middleware.
+ *
+ * Usage:
+ *   authorizeRoles('ADMIN')                  → only ADMIN
+ *   authorizeRoles('CAREER_COUNSELLOR_LEAD') → CCL and ADMIN
+ *   authorizeRoles('CAREER_COUNSELLOR')       → CC, CCL, and ADMIN
+ *
+ * Rule: user passes if their role level is >= the MINIMUM level
+ * among the specified allowedRoles.  Higher-level roles auto-pass lower routes.
+ * Must be used AFTER `authenticate` (requires req.user to be set).
+ */
+const authorizeRoles = (...allowedRoles) => {
+  if (!allowedRoles.length) {
+    throw new Error('authorizeRoles() requires at least one role argument');
+  }
+
+  // Validate at definition time — catch typos before any request is made.
+  const { ROLE_HIERARCHY } = require('../config/roles');
+  for (const role of allowedRoles) {
+    if (!(role in ROLE_HIERARCHY)) {
+      throw new Error(`authorizeRoles(): unknown role "${role}". Valid roles: ${Object.keys(ROLE_HIERARCHY).join(', ')}`);
+    }
+  }
+
+  const minRequiredLevel = Math.min(...allowedRoles.map(getRoleLevel));
+
+  return (req, res, next) => {
+    if (!req.user) {
+      return errorResponse(res, 'Authentication required', 401, 'UNAUTHORIZED');
+    }
+
+    const userLevel = getRoleLevel(req.user.role);
+    if (userLevel < minRequiredLevel) {
+      return errorResponse(res, 'You do not have permission to access this resource', 403, 'FORBIDDEN');
+    }
+
+    next();
+  };
+};
+
+module.exports = { authenticate, authenticateAdmin, optionalAuthenticate, requireRole, requireSuperAdmin, authorizeRoles };

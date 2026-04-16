@@ -12,6 +12,11 @@ router.post('/register', authLimiter, validate(authValidator.register), authCont
 router.post('/login', authLimiter, validate(authValidator.login), authController.login);
 router.post('/refresh', validate(authValidator.refreshToken), authController.refresh);
 router.post('/logout', authenticate, authController.logout);
+
+// ⚠️  LEGACY ENDPOINT — authenticates against the old `AdminUser` table and
+//    issues a JWT with { adminId, type:'admin' } which is NOT compatible with
+//    the new `authenticate` middleware.  Do NOT use for new features.
+//    Use POST /api/v1/admin/login instead.
 router.post('/admin/login', authLimiter, validate(authValidator.login), authController.adminLogin);
 
 module.exports = router;

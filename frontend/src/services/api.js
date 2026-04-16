@@ -95,6 +95,18 @@ adminApiClient.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
+adminApiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('cg_admin_token')
+      localStorage.removeItem('cg_admin_refresh_token')
+      localStorage.removeItem('cg_admin')
+      window.location.href = '/admin/login?session=expired'
+    }
+    return Promise.reject(error)
+  }
+)
 
 // ─── Admin Lead API ───────────────────────────────────────────────────────────
 export const adminLeadApi = {

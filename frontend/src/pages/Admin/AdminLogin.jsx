@@ -12,14 +12,15 @@ export default function AdminLogin() {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      const response = await api.post('/auth/admin/login', data)
-      const { accessToken, admin } = response.data.data
+      const response = await api.post('/admin/login', data)
+      const { accessToken, refreshToken, user } = response.data.data
       localStorage.setItem('cg_admin_token', accessToken)
-      localStorage.setItem('cg_admin', JSON.stringify(admin))
-      toast.success('Welcome, ' + admin.name)
+      if (refreshToken) localStorage.setItem('cg_admin_refresh_token', refreshToken)
+      localStorage.setItem('cg_admin', JSON.stringify(user))
+      toast.success('Welcome, ' + (user.name || user.email))
       navigate('/admin')
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Invalid credentials')
+      toast.error(err?.response?.data?.error?.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
