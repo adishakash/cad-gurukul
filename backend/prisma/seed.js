@@ -40,6 +40,23 @@ async function main() {
   console.log('   Credentials: superadmin@cadgurukul.com / Admin@123456');
   console.log('   ⚠️  Change the password immediately in production!');
 
+  // ── Career Counsellor Lead seed user (Phase 2) ───────────────────────────
+  const cclPassword = await bcrypt.hash('Lead@123456', 12);
+  const cclUser = await prisma.user.upsert({
+    where: { email: 'lead@cadgurukul.com' },
+    update: {},
+    create: {
+      email: 'lead@cadgurukul.com',
+      passwordHash: cclPassword,
+      name: 'Lead Counsellor',
+      role: 'CAREER_COUNSELLOR_LEAD',
+    },
+  });
+  console.log('✅ CCL User created:', cclUser.email, '| role:', cclUser.role);
+  console.log('   Login via: POST /api/v1/staff/login');
+  console.log('   Credentials: lead@cadgurukul.com / Lead@123456');
+  console.log('   ⚠️  Change the password immediately in production!');
+
   // Seed pricing plans — upsert-per-plan so production data is never wiped.
   const plans = [
     {

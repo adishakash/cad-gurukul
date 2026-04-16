@@ -23,10 +23,14 @@ import Payment from './pages/Payment'
 import Report from './pages/Report'
 
 // Admin pages
-import AdminLogin from './pages/Admin/AdminLogin'
+import AdminLogin     from './pages/Admin/AdminLogin'
 import AdminDashboard from './pages/Admin/AdminDashboard'
-import LeadList from './pages/Admin/LeadList'
-import LeadDetail from './pages/Admin/LeadDetail'
+import LeadList       from './pages/Admin/LeadList'
+import LeadDetail     from './pages/Admin/LeadDetail'
+
+// Staff pages (Career Counsellor Lead portal)
+import StaffLogin    from './pages/Staff/StaffLogin'
+import LeadDashboard from './pages/Staff/LeadDashboard'
 
 // Guards
 const ProtectedRoute = ({ children }) => {
@@ -43,6 +47,12 @@ const GuestRoute = ({ children }) => {
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('cg_admin_token')
   return token ? children : <Navigate to="/admin/login" replace />
+}
+
+// Staff guard — checks localStorage directly (staff auth is independent of Redux store)
+const StaffRoute = ({ children }) => {
+  const token = localStorage.getItem('cg_staff_token')
+  return token ? children : <Navigate to="/staff/login" replace />
 }
 
 const PublicLayout = ({ children }) => (
@@ -82,6 +92,11 @@ export default function App() {
         <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/leads" element={<AdminRoute><LeadList /></AdminRoute>} />
         <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
+
+        {/* Staff (Career Counsellor Lead) routes */}
+        <Route path="/staff/login" element={<StaffLogin />} />
+        <Route path="/staff"           element={<StaffRoute><LeadDashboard /></StaffRoute>} />
+        <Route path="/staff/dashboard" element={<StaffRoute><LeadDashboard /></StaffRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -37,9 +37,16 @@ const ALL_ROLES = Object.freeze(Object.keys(ROLE_HIERARCHY));
 const ADMIN_PANEL_ROLES = Object.freeze(['ADMIN']);
 
 /**
+ * Roles that can access the staff portal.
+ * Phase 2: CAREER_COUNSELLOR_LEAD.
+ * Phase 3: add CAREER_COUNSELLOR.
+ */
+const STAFF_PORTAL_ROLES = Object.freeze(['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR']);
+
+/**
  * Returns the numeric hierarchy level for a given role.
  * Returns 0 for unknown roles (they will fail all checks).
  */
 const getRoleLevel = (role) => ROLE_HIERARCHY[role] ?? 0;
 
-module.exports = { ROLE_HIERARCHY, ALL_ROLES, ADMIN_PANEL_ROLES, getRoleLevel };
+module.exports = { ROLE_HIERARCHY, ALL_ROLES, ADMIN_PANEL_ROLES, STAFF_PORTAL_ROLES, getRoleLevel };

@@ -124,6 +124,36 @@ export const adminLeadApi = {
   exportCsv:     ()              => adminApiClient.get('/admin/export/leads', { responseType: 'blob' }),
 }
 
+// ─── Staff API client (uses cg_staff_token, for Career Counsellor Lead / CC) ──
+export const staffApiClient = axios.create({
+  baseURL: apiBaseUrl,
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' },
+})
+staffApiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('cg_staff_token')
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+staffApiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('cg_staff_token')
+      localStorage.removeItem('cg_staff_refresh_token')
+      localStorage.removeItem('cg_staff')
+      window.location.href = '/staff/login?session=expired'
+    }
+    return Promise.reject(error)
+  }
+)
+
+// ─── Staff Lead API (read-only — for CCL dashboard) ──────────────────────────
+export const staffLeadApi = {
+  list:      (params) => staffApiClient.get('/staff/leads',      { params }),
+  getDetail: (id)     => staffApiClient.get(`/staff/leads/${id}`),
+}
+
 // ─── Analytics helper (fire-and-forget from frontend) ────────────────────────
 export const trackEvent = (event, metadata = {}) => {
   leadApi.appendEvent(event, metadata).catch(() => {/* silent */})
