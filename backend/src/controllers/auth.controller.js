@@ -1,6 +1,8 @@
 'use strict';
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const prisma = require('../config/database');
+const config = require('../config');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../utils/token');
 const logger = require('../utils/logger');

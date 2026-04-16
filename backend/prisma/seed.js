@@ -79,11 +79,15 @@ async function main() {
   ];
 
   for (const plan of plans) {
-    await prisma.pricingPlan.upsert({
-      where: { name: plan.name },
-      update: { amountPaise: plan.amountPaise, features: plan.features, displayOrder: plan.displayOrder },
-      create: plan,
-    });
+    const existing = await prisma.pricingPlan.findFirst({ where: { name: plan.name } });
+    if (existing) {
+      await prisma.pricingPlan.update({
+        where: { id: existing.id },
+        data: { amountPaise: plan.amountPaise, features: plan.features, displayOrder: plan.displayOrder },
+      });
+    } else {
+      await prisma.pricingPlan.create({ data: plan });
+    }
   }
   console.log('✅ Pricing plans seeded');
 

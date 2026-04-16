@@ -11,7 +11,7 @@ backend/node_modules/
 backend/.env
 backend/logs/
 backend/uploads/
-backend/prisma/migrations/
+# backend/prisma/migrations/ — migrations MUST be committed for production deploys
 
 # Frontend
 frontend/node_modules/
