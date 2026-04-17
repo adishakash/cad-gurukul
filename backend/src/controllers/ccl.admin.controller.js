@@ -398,7 +398,7 @@ const listAllTraining = async (req, res) => {
  */
 const createTrainingContent = async (req, res) => {
   try {
-    const { title, type, description, isActive = true, displayOrder = 0, isDownloadable = false } = req.body;
+    const { title, type, description, isActive = true, displayOrder = 0, isDownloadable = false, targetRole = 'ALL' } = req.body;
     let { url } = req.body;
 
     if (!title || !type) {
@@ -408,6 +408,8 @@ const createTrainingContent = async (req, res) => {
     if (!validTypes.includes(type)) {
       return errorResponse(res, `type must be one of: ${validTypes.join(', ')}`, 400, 'INVALID_TYPE');
     }
+    const validRoles = ['CCL', 'CC', 'ALL'];
+    const resolvedRole = validRoles.includes(targetRole) ? targetRole : 'ALL';
 
     let originalFilename = null;
     let storagePath      = null;
@@ -425,6 +427,7 @@ const createTrainingContent = async (req, res) => {
       data: {
         title,
         type,
+        targetRole:       resolvedRole,
         url:              url || null,
         description:      description || null,
         isActive:         isActive === 'true' || isActive === true,
@@ -436,7 +439,7 @@ const createTrainingContent = async (req, res) => {
       },
     });
 
-    logger.info('[Admin.CCL] Training content created', { id: item.id, title });
+    logger.info('[Admin.CCL] Training content created', { id: item.id, title, targetRole: resolvedRole });
     return successResponse(res, item, 'Training content created', 201);
   } catch (err) {
     logger.error('[Admin.CCL] createTrainingContent error', { error: err.message });

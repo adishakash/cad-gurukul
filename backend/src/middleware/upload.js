@@ -14,6 +14,10 @@ const { v4: uuidv4 } = require('uuid');
 
 const UPLOAD_DIR = path.join(__dirname, '../../uploads/training');
 
+// Ensure upload directory exists at startup — critical for DO App Platform
+// where the filesystem is fresh on each deploy (ephemeral storage).
+require('fs').mkdirSync(UPLOAD_DIR, { recursive: true });
+
 // Allowed extensions and their corresponding MIME types
 // Extension check prevents obvious abuse; MIME check catches renamed files
 const ALLOWED_MIME_MAP = {
