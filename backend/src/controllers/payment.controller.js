@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const { triggerAutomation } = require('../services/automation/automationService');
 const analytics = require('../services/analytics/analyticsService');
+const { getEffectiveChargeAmount } = require('../utils/testPricing');
 
 // ── Value Ladder pricing ─────────────────────────────────────────────────────
 const PLAN_PRICES = {
@@ -75,26 +76,40 @@ const createOrder = async (req, res) => {
     }
 
     const amountRupees = PLAN_PRICES[planType];
-    const amountPaise = rupeesToPaise(amountRupees);
+    const amountPaise  = rupeesToPaise(amountRupees);
+
+    // ── Test pricing override ─────────────────────────────────────────────────
+    // In PAYMENT_TEST_MODE the charge sent to Razorpay is reduced (₹1/₹2/₹3).
+    // The DB record always stores the real catalog price (amountPaise).
+    const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(amountPaise);
+    if (isTestMode) {
+      logger.warn('[Payment] TEST MODE — charging reduced amount', {
+        planType, originalPaise: amountPaise, chargePaise: chargeAmountPaise,
+      });
+    }
 
     // Create Razorpay order
     const receiptBase = assessmentId ? assessmentId.slice(0, 12) : req.user.id.slice(0, 12);
     const order = await razorpayService.createOrder({
-      amount: amountPaise,
+      amount: chargeAmountPaise,   // ← test amount in test mode, full amount in prod
       currency: 'INR',
       receipt: `cg_${planType[0]}_${receiptBase}`,
       notes: { userId: req.user.id, assessmentId: assessmentId || null, planType },
     });
 
-    // Save payment record
+    // Save payment record — always stores CATALOG price so reports/admin are correct
     const payment = await prisma.payment.create({
       data: {
         userId: req.user.id,
-        amountPaise,
+        amountPaise,             // catalog price — real plan price
         currency: 'INR',
         status: 'CREATED',
         razorpayOrderId: order.id,
-        metadata: { assessmentId: assessmentId || null, planType },
+        metadata: {
+          assessmentId: assessmentId || null,
+          planType,
+          ...(isTestMode ? { testMode: true, chargeAmountPaise } : {}),
+        },
       },
     });
 
@@ -115,10 +130,10 @@ const createOrder = async (req, res) => {
     logger.info('[Payment] Order created', { paymentId: payment.id, orderId: order.id, planType });
 
     return successResponse(res, {
-      orderId: order.id,
-      amount: amountPaise,
+      orderId:  order.id,
+      amount:   chargeAmountPaise,   // actual Razorpay charge (test or catalog)
       currency: 'INR',
-      keyId: config.razorpay.keyId,
+      keyId:    config.razorpay.keyId,
       paymentId: payment.id,
       planType,
     }, 'Order created', 201);
