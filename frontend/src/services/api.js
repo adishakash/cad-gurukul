@@ -196,6 +196,27 @@ export const counsellorApi = {
   reports:    (params) => staffApiClient.get('/counsellor/reports',  { params }),
 }
 
+// ─── Counsellor Business API (CC Phase 5 — income, test links, payouts) ──────
+// Uses staffApiClient (cg_staff_token), hits /counsellor/* business routes.
+export const counsellorBizApi = {
+  getAccount:       ()                  => staffApiClient.get('/counsellor/account'),
+  getTransactions:  (page = 1, limit = 20) => staffApiClient.get(`/counsellor/account/transactions?page=${page}&limit=${limit}`),
+  getTestLinks:     (page = 1, limit = 20) => staffApiClient.get(`/counsellor/test-links?page=${page}&limit=${limit}`),
+  createTestLink:   (data)              => staffApiClient.post('/counsellor/test-links', data),
+  getDiscount:      ()                  => staffApiClient.get('/counsellor/discount'),
+  updateDiscount:   (data)              => staffApiClient.put('/counsellor/discount', data),
+  getTraining:      ()                  => staffApiClient.get('/counsellor/training'),
+  getPayouts:       ()                  => staffApiClient.get('/counsellor/payouts'),
+  getPayoutDetail:  (id)                => staffApiClient.get(`/counsellor/payouts/${id}`),
+}
+
+// ─── Public Test Link API (no auth required) ──────────────────────────────────
+export const testlinkApi = {
+  resolve:     (code)       => api.get(`/testlink/${code}`),
+  createOrder: (code, data) => api.post(`/testlink/${code}/order`, data),
+  verify:      (code, data) => api.post(`/testlink/${code}/verify`, data),
+}
+
 // ─── Analytics helper (fire-and-forget from frontend) ────────────────────────
 export const trackEvent = (event, metadata = {}) => {
   leadApi.appendEvent(event, metadata).catch(() => {/* silent */})

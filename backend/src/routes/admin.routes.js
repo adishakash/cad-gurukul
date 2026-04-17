@@ -79,4 +79,30 @@ router.post('/ccl/training',         cclAdminController.createTrainingContent);
 router.patch('/ccl/training/:id',    cclAdminController.updateTrainingContent);
 router.delete('/ccl/training/:id',   cclAdminController.deleteTrainingContent);
 
+// ─── CC Business Layer Oversight (Phase 5) ────────────────────────────────────
+// Admin can inspect and manage the entire CC financial layer.
+
+const ccAdminController = require('../controllers/cc.admin.controller');
+
+// Test links
+router.get('/cc/test-links',          ccAdminController.listAllTestLinks);
+
+// Attributed sales
+router.get('/cc/sales',               ccAdminController.listAllSales);
+
+// Commissions
+router.get('/cc/commissions',         ccAdminController.listAllCommissions);
+
+// Payouts: view, generate batch, update status
+router.get('/cc/payouts',             ccAdminController.listAllPayouts);
+router.post('/cc/payouts/generate',   ccAdminController.generatePayoutBatch);
+router.get('/cc/payouts/:id',         ccAdminController.getPayoutDetail);
+router.patch('/cc/payouts/:id',       ccAdminController.updatePayoutStatus);
+
+// Training content CRUD (shared CclTrainingContent table with targetRole)
+router.get('/cc/training',            ccAdminController.listAllTraining);
+router.post('/cc/training',           ccAdminController.createTrainingContent);
+router.patch('/cc/training/:id',      ccAdminController.updateTrainingContent);
+router.delete('/cc/training/:id',     ccAdminController.deleteTrainingContent);
+
 module.exports = router;

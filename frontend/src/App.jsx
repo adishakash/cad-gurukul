@@ -38,6 +38,9 @@ import CounsellorDashboard from './pages/Counsellor/CounsellorDashboard'
 // Public joining page (no auth required)
 import JoinPage from './pages/Public/JoinPage'
 
+// Public test link page (no auth required — candidate payment via CC link)
+import TestLinkPage from './pages/Public/TestLinkPage'
+
 // Guards
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated)
@@ -103,6 +106,9 @@ export default function App() {
 
         {/* Public joining page (no login required — candidate enrolment via CCL link) */}
         <Route path="/join" element={<JoinPage />} />
+
+        {/* Public test link page (no login required — candidate assessment via CC link) */}
+        <Route path="/testlink" element={<TestLinkPage />} />
 
         {/* Admin routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
