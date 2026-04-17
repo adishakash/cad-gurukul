@@ -717,6 +717,9 @@ model CclJoiningLink {
 
   feeAmountPaise Int       @default(1200000) // ₹12,000
 
+  // Inline discount applied when this link was created (Phase 6)
+  discountPctUsed Float    @default(0)
+
   // Payment tracking for the candidate's joining payment
   joiningOrderId         String?   @unique  // Razorpay order ID created for this link
   joiningPaymentId       String?            // Razorpay payment ID after capture
@@ -830,14 +833,20 @@ model CclDiscount {
 /// Managed by Admin; read-only for CCL.
 /// targetRole controls which role sees this content: 'CCL', 'CC', or 'ALL'.
 model CclTrainingContent {
-  id           String   @id @default(cuid())
-  title        String
-  type         String              // "video" | "book" | "document"
-  url          String?
-  description  String?
-  isActive     Boolean  @default(true)
-  displayOrder Int      @default(0)
-  targetRole   String   @default("CCL") // "CCL" | "CC" | "ALL"
+  id               String   @id @default(cuid())
+  title            String
+  type             String              // "video" | "book" | "document"
+  url              String?
+  description      String?
+  isActive         Boolean  @default(true)
+  displayOrder     Int      @default(0)
+  targetRole       String   @default("CCL") // "CCL" | "CC" | "ALL"
+
+  // Phase 6: file upload support
+  originalFilename String?             // original file name — NOT exposed to staff
+  storagePath      String?             // internal storage path/key
+  isDownloadable   Boolean  @default(false)
+  mimeType         String?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -867,6 +876,8 @@ model CcTestLink {
   testPaymentId        String?
   testPaymentStatus    String    @default("pending")
   testNetAmountPaise   Int?
+  // Phase 6: inline discount applied when this link was created
+  discountPctUsed      Float     @default(0)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -956,4 +967,24 @@ model CcDiscount {
   ccUser      User @relation("CcDiscount", fields: [ccUserId], references: [id], onDelete: Cascade)
 
   @@map("cc_discounts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISCOUNT POLICIES — Phase 6
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Admin-managed discount policy per role+planType.
+/// Defines the allowed min/max discount range staff can apply at link creation.
+model DiscountPolicy {
+  id        String   @id @default(cuid())
+  role      String   // "CAREER_COUNSELLOR_LEAD" | "CAREER_COUNSELLOR"
+  planType  String   // "joining" | "499plan" | "standard" | "premium" | "consultation"
+  minPct    Float    @default(0)
+  maxPct    Float    @default(20)
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([role, planType])
+  @@map("discount_policies")
 }

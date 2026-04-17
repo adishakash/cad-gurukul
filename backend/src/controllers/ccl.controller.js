@@ -167,11 +167,18 @@ const resolveJoiningLink = async (req, res) => {
 
     const isExpired = link.expiresAt ? new Date() > new Date(link.expiresAt) : false;
 
-    const discount = await prisma.cclDiscount.findUnique({ where: { cclUserId: link.cclUserId } });
-    const effectiveDiscountPct =
-      !link.isUsed && !isExpired && discount && discount.isActive
-        ? Math.min(discount.discountPct, MAX_DISCOUNT_PCT)
-        : 0;
+    // Phase 6: prefer inline discountPctUsed stored on the link; fall back to CclDiscount
+    let effectiveDiscountPct = 0;
+    if (!link.isUsed && !isExpired) {
+      if (link.discountPctUsed > 0) {
+        effectiveDiscountPct = Math.min(link.discountPctUsed, MAX_DISCOUNT_PCT);
+      } else {
+        const discount = await prisma.cclDiscount.findUnique({ where: { cclUserId: link.cclUserId } });
+        if (discount && discount.isActive) {
+          effectiveDiscountPct = Math.min(discount.discountPct, MAX_DISCOUNT_PCT);
+        }
+      }
+    }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
     const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
@@ -220,10 +227,16 @@ const createJoiningOrder = async (req, res) => {
       return errorResponse(res, 'This joining link has expired', 410, 'LINK_EXPIRED');
     }
 
-    const discount = await prisma.cclDiscount.findUnique({ where: { cclUserId: link.cclUserId } });
-    const effectiveDiscountPct = (discount && discount.isActive)
-      ? Math.min(discount.discountPct, MAX_DISCOUNT_PCT)
-      : 0;
+    // Phase 6: prefer inline discountPctUsed stored on the link; fall back to CclDiscount
+    let effectiveDiscountPct = 0;
+    if (link.discountPctUsed > 0) {
+      effectiveDiscountPct = Math.min(link.discountPctUsed, MAX_DISCOUNT_PCT);
+    } else {
+      const discount = await prisma.cclDiscount.findUnique({ where: { cclUserId: link.cclUserId } });
+      if (discount && discount.isActive) {
+        effectiveDiscountPct = Math.min(discount.discountPct, MAX_DISCOUNT_PCT);
+      }
+    }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
     const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
@@ -386,11 +399,26 @@ const listJoiningLinks = async (req, res) => {
  * POST /api/v1/staff/joining-links
  *
  * Creates a new joining link for a candidate.
+ * Accepts optional discountPct (validated against DiscountPolicy).
  */
 const createJoiningLink = async (req, res) => {
   try {
     const cclUserId = req.user.id;
-    const { candidateName, candidateEmail, candidatePhone, expiresInDays } = req.body;
+    const { candidateName, candidateEmail, candidatePhone, expiresInDays, discountPct: rawDiscount } = req.body;
+
+    // Validate and cap discount against DiscountPolicy
+    let discountPct = 0;
+    if (rawDiscount !== undefined && Number(rawDiscount) > 0) {
+      const policy = await prisma.discountPolicy.findUnique({
+        where: { role_planType: { role: 'CAREER_COUNSELLOR_LEAD', planType: 'joining' } },
+      });
+      const cap = policy ? policy.maxPct : MAX_DISCOUNT_PCT;
+      const min = policy ? policy.minPct : 0;
+      // NOTE: No DiscountPolicy configured for CAREER_COUNSELLOR_LEAD/joining — using default cap.
+      // Admin should configure a policy via the Discounts section to enforce custom limits.
+      if (!policy) logger.warn('[CCL] No DiscountPolicy found for joining links — defaulting to MAX_DISCOUNT_PCT', { cap });
+      discountPct = Math.min(Math.max(Number(rawDiscount), min), cap);
+    }
 
     const code = await generateUniqueCode();
     const expiresAt = expiresInDays
@@ -405,6 +433,7 @@ const createJoiningLink = async (req, res) => {
         candidateEmail: candidateEmail || null,
         candidatePhone: candidatePhone || null,
         expiresAt,
+        discountPctUsed: discountPct,
       },
     });
 
@@ -486,6 +515,30 @@ const getPayoutDetail = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/v1/staff/discount-policy?planType=joining
+ *
+ * Returns the admin-configured allowed discount range for CCL's planType.
+ * Falls back to defaults if no policy exists.
+ */
+const getDiscountPolicy = async (req, res) => {
+  try {
+    const planType = req.query.planType || 'joining';
+    const policy = await prisma.discountPolicy.findUnique({
+      where: { role_planType: { role: 'CAREER_COUNSELLOR_LEAD', planType } },
+    });
+    return successResponse(res, {
+      planType,
+      minPct:   policy ? policy.minPct   : 0,
+      maxPct:   policy ? policy.maxPct   : MAX_DISCOUNT_PCT,
+      isActive: policy ? policy.isActive : true,
+    });
+  } catch (err) {
+    logger.error('[CCL] getDiscountPolicy error', { error: err.message });
+    return errorResponse(res, 'Failed to load discount policy', 500);
+  }
+};
+
 // ─── Discount Config ──────────────────────────────────────────────────────────
 
 /**
@@ -547,17 +600,68 @@ const updateDiscount = async (req, res) => {
  * GET /api/v1/staff/training
  *
  * Returns all active training content items ordered by displayOrder.
+ * originalFilename is intentionally excluded — staff only see admin-given title.
  */
 const listTraining = async (req, res) => {
   try {
     const content = await prisma.cclTrainingContent.findMany({
-      where:   { isActive: true },
+      where:   { isActive: true, targetRole: { in: ['CCL', 'ALL'] } },
       orderBy: { displayOrder: 'asc' },
+      select:  { id: true, title: true, type: true, description: true, isDownloadable: true, targetRole: true, displayOrder: true },
     });
     return successResponse(res, content);
   } catch (err) {
     logger.error('[CCL] listTraining error', { error: err.message });
     return errorResponse(res, 'Failed to load training content', 500);
+  }
+};
+
+/**
+ * GET /api/v1/staff/training/:id/file[?download=true]
+ *
+ * Authenticated file serving — only CCL-visible content is accessible.
+ * Streams the file inline for viewing; use ?download=true to get attachment.
+ * Enforces isDownloadable flag when download is requested.
+ */
+const serveTrainingFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const isDownload = req.query.download === 'true';
+
+    const item = await prisma.cclTrainingContent.findFirst({
+      where: { id, isActive: true, targetRole: { in: ['CCL', 'ALL'] } },
+    });
+
+    if (!item)            return errorResponse(res, 'Resource not found', 404, 'NOT_FOUND');
+    if (!item.storagePath) return errorResponse(res, 'File not available', 404, 'NOT_FOUND');
+
+    if (isDownload && !item.isDownloadable) {
+      return errorResponse(res, 'Download not permitted for this resource', 403, 'FORBIDDEN');
+    }
+
+    const path = require('path');
+    const contentType = item.mimeType || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    if (isDownload) {
+      // Use admin title as the download filename (hides original file name)
+      const ext = path.extname(item.storagePath);
+      const safeTitle = item.title.replace(/[^a-zA-Z0-9\-_.]/g, '_');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}${ext}"`);
+    } else {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+
+    res.sendFile(item.storagePath, (err) => {
+      if (err && !res.headersSent) {
+        logger.error('[CCL] serveTrainingFile sendFile error', { error: err.message, id });
+        errorResponse(res, 'File not accessible', 500);
+      }
+    });
+  } catch (err) {
+    logger.error('[CCL] serveTrainingFile error', { error: err.message });
+    return errorResponse(res, 'Failed to serve file', 500);
   }
 };
 
@@ -575,10 +679,13 @@ module.exports = {
   // CCL payouts
   listPayouts,
   getPayoutDetail,
-  // Discount
+  // Discount policy (Phase 6)
+  getDiscountPolicy,
+  // Discount (legacy)
   getDiscount,
   updateDiscount,
   // Training
   listTraining,
+  serveTrainingFile,
 };
 

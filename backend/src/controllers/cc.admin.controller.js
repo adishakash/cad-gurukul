@@ -6,7 +6,7 @@
  *   - All test links across all CCs
  *   - All attributed sales and commissions
  *   - Payout batch generation and status management
- *   - Training content CRUD (shared CclTrainingContent table with targetRole)
+ *   - Training content CRUD (shared CclTrainingContent table with targetRole, file upload support)
  *
  * All routes behind authenticateAdmin + ADMIN role.
  */
@@ -389,11 +389,13 @@ const listAllTraining = async (req, res) => {
 /**
  * POST /api/v1/admin/cc/training
  * Create a new training content item targeted at CC.
- * Body: { title, type, url?, description?, isActive?, displayOrder?, targetRole? }
+ * Supports multipart/form-data (file upload) or JSON (URL-based).
+ * Body: { title, type, url?, description?, isActive?, displayOrder?, targetRole?, isDownloadable? }
  */
 const createTrainingContent = async (req, res) => {
   try {
-    const { title, type, url, description, isActive = true, displayOrder = 0, targetRole = 'CC' } = req.body;
+    const { title, type, description, isActive = true, displayOrder = 0, targetRole = 'CC', isDownloadable = false } = req.body;
+    let { url } = req.body;
 
     if (!title || !type) {
       return errorResponse(res, 'title and type are required', 400, 'MISSING_FIELDS');
@@ -407,8 +409,33 @@ const createTrainingContent = async (req, res) => {
       return errorResponse(res, `targetRole must be one of: ${validRoles.join(', ')}`, 400, 'INVALID_TARGET_ROLE');
     }
 
+    let originalFilename = null;
+    let storagePath      = null;
+    let mimeType         = null;
+
+    if (req.file) {
+      const path         = require('path');
+      const relativePath = `/uploads/training/${req.file.filename}`;
+      url                = relativePath;
+      originalFilename   = req.file.originalname;
+      storagePath        = req.file.path;
+      mimeType           = req.file.mimetype || null;
+    }
+
     const item = await prisma.cclTrainingContent.create({
-      data: { title, type, url: url || null, description: description || null, isActive, displayOrder, targetRole },
+      data: {
+        title,
+        type,
+        url:              url || null,
+        description:      description || null,
+        isActive:         isActive === 'true' || isActive === true,
+        displayOrder:     Number(displayOrder) || 0,
+        targetRole,
+        isDownloadable:   isDownloadable === 'true' || isDownloadable === true,
+        originalFilename,
+        storagePath,
+        mimeType,
+      },
     });
 
     logger.info('[Admin.CC] Training content created', { id: item.id, title, targetRole });
@@ -426,7 +453,7 @@ const createTrainingContent = async (req, res) => {
 const updateTrainingContent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, type, url, description, isActive, displayOrder, targetRole } = req.body;
+    const { title, type, url, description, isActive, displayOrder, targetRole, isDownloadable } = req.body;
 
     const existing = await prisma.cclTrainingContent.findUnique({ where: { id } });
     if (!existing) return errorResponse(res, 'Training content not found', 404, 'NOT_FOUND');
@@ -445,13 +472,14 @@ const updateTrainingContent = async (req, res) => {
     }
 
     const updateData = {};
-    if (title        !== undefined) updateData.title        = title;
-    if (type         !== undefined) updateData.type         = type;
-    if (url          !== undefined) updateData.url          = url || null;
-    if (description  !== undefined) updateData.description  = description || null;
-    if (isActive     !== undefined) updateData.isActive     = Boolean(isActive);
-    if (displayOrder !== undefined) updateData.displayOrder = Number(displayOrder);
-    if (targetRole   !== undefined) updateData.targetRole   = targetRole;
+    if (title          !== undefined) updateData.title          = title;
+    if (type           !== undefined) updateData.type           = type;
+    if (url            !== undefined) updateData.url            = url || null;
+    if (description    !== undefined) updateData.description    = description || null;
+    if (isActive       !== undefined) updateData.isActive       = Boolean(isActive);
+    if (displayOrder   !== undefined) updateData.displayOrder   = Number(displayOrder);
+    if (targetRole     !== undefined) updateData.targetRole     = targetRole;
+    if (isDownloadable !== undefined) updateData.isDownloadable = Boolean(isDownloadable);
 
     const updated = await prisma.cclTrainingContent.update({ where: { id }, data: updateData });
     return successResponse(res, updated);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { adminLeadApi, adminApiClient as adminApi } from '../../services/api'
+import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi } from '../../services/api'
 
 const StatCard = ({ icon, label, value, sub, highlight }) => (
   <div className={`card text-center hover:shadow-lg transition-shadow ${highlight ? 'border-2 border-brand-red bg-red-50' : ''}`}>
@@ -46,6 +46,19 @@ export default function AdminDashboard() {
   const [funnel, setFunnel]       = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading]     = useState(true)
+
+  // Phase 6: Discount policy state
+  const [policies, setPolicies]           = useState([])
+  const [policyForm, setPolicyForm]       = useState({ role: 'CAREER_COUNSELLOR_LEAD', planType: 'joining', minPct: 0, maxPct: 20, isActive: true })
+  const [policySaving, setPolicySaving]   = useState(false)
+  const [discountLoaded, setDiscountLoaded] = useState(false)
+
+  // Phase 6: Training state
+  const [trainingItems, setTrainingItems]   = useState([])
+  const [trainingLoaded, setTrainingLoaded] = useState(false)
+  const [trainingUploading, setTrainingUploading] = useState(false)
+  const [trainingForm, setTrainingForm]     = useState({ title: '', type: 'document', targetRole: 'ALL', isDownloadable: false, url: '' })
+  const [trainingFile, setTrainingFile]     = useState(null)
 
   const admin = JSON.parse(localStorage.getItem('cg_admin') || '{}')
 
@@ -102,7 +115,94 @@ export default function AdminDashboard() {
     navigate('/admin/login')
   }
 
-  const tabs = ['overview', 'leads', 'users', 'payments', 'ai-usage']
+  // Phase 6: load discount policies on tab switch
+  const loadDiscountPolicies = async () => {
+    try {
+      const res = await adminDiscountApi.listPolicies()
+      setPolicies(res.data.data || [])
+      setDiscountLoaded(true)
+    } catch {
+      toast.error('Failed to load discount policies.')
+    }
+  }
+
+  const handleSavePolicy = async (e) => {
+    e.preventDefault()
+    setPolicySaving(true)
+    try {
+      await adminDiscountApi.upsertPolicy(policyForm)
+      toast.success('Discount policy saved.')
+      await loadDiscountPolicies()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to save policy.')
+    } finally {
+      setPolicySaving(false)
+    }
+  }
+
+  // Phase 6: load training items on tab switch
+  const loadTraining = async () => {
+    try {
+      const res = await adminTrainingApi.list()
+      setTrainingItems(res.data.data || [])
+      setTrainingLoaded(true)
+    } catch {
+      toast.error('Failed to load training content.')
+    }
+  }
+
+  const handleCreateTraining = async (e) => {
+    e.preventDefault()
+    setTrainingUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('title', trainingForm.title)
+      formData.append('type', trainingForm.type)
+      formData.append('targetRole', trainingForm.targetRole)
+      formData.append('isDownloadable', trainingForm.isDownloadable)
+      if (trainingFile) {
+        formData.append('file', trainingFile)
+      } else if (trainingForm.url) {
+        formData.append('url', trainingForm.url)
+      }
+      await adminTrainingApi.create(formData)
+      toast.success('Training content added.')
+      setTrainingForm({ title: '', type: 'document', targetRole: 'ALL', isDownloadable: false, url: '' })
+      setTrainingFile(null)
+      await loadTraining()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to add training content.')
+    } finally {
+      setTrainingUploading(false)
+    }
+  }
+
+  const handleToggleTraining = async (item) => {
+    try {
+      await adminTrainingApi.update(item.id, { isActive: !item.isActive })
+      toast.success(`Training item ${!item.isActive ? 'activated' : 'deactivated'}.`)
+      await loadTraining()
+    } catch {
+      toast.error('Failed to toggle training item.')
+    }
+  }
+
+  const handleDeleteTraining = async (item) => {
+    try {
+      await adminTrainingApi.remove(item.id)
+      toast.success('Training item deactivated.')
+      await loadTraining()
+    } catch {
+      toast.error('Failed to deactivate training item.')
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'discounts' && !discountLoaded) loadDiscountPolicies()
+    if (activeTab === 'training' && !trainingLoaded) loadTraining()
+  }, [activeTab])
+
+  const tabs = ['overview', 'leads', 'users', 'payments', 'ai-usage', 'discounts', 'training']
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -290,6 +390,148 @@ export default function AdminDashboard() {
                   ])}
                   emptyText="No AI usage recorded."
                 />
+              </div>
+            )}
+
+            {/* ── Phase 6: Discount Policies ── */}
+            {activeTab === 'discounts' && (
+              <div className="space-y-6">
+                <div className="card">
+                  <h3 className="font-bold text-brand-dark text-lg mb-4">Discount Policy Editor</h3>
+                  <form onSubmit={handleSavePolicy} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Role</label>
+                      <select value={policyForm.role} onChange={(e) => setPolicyForm((f) => ({ ...f, role: e.target.value }))} className="input-field text-sm w-full">
+                        <option value="CAREER_COUNSELLOR_LEAD">Career Counsellor Lead (CCL)</option>
+                        <option value="CAREER_COUNSELLOR">Career Counsellor (CC)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Plan Type</label>
+                      <select value={policyForm.planType} onChange={(e) => setPolicyForm((f) => ({ ...f, planType: e.target.value }))} className="input-field text-sm w-full">
+                        <option value="joining">joining (CCL joining fee)</option>
+                        <option value="standard">standard (₹12,000 plan)</option>
+                        <option value="499plan">499plan (₹499 plan)</option>
+                        <option value="premium">premium</option>
+                        <option value="consultation">consultation</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Min Discount %</label>
+                      <input type="number" min="0" max="100" step="0.5" value={policyForm.minPct} onChange={(e) => setPolicyForm((f) => ({ ...f, minPct: Number(e.target.value) }))} className="input-field text-sm w-full" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Max Discount %</label>
+                      <input type="number" min="0" max="100" step="0.5" value={policyForm.maxPct} onChange={(e) => setPolicyForm((f) => ({ ...f, maxPct: Number(e.target.value) }))} className="input-field text-sm w-full" />
+                    </div>
+                    <div className="flex items-center gap-2 pt-5">
+                      <input type="checkbox" id="policyActive" checked={policyForm.isActive} onChange={(e) => setPolicyForm((f) => ({ ...f, isActive: e.target.checked }))} className="w-4 h-4" />
+                      <label htmlFor="policyActive" className="text-sm text-gray-700">Policy active</label>
+                    </div>
+                    <div className="flex items-end">
+                      <button type="submit" disabled={policySaving} className="btn-primary text-sm w-full">
+                        {policySaving ? 'Saving…' : 'Save Policy'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-brand-dark text-lg">Current Policies ({policies.length})</h3>
+                    <button onClick={loadDiscountPolicies} className="btn-secondary text-sm">↻ Refresh</button>
+                  </div>
+                  <Table
+                    headers={['Role', 'Plan Type', 'Min %', 'Max %', 'Active']}
+                    rows={policies.map((p) => [
+                      p.role === 'CAREER_COUNSELLOR_LEAD' ? 'CCL' : 'CC',
+                      p.planType,
+                      `${p.minPct}%`,
+                      `${p.maxPct}%`,
+                      p.isActive
+                        ? <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Active</span>
+                        : <span key="i" className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">Inactive</span>,
+                    ])}
+                    emptyText="No discount policies set. Add one above."
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── Phase 6: Training Content Management ── */}
+            {activeTab === 'training' && (
+              <div className="space-y-6">
+                <div className="card">
+                  <h3 className="font-bold text-brand-dark text-lg mb-4">Add Training Content</h3>
+                  <form onSubmit={handleCreateTraining} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Title *</label>
+                      <input type="text" required value={trainingForm.title} onChange={(e) => setTrainingForm((f) => ({ ...f, title: e.target.value }))} placeholder="e.g. Career Counselling Guide" className="input-field text-sm w-full" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Type</label>
+                      <select value={trainingForm.type} onChange={(e) => setTrainingForm((f) => ({ ...f, type: e.target.value }))} className="input-field text-sm w-full">
+                        <option value="document">Document</option>
+                        <option value="video">Video</option>
+                        <option value="book">Book</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Target Role</label>
+                      <select value={trainingForm.targetRole} onChange={(e) => setTrainingForm((f) => ({ ...f, targetRole: e.target.value }))} className="input-field text-sm w-full">
+                        <option value="ALL">All Staff (CCL + CC)</option>
+                        <option value="CCL">CCL Only</option>
+                        <option value="CC">CC Only</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">URL (if no file upload)</label>
+                      <input type="url" value={trainingForm.url} onChange={(e) => setTrainingForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." className="input-field text-sm w-full" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">File Upload (pdf, docx, mp4, etc.)</label>
+                      <input type="file" accept=".pdf,.txt,.epub,.mp4,.mkv,.doc,.docx" onChange={(e) => setTrainingFile(e.target.files[0] || null)} className="text-sm w-full" />
+                      <p className="text-xs text-gray-400 mt-0.5">Max 200MB (video), 50MB (document)</p>
+                    </div>
+                    <div className="flex items-center gap-2 pt-5">
+                      <input type="checkbox" id="isDownloadable" checked={trainingForm.isDownloadable} onChange={(e) => setTrainingForm((f) => ({ ...f, isDownloadable: e.target.checked }))} className="w-4 h-4" />
+                      <label htmlFor="isDownloadable" className="text-sm text-gray-700">Downloadable by staff</label>
+                    </div>
+                    <div className="flex items-end">
+                      <button type="submit" disabled={trainingUploading} className="btn-primary text-sm w-full">
+                        {trainingUploading ? 'Uploading…' : 'Add Content'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-brand-dark text-lg">Training Library ({trainingItems.length})</h3>
+                    <button onClick={loadTraining} className="btn-secondary text-sm">↻ Refresh</button>
+                  </div>
+                  <Table
+                    headers={['Title', 'Type', 'Target', 'Downloadable', 'Active', 'Actions']}
+                    rows={trainingItems.map((item) => [
+                      item.title,
+                      item.type,
+                      item.targetRole,
+                      item.isDownloadable ? '✅' : '—',
+                      item.isActive
+                        ? <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Active</span>
+                        : <span key="i" className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">Hidden</span>,
+                      <div key="actions" className="flex gap-2">
+                        <button onClick={() => handleToggleTraining(item)} className="text-xs text-blue-600 hover:underline">
+                          {item.isActive ? 'Hide' : 'Show'}
+                        </button>
+                        <button onClick={() => handleDeleteTraining(item)} className="text-xs text-red-600 hover:underline">
+                          Delete
+                        </button>
+                      </div>,
+                    ])}
+                    emptyText="No training content yet. Add some above."
+                  />
+                </div>
               </div>
             )}
           </>

@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const path    = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const { requestLogger } = require('./middleware/requestLogger');
@@ -75,6 +76,14 @@ app.use(requestLogger);
 
 // ─── General Rate Limiting ────────────────────────────────────────────────────
 app.use(generalLimiter);
+
+// ─── Static File Serving ──────────────────────────────────────────────────────
+// ⚠️  Training files are NOT served as public static assets.
+//     All file access goes through authenticated API routes:
+//       GET /api/v1/staff/training/:id/file       (CCL)
+//       GET /api/v1/counsellor/training/:id/file  (CC)
+//     These routes enforce role-based access and the isDownloadable flag.
+//     Direct /uploads/* requests are intentionally not served.
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/v1', routes);

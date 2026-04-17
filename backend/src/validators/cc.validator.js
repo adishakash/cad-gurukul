@@ -10,6 +10,8 @@ const createTestLinkSchema = Joi.object({
   candidatePhone: Joi.string().pattern(/^[6-9]\d{9}$/),
   expiryDays:     Joi.number().integer().min(1).max(90),
   feeAmountPaise: Joi.number().integer().min(1),
+  // Phase 6: inline discount at link creation (validated against DiscountPolicy server-side)
+  discountPct:    Joi.number().min(0).max(100).optional().allow(null),
 });
 
 const updateDiscountSchema = Joi.object({

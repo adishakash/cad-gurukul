@@ -124,6 +124,20 @@ export const adminLeadApi = {
   exportCsv:     ()              => adminApiClient.get('/admin/export/leads', { responseType: 'blob' }),
 }
 
+// ─── Admin Discount Policy API (Phase 6) ──────────────────────────────────────
+export const adminDiscountApi = {
+  listPolicies: ()       => adminApiClient.get('/admin/discount-policies'),
+  upsertPolicy: (data)   => adminApiClient.put('/admin/discount-policies', data),
+}
+
+// ─── Admin Training API (Phase 6) ────────────────────────────────────────────
+export const adminTrainingApi = {
+  list:    ()           => adminApiClient.get('/admin/ccl/training'),
+  create:  (formData)   => adminApiClient.post('/admin/ccl/training', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:  (id, data)   => adminApiClient.patch(`/admin/ccl/training/${id}`, data),
+  remove:  (id)         => adminApiClient.delete(`/admin/ccl/training/${id}`),
+}
+
 // ─── Staff API client (uses cg_staff_token, for Career Counsellor Lead / CC) ──
 export const staffApiClient = axios.create({
   baseURL: apiBaseUrl,
@@ -165,11 +179,16 @@ export const staffApi = {
   // Payouts
   getPayouts:      ()             => staffApiClient.get('/staff/payouts'),
   getPayoutDetail: (id)           => staffApiClient.get(`/staff/payouts/${id}`),
-  // Discount config
+  // Discount policy (Phase 6)
+  getDiscountPolicy: (planType = 'joining') => staffApiClient.get('/staff/discount-policy', { params: { planType } }),
+  // Discount config (legacy)
   getDiscount:     ()             => staffApiClient.get('/staff/discount'),
   updateDiscount:  (data)         => staffApiClient.put('/staff/discount', data),
   // Training content
-  getTraining:     ()             => staffApiClient.get('/staff/training'),
+  getTraining:       ()            => staffApiClient.get('/staff/training'),
+  // Protected file access — streams file with auth header; use responseType:'blob' on caller side
+  getTrainingFile:   (id)          => staffApiClient.get(`/staff/training/${id}/file`,              { responseType: 'blob' }),
+  downloadTrainingFile: (id)       => staffApiClient.get(`/staff/training/${id}/file?download=true`, { responseType: 'blob' }),
 }
 
 // ─── Public Joining Link API (no auth required) ───────────────────────────────
@@ -203,9 +222,15 @@ export const counsellorBizApi = {
   getTransactions:  (page = 1, limit = 20) => staffApiClient.get(`/counsellor/account/transactions?page=${page}&limit=${limit}`),
   getTestLinks:     (page = 1, limit = 20) => staffApiClient.get(`/counsellor/test-links?page=${page}&limit=${limit}`),
   createTestLink:   (data)              => staffApiClient.post('/counsellor/test-links', data),
+  // Discount policy (Phase 6)
+  getDiscountPolicy: (planType = 'standard') => staffApiClient.get('/counsellor/discount-policy', { params: { planType } }),
+  // Discount config (legacy)
   getDiscount:      ()                  => staffApiClient.get('/counsellor/discount'),
   updateDiscount:   (data)              => staffApiClient.put('/counsellor/discount', data),
   getTraining:      ()                  => staffApiClient.get('/counsellor/training'),
+  // Protected file access
+  getTrainingFile:     (id)             => staffApiClient.get(`/counsellor/training/${id}/file`,              { responseType: 'blob' }),
+  downloadTrainingFile:(id)             => staffApiClient.get(`/counsellor/training/${id}/file?download=true`, { responseType: 'blob' }),
   getPayouts:       ()                  => staffApiClient.get('/counsellor/payouts'),
   getPayoutDetail:  (id)                => staffApiClient.get(`/counsellor/payouts/${id}`),
 }

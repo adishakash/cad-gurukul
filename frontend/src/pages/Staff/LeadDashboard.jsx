@@ -67,12 +67,12 @@ export default function LeadDashboard() {
   const [joiningLinks, setJoiningLinks] = useState([])
   const [payouts, setPayouts]         = useState([])
   const [training, setTraining]       = useState([])
-  const [discountConfig, setDiscountConfig] = useState({ discountPct: 0, isActive: false })
-  const [discountForm, setDiscountForm]     = useState({ discountPct: 0, isActive: false })
   const [bizLoading, setBizLoading]   = useState(false)
   const [linkFormOpen, setLinkFormOpen] = useState(false)
-  const [newLink, setNewLink] = useState({ candidateName: '', candidateEmail: '', candidatePhone: '', expiresInDays: '' })
+  const [newLink, setNewLink] = useState({ candidateName: '', candidateEmail: '', candidatePhone: '', expiresInDays: '', discountPct: 0, applyDiscount: false })
   const [linkCreating, setLinkCreating] = useState(false)
+  // Phase 6: discount policy (fetched on joining-links tab open)
+  const [discountPolicy, setDiscountPolicy] = useState({ minPct: 0, maxPct: 20, isActive: true })
 
   const staff = JSON.parse(localStorage.getItem('cg_staff') || '{}')
 
@@ -148,19 +148,19 @@ export default function LeadDashboard() {
         setTxPage(txData?.page || 1)
         setTxTotalPages(txData?.totalPages || 1)
       } else if (tab === 'joining-links') {
-        const res = await staffApi.getJoiningLinks()
-        setJoiningLinks(res.data.data?.items || res.data.data || [])
+        // Phase 6: fetch discount policy and links in parallel
+        const [res, policyRes] = await Promise.all([
+          staffApi.getJoiningLinks(),
+          staffApi.getDiscountPolicy('joining').catch(() => ({ data: { data: { minPct: 0, maxPct: 20, isActive: true } } })),
+        ])
+        setJoiningLinks(res.data.data?.links || [])
+        setDiscountPolicy(policyRes.data.data || { minPct: 0, maxPct: 20, isActive: true })
       } else if (tab === 'payouts') {
         const res = await staffApi.getPayouts()
         setPayouts(res.data.data || [])
       } else if (tab === 'training') {
         const res = await staffApi.getTraining()
         setTraining(res.data.data || [])
-      } else if (tab === 'discount') {
-        const res = await staffApi.getDiscount()
-        const cfg = res.data.data
-        setDiscountConfig(cfg)
-        setDiscountForm({ discountPct: cfg.discountPct, isActive: cfg.isActive })
       }
     } catch {
       toast.error('Failed to load data.')
@@ -171,7 +171,7 @@ export default function LeadDashboard() {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab)
-    const bizTabs = ['account', 'joining-links', 'payouts', 'training', 'discount']
+    const bizTabs = ['account', 'joining-links', 'payouts', 'training']
     if (bizTabs.includes(tab)) loadBizData(tab)
   }
 
@@ -199,9 +199,12 @@ export default function LeadDashboard() {
       if (newLink.candidateEmail) payload.candidateEmail = newLink.candidateEmail
       if (newLink.candidatePhone) payload.candidatePhone = newLink.candidatePhone
       if (newLink.expiresInDays)  payload.expiresInDays  = Number(newLink.expiresInDays)
+      if (newLink.applyDiscount && Number(newLink.discountPct) > 0) {
+        payload.discountPct = Number(newLink.discountPct)
+      }
       const res = await staffApi.createJoiningLink(payload)
       setJoiningLinks((prev) => [res.data.data, ...prev])
-      setNewLink({ candidateName: '', candidateEmail: '', candidatePhone: '', expiresInDays: '' })
+      setNewLink({ candidateName: '', candidateEmail: '', candidatePhone: '', expiresInDays: '', discountPct: 0, applyDiscount: false })
       setLinkFormOpen(false)
       toast.success('Joining link created!')
     } catch (err) {
@@ -211,27 +214,13 @@ export default function LeadDashboard() {
     }
   }
 
-  const handleSaveDiscount = async (e) => {
-    e.preventDefault()
-    try {
-      const res = await staffApi.updateDiscount({
-        discountPct: Number(discountForm.discountPct),
-        isActive: discountForm.isActive,
-      })
-      setDiscountConfig(res.data.data)
-      toast.success('Discount settings saved.')
-    } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to save discount.')
-    }
-  }
-
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(() => toast.success('Link copied!')).catch(() => toast.error('Copy failed.'))
   }
 
   const formatPaise = (paise) => `₹${((paise || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
-  const tabs = ['leads', 'students', 'reports', 'account', 'joining-links', 'payouts', 'training', 'discount']
+  const tabs = ['leads', 'students', 'reports', 'account', 'joining-links', 'payouts', 'training']
 
   const TAB_LABELS = {
     leads: '👥 Leads',
@@ -241,7 +230,6 @@ export default function LeadDashboard() {
     'joining-links': '🔗 Joining Links',
     payouts: '💳 Payouts',
     training: '📚 Training',
-    discount: '🏷️ Discount',
   }
 
   return (
@@ -449,7 +437,15 @@ export default function LeadDashboard() {
                     <p className="text-sm text-gray-500 mt-1">Each link carries a ₹12,000 joining fee. All payments go to the platform; your commission is credited automatically.</p>
                   </div>
                   <button
-                    onClick={() => setLinkFormOpen((o) => !o)}
+                    onClick={() => {
+                      setLinkFormOpen((o) => !o)
+                      if (!linkFormOpen) {
+                        // Re-fetch discount policy whenever form is opened (Task 9)
+                        staffApi.getDiscountPolicy('joining')
+                          .then((r) => setDiscountPolicy(r.data.data || { minPct: 0, maxPct: 20, isActive: true }))
+                          .catch(() => {})
+                      }
+                    }}
                     className="btn-primary text-sm"
                   >
                     {linkFormOpen ? 'Cancel' : '+ New Link'}
@@ -501,6 +497,43 @@ export default function LeadDashboard() {
                         />
                       </div>
                     </div>
+
+                    {/* Phase 6: Inline Discount */}
+                    {discountPolicy.isActive && discountPolicy.maxPct > 0 && (
+                      <div className="border rounded-lg p-4 bg-yellow-50 border-yellow-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <input
+                            type="checkbox"
+                            id="applyDiscount"
+                            checked={newLink.applyDiscount}
+                            onChange={(e) => setNewLink((p) => ({ ...p, applyDiscount: e.target.checked }))}
+                            className="w-4 h-4 accent-red-600"
+                          />
+                          <label htmlFor="applyDiscount" className="text-sm font-semibold text-gray-700">Apply Discount to this link</label>
+                        </div>
+                        {newLink.applyDiscount && (
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">
+                              Discount (%) <span className="text-gray-400">({discountPolicy.minPct}%–{discountPolicy.maxPct}% allowed)</span>
+                            </label>
+                            <input
+                              type="number"
+                              className="input-field text-sm"
+                              min={discountPolicy.minPct}
+                              max={discountPolicy.maxPct}
+                              step="0.5"
+                              value={newLink.discountPct}
+                              onChange={(e) => setNewLink((p) => ({ ...p, discountPct: e.target.value }))}
+                            />
+                            {Number(newLink.discountPct) > 0 && (
+                              <p className="text-xs text-yellow-700 mt-1">
+                                💡 Candidate will receive {newLink.discountPct}% off ₹12,000 = ₹{((12000 * (1 - Number(newLink.discountPct) / 100))).toLocaleString('en-IN')}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <button type="submit" disabled={linkCreating} className="btn-primary text-sm">
                       {linkCreating ? 'Creating…' : 'Create Link'}
                     </button>
@@ -532,6 +565,7 @@ export default function LeadDashboard() {
                               </div>
                               {l.candidateName  && <p className="text-xs text-gray-600">👤 {l.candidateName}</p>}
                               {l.candidateEmail && <p className="text-xs text-gray-500">✉️ {l.candidateEmail}</p>}
+                              {l.discountPctUsed > 0 && <p className="text-xs text-yellow-600 font-medium">🏷️ {l.discountPctUsed}% discount applied</p>}
                               <p className="text-xs text-gray-400 mt-1 font-mono truncate">{l.joinUrl}</p>
                               <p className="text-xs text-gray-400">Created: {new Date(l.createdAt).toLocaleDateString('en-IN')}{l.expiresAt ? ` · Expires: ${new Date(l.expiresAt).toLocaleDateString('en-IN')}` : ''}</p>
                             </div>
@@ -616,78 +650,48 @@ export default function LeadDashboard() {
                         </div>
                         <h4 className="font-bold text-brand-dark">{item.title}</h4>
                         {item.description && <p className="text-sm text-gray-500 mt-1">{item.description}</p>}
-                        {item.url && (
-                          <a
-                            href={item.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block mt-3 text-sm text-blue-600 hover:underline font-medium"
+                        <div className="flex gap-3 mt-3">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await staffApi.getTrainingFile(item.id)
+                                const url = URL.createObjectURL(res.data)
+                                window.open(url, '_blank')
+                                setTimeout(() => URL.revokeObjectURL(url), 30000)
+                              } catch (err) {
+                                console.error('[Training] open error', err)
+                                toast.error('Could not open file')
+                              }
+                            }}
+                            className="text-sm text-blue-600 hover:underline font-medium"
                           >
                             Open →
-                          </a>
-                        )}
+                          </button>
+                          {item.isDownloadable && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await staffApi.downloadTrainingFile(item.id)
+                                  const url = URL.createObjectURL(res.data)
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = item.title
+                                  a.click()
+                                  setTimeout(() => URL.revokeObjectURL(url), 5000)
+                                } catch (err) {
+                                  console.error('[Training] download error', err)
+                                  toast.error('Download failed')
+                                }
+                              }}
+                              className="text-sm text-green-600 hover:underline font-medium"
+                            >
+                              ⬇ Download
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Phase 4: Discount ────────────────────────────────────── */}
-            {activeTab === 'discount' && (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="font-bold text-brand-dark text-lg">Discount Settings</h3>
-                  <p className="text-sm text-gray-500 mt-1">You can offer an optional discount on counsellor plans, capped at 20%.</p>
-                </div>
-
-                {bizLoading ? (
-                  <div className="flex justify-center py-12">
-                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
-                  </div>
-                ) : (
-                  <form onSubmit={handleSaveDiscount} className="card max-w-md space-y-5">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Discount Percentage: <span className="text-brand-red">{discountForm.discountPct}%</span>
-                      </label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={20}
-                        step={0.5}
-                        value={discountForm.discountPct}
-                        onChange={(e) => setDiscountForm((p) => ({ ...p, discountPct: Number(e.target.value) }))}
-                        className="w-full accent-red-600"
-                      />
-                      <div className="flex justify-between text-xs text-gray-400 mt-1">
-                        <span>0%</span><span>10%</span><span>20% (max)</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <input
-                        id="discountActive"
-                        type="checkbox"
-                        checked={discountForm.isActive}
-                        onChange={(e) => setDiscountForm((p) => ({ ...p, isActive: e.target.checked }))}
-                        className="w-4 h-4 accent-red-600"
-                      />
-                      <label htmlFor="discountActive" className="text-sm font-medium text-gray-700">
-                        Enable discount for candidates
-                      </label>
-                    </div>
-
-                    {discountConfig.isActive && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-sm text-green-700">
-                        ✅ Currently active: <strong>{discountConfig.discountPct}% off</strong>
-                      </div>
-                    )}
-
-                    <button type="submit" className="btn-primary text-sm w-full">
-                      Save Discount Settings
-                    </button>
-                  </form>
                 )}
               </div>
             )}

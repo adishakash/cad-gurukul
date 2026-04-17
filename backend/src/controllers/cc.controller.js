@@ -151,12 +151,19 @@ const resolveTestLink = async (req, res) => {
 
     const isExpired = link.expiresAt ? new Date() > new Date(link.expiresAt) : false;
 
-    const discount = await prisma.ccDiscount.findUnique({ where: { ccUserId: link.ccUserId } });
+    // Phase 6: prefer inline discountPctUsed stored on the link; fall back to CcDiscount
     const MAX_DISCOUNT = link.planType === '499plan' ? 100 : 20;
-    const effectiveDiscountPct =
-      !link.isUsed && !isExpired && discount && discount.isActive
-        ? Math.min(discount.discountPct, MAX_DISCOUNT)
-        : 0;
+    let effectiveDiscountPct = 0;
+    if (!link.isUsed && !isExpired) {
+      if (link.discountPctUsed > 0) {
+        effectiveDiscountPct = Math.min(link.discountPctUsed, MAX_DISCOUNT);
+      } else {
+        const discount = await prisma.ccDiscount.findUnique({ where: { ccUserId: link.ccUserId } });
+        if (discount && discount.isActive) {
+          effectiveDiscountPct = Math.min(discount.discountPct, MAX_DISCOUNT);
+        }
+      }
+    }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
     const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
@@ -206,11 +213,17 @@ const createTestOrder = async (req, res) => {
       return errorResponse(res, 'This test link has expired', 410, 'LINK_EXPIRED');
     }
 
-    const discount = await prisma.ccDiscount.findUnique({ where: { ccUserId: link.ccUserId } });
+    // Phase 6: prefer inline discountPctUsed stored on the link; fall back to CcDiscount
     const MAX_DISCOUNT = link.planType === '499plan' ? 100 : 20;
-    const effectiveDiscountPct = (discount && discount.isActive)
-      ? Math.min(discount.discountPct, MAX_DISCOUNT)
-      : 0;
+    let effectiveDiscountPct = 0;
+    if (link.discountPctUsed > 0) {
+      effectiveDiscountPct = Math.min(link.discountPctUsed, MAX_DISCOUNT);
+    } else {
+      const discount = await prisma.ccDiscount.findUnique({ where: { ccUserId: link.ccUserId } });
+      if (discount && discount.isActive) {
+        effectiveDiscountPct = Math.min(discount.discountPct, MAX_DISCOUNT);
+      }
+    }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
     const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
@@ -409,11 +422,27 @@ const listTestLinks = async (req, res) => {
  * POST /api/v1/counsellor/test-links
  *
  * Creates a new test link for a candidate.
+ * Accepts optional discountPct (validated against DiscountPolicy).
  */
 const createTestLink = async (req, res) => {
   try {
     const ccUserId = req.user.id;
-    const { planType = 'standard', candidateName, candidateEmail, candidatePhone, expiryDays, feeAmountPaise } = req.body;
+    const { planType = 'standard', candidateName, candidateEmail, candidatePhone, expiryDays, feeAmountPaise, discountPct: rawDiscount } = req.body;
+
+    // Validate and cap discount against DiscountPolicy
+    let discountPct = 0;
+    if (rawDiscount !== undefined && Number(rawDiscount) > 0) {
+      const policy = await prisma.discountPolicy.findUnique({
+        where: { role_planType: { role: 'CAREER_COUNSELLOR', planType } },
+      });
+      const defaultMax = planType === '499plan' ? 100 : 20;
+      const cap = policy ? policy.maxPct : defaultMax;
+      const min = policy ? policy.minPct : 0;
+      // NOTE: No DiscountPolicy configured for CAREER_COUNSELLOR/{planType} — using default cap.
+      // Admin should configure a policy via the Discounts section to enforce custom limits.
+      if (!policy) logger.warn('[CC] No DiscountPolicy found for planType — defaulting', { planType, cap });
+      discountPct = Math.min(Math.max(Number(rawDiscount), min), cap);
+    }
 
     const code = await generateUniqueCode();
     const expiresAt = expiryDays
@@ -434,6 +463,7 @@ const createTestLink = async (req, res) => {
         candidatePhone: candidatePhone || null,
         feeAmountPaise: resolvedFee,
         expiresAt,
+        discountPctUsed: discountPct,
       },
     });
 
@@ -516,6 +546,32 @@ const getPayoutDetail = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/v1/counsellor/discount-policy?planType=499plan
+ *
+ * Returns the admin-configured allowed discount range for CC's planType.
+ * Falls back to defaults if no policy exists.
+ */
+const getDiscountPolicy = async (req, res) => {
+  try {
+    const planType = req.query.planType || 'standard';
+    const policy = await prisma.discountPolicy.findUnique({
+      where: { role_planType: { role: 'CAREER_COUNSELLOR', planType } },
+    });
+    // Default caps: 499plan = 100%, others = 20%
+    const defaultMax = planType === '499plan' ? 100 : 20;
+    return successResponse(res, {
+      planType,
+      minPct:   policy ? policy.minPct   : 0,
+      maxPct:   policy ? policy.maxPct   : defaultMax,
+      isActive: policy ? policy.isActive : true,
+    });
+  } catch (err) {
+    logger.error('[CC] getDiscountPolicy error', { error: err.message });
+    return errorResponse(res, 'Failed to load discount policy', 500);
+  }
+};
+
 // ─── Discount Config ──────────────────────────────────────────────────────────
 
 /**
@@ -581,17 +637,67 @@ const updateDiscount = async (req, res) => {
  * GET /api/v1/counsellor/training
  *
  * Returns active training content items targeted at CC or ALL roles.
+ * originalFilename is intentionally excluded — staff only see admin-given title.
  */
 const listTraining = async (req, res) => {
   try {
     const content = await prisma.cclTrainingContent.findMany({
       where:   { isActive: true, targetRole: { in: ['CC', 'ALL'] } },
       orderBy: { displayOrder: 'asc' },
+      select:  { id: true, title: true, type: true, description: true, isDownloadable: true, targetRole: true, displayOrder: true },
     });
     return successResponse(res, content);
   } catch (err) {
     logger.error('[CC] listTraining error', { error: err.message });
     return errorResponse(res, 'Failed to load training content', 500);
+  }
+};
+
+/**
+ * GET /api/v1/counsellor/training/:id/file[?download=true]
+ *
+ * Authenticated file serving — only CC-visible content is accessible.
+ * Streams the file inline for viewing; use ?download=true to get attachment.
+ * Enforces isDownloadable flag when download is requested.
+ */
+const serveTrainingFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const isDownload = req.query.download === 'true';
+
+    const item = await prisma.cclTrainingContent.findFirst({
+      where: { id, isActive: true, targetRole: { in: ['CC', 'ALL'] } },
+    });
+
+    if (!item)             return errorResponse(res, 'Resource not found', 404, 'NOT_FOUND');
+    if (!item.storagePath) return errorResponse(res, 'File not available', 404, 'NOT_FOUND');
+
+    if (isDownload && !item.isDownloadable) {
+      return errorResponse(res, 'Download not permitted for this resource', 403, 'FORBIDDEN');
+    }
+
+    const path = require('path');
+    const contentType = item.mimeType || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    if (isDownload) {
+      const ext = path.extname(item.storagePath);
+      const safeTitle = item.title.replace(/[^a-zA-Z0-9\-_.]/g, '_');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}${ext}"`);
+    } else {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+
+    res.sendFile(item.storagePath, (err) => {
+      if (err && !res.headersSent) {
+        logger.error('[CC] serveTrainingFile sendFile error', { error: err.message, id });
+        errorResponse(res, 'File not accessible', 500);
+      }
+    });
+  } catch (err) {
+    logger.error('[CC] serveTrainingFile error', { error: err.message });
+    return errorResponse(res, 'Failed to serve file', 500);
   }
 };
 
@@ -609,9 +715,12 @@ module.exports = {
   // CC payouts
   listPayouts,
   getPayoutDetail,
-  // Discount
+  // Discount policy (Phase 6)
+  getDiscountPolicy,
+  // Discount (legacy)
   getDiscount,
   updateDiscount,
   // Training
   listTraining,
+  serveTrainingFile,
 };

@@ -41,12 +41,16 @@ router.get('/account/transactions', ccController.listTransactions);
 router.get('/test-links',           ccController.listTestLinks);
 router.post('/test-links',          validate(createTestLinkSchema), ccController.createTestLink);
 
+// Discount policy — read-only range for inline discount on link creation
+router.get('/discount-policy',      ccController.getDiscountPolicy);
+
 // Discount config
 router.get('/discount',             ccController.getDiscount);
 router.put('/discount',             validate(updateDiscountSchema), ccController.updateDiscount);
 
 // Training content
-router.get('/training',             ccController.listTraining);
+router.get('/training',            ccController.listTraining);
+router.get('/training/:id/file',   ccController.serveTrainingFile);
 
 // Payouts
 router.get('/payouts',              ccController.listPayouts);

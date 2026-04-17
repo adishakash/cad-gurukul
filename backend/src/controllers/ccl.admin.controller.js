@@ -6,11 +6,13 @@
  *   - All joining links across all CCLs
  *   - All attributed sales and commissions
  *   - Payout batch generation and status management
- *   - Training content CRUD
+ *   - Training content CRUD (with file upload support)
+ *   - Discount policy CRUD (Phase 6)
  *
  * All routes behind authenticateAdmin + ADMIN role.
  */
 
+const path   = require('path');
 const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
@@ -390,11 +392,14 @@ const listAllTraining = async (req, res) => {
 /**
  * POST /api/v1/admin/ccl/training
  * Create a new training content item.
- * Body: { title, type, url?, description?, isActive?, displayOrder? }
+ * Supports multipart/form-data (file upload) or JSON (URL-based).
+ * Body: { title, type, url?, description?, isActive?, displayOrder?, isDownloadable? }
+ * File: uploaded as req.file (optional — handled by multer in route)
  */
 const createTrainingContent = async (req, res) => {
   try {
-    const { title, type, url, description, isActive = true, displayOrder = 0 } = req.body;
+    const { title, type, description, isActive = true, displayOrder = 0, isDownloadable = false } = req.body;
+    let { url } = req.body;
 
     if (!title || !type) {
       return errorResponse(res, 'title and type are required', 400, 'MISSING_FIELDS');
@@ -404,8 +409,31 @@ const createTrainingContent = async (req, res) => {
       return errorResponse(res, `type must be one of: ${validTypes.join(', ')}`, 400, 'INVALID_TYPE');
     }
 
+    let originalFilename = null;
+    let storagePath      = null;
+    let mimeType         = null;
+
+    if (req.file) {
+      const relativePath  = `/uploads/training/${req.file.filename}`;
+      url                 = relativePath;
+      originalFilename    = req.file.originalname;
+      storagePath         = req.file.path;
+      mimeType            = req.file.mimetype || null;
+    }
+
     const item = await prisma.cclTrainingContent.create({
-      data: { title, type, url: url || null, description: description || null, isActive, displayOrder },
+      data: {
+        title,
+        type,
+        url:              url || null,
+        description:      description || null,
+        isActive:         isActive === 'true' || isActive === true,
+        displayOrder:     Number(displayOrder) || 0,
+        isDownloadable:   isDownloadable === 'true' || isDownloadable === true,
+        originalFilename,
+        storagePath,
+        mimeType,
+      },
     });
 
     logger.info('[Admin.CCL] Training content created', { id: item.id, title });
@@ -423,7 +451,7 @@ const createTrainingContent = async (req, res) => {
 const updateTrainingContent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, type, url, description, isActive, displayOrder } = req.body;
+    const { title, type, url, description, isActive, displayOrder, isDownloadable } = req.body;
 
     const existing = await prisma.cclTrainingContent.findUnique({ where: { id } });
     if (!existing) return errorResponse(res, 'Training content not found', 404, 'NOT_FOUND');
@@ -436,12 +464,13 @@ const updateTrainingContent = async (req, res) => {
     }
 
     const updateData = {};
-    if (title       !== undefined) updateData.title        = title;
-    if (type        !== undefined) updateData.type         = type;
-    if (url         !== undefined) updateData.url          = url || null;
-    if (description !== undefined) updateData.description  = description || null;
-    if (isActive    !== undefined) updateData.isActive     = Boolean(isActive);
-    if (displayOrder !== undefined) updateData.displayOrder = Number(displayOrder);
+    if (title          !== undefined) updateData.title          = title;
+    if (type           !== undefined) updateData.type           = type;
+    if (url            !== undefined) updateData.url            = url || null;
+    if (description    !== undefined) updateData.description    = description || null;
+    if (isActive       !== undefined) updateData.isActive       = Boolean(isActive);
+    if (displayOrder   !== undefined) updateData.displayOrder   = Number(displayOrder);
+    if (isDownloadable !== undefined) updateData.isDownloadable = Boolean(isDownloadable);
 
     const updated = await prisma.cclTrainingContent.update({ where: { id }, data: updateData });
     return successResponse(res, updated);
@@ -470,6 +499,58 @@ const deleteTrainingContent = async (req, res) => {
   }
 };
 
+// ─── Discount Policies (Phase 6) ──────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/discount-policies
+ * List all discount policy records.
+ */
+const listPolicies = async (req, res) => {
+  try {
+    const policies = await prisma.discountPolicy.findMany({
+      orderBy: [{ role: 'asc' }, { planType: 'asc' }],
+    });
+    return successResponse(res, policies);
+  } catch (err) {
+    logger.error('[Admin] listPolicies error', { error: err.message });
+    return errorResponse(res, 'Failed to load discount policies', 500);
+  }
+};
+
+/**
+ * PUT /api/v1/admin/discount-policies
+ * Upsert a discount policy for a given role+planType.
+ * Body: { role, planType, minPct, maxPct, isActive }
+ */
+const upsertPolicy = async (req, res) => {
+  try {
+    const { role, planType, minPct = 0, maxPct = 20, isActive = true } = req.body;
+
+    if (!role || !planType) {
+      return errorResponse(res, 'role and planType are required', 400, 'MISSING_FIELDS');
+    }
+    const validRoles = ['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR'];
+    if (!validRoles.includes(role)) {
+      return errorResponse(res, `role must be one of: ${validRoles.join(', ')}`, 400, 'INVALID_ROLE');
+    }
+    if (Number(minPct) < 0 || Number(maxPct) > 100 || Number(minPct) > Number(maxPct)) {
+      return errorResponse(res, 'minPct must be ≥0, maxPct must be ≤100, and minPct must be ≤maxPct', 400, 'INVALID_RANGE');
+    }
+
+    const policy = await prisma.discountPolicy.upsert({
+      where:  { role_planType: { role, planType } },
+      update: { minPct: Number(minPct), maxPct: Number(maxPct), isActive: Boolean(isActive) },
+      create: { role, planType, minPct: Number(minPct), maxPct: Number(maxPct), isActive: Boolean(isActive) },
+    });
+
+    logger.info('[Admin] DiscountPolicy upserted', { role, planType, minPct, maxPct, isActive });
+    return successResponse(res, policy, 'Discount policy saved');
+  } catch (err) {
+    logger.error('[Admin] upsertPolicy error', { error: err.message });
+    return errorResponse(res, 'Failed to save discount policy', 500);
+  }
+};
+
 module.exports = {
   // Joining links
   listAllJoiningLinks,
@@ -487,4 +568,7 @@ module.exports = {
   createTrainingContent,
   updateTrainingContent,
   deleteTrainingContent,
+  // Discount policies (Phase 6)
+  listPolicies,
+  upsertPolicy,
 };

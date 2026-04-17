@@ -5,6 +5,7 @@ const router = express.Router();
 const { authenticate, authorizeRoles } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { authLimiter } = require('../middleware/rateLimiter');
+const { upload, enforceSizeLimit } = require('../middleware/upload');
 const adminController = require('../controllers/admin.controller');
 const cclAdminController = require('../controllers/ccl.admin.controller');
 const {
@@ -55,6 +56,10 @@ router.get('/leads/:id', adminController.getLeadDetail);
 router.patch('/leads/:id', adminController.updateLeadAdmin);
 router.post('/leads/:id/actions', validate(triggerActionSchema), adminController.triggerAdminAction);
 
+// ─── Discount Policies (Phase 6) ─────────────────────────────────────────────
+router.get('/discount-policies', cclAdminController.listPolicies);
+router.put('/discount-policies', cclAdminController.upsertPolicy);
+
 // ─── CCL Business Layer Oversight ────────────────────────────────────────────
 // Admin can inspect and manage the entire CCL financial layer.
 
@@ -73,9 +78,9 @@ router.post('/ccl/payouts/generate',    cclAdminController.generatePayoutBatch);
 router.get('/ccl/payouts/:id',          cclAdminController.getPayoutDetail);
 router.patch('/ccl/payouts/:id',        cclAdminController.updatePayoutStatus);
 
-// Training content CRUD
+// Training content CRUD (with optional file upload)
 router.get('/ccl/training',          cclAdminController.listAllTraining);
-router.post('/ccl/training',         cclAdminController.createTrainingContent);
+router.post('/ccl/training',         upload.single('file'), enforceSizeLimit, cclAdminController.createTrainingContent);
 router.patch('/ccl/training/:id',    cclAdminController.updateTrainingContent);
 router.delete('/ccl/training/:id',   cclAdminController.deleteTrainingContent);
 
@@ -99,9 +104,9 @@ router.post('/cc/payouts/generate',   ccAdminController.generatePayoutBatch);
 router.get('/cc/payouts/:id',         ccAdminController.getPayoutDetail);
 router.patch('/cc/payouts/:id',       ccAdminController.updatePayoutStatus);
 
-// Training content CRUD (shared CclTrainingContent table with targetRole)
+// Training content CRUD (shared CclTrainingContent table with targetRole, with file upload)
 router.get('/cc/training',            ccAdminController.listAllTraining);
-router.post('/cc/training',           ccAdminController.createTrainingContent);
+router.post('/cc/training',           upload.single('file'), enforceSizeLimit, ccAdminController.createTrainingContent);
 router.patch('/cc/training/:id',      ccAdminController.updateTrainingContent);
 router.delete('/cc/training/:id',     ccAdminController.deleteTrainingContent);
 

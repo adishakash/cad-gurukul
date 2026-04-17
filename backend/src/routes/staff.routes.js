@@ -62,12 +62,16 @@ router.get('/account/transactions', cclController.listTransactions);
 router.get('/joining-links',  cclController.listJoiningLinks);
 router.post('/joining-links', validate(createJoiningLinkSchema), cclController.createJoiningLink);
 
+// Discount policy — read-only range for inline discount on link creation
+router.get('/discount-policy', cclController.getDiscountPolicy);
+
 // Discount configuration — optional, capped at 20%
 router.get('/discount', cclController.getDiscount);
 router.put('/discount', validate(updateDiscountSchema), cclController.updateDiscount);
 
 // Training content — read-only for CCL, managed by Admin
-router.get('/training', cclController.listTraining);
+router.get('/training',            cclController.listTraining);
+router.get('/training/:id/file',   cclController.serveTrainingFile);
 
 // Payouts — CCL can view their own payout batches
 router.get('/payouts',     cclController.listPayouts);

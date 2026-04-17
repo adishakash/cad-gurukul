@@ -15,6 +15,8 @@ const createJoiningLinkSchema = Joi.object({
     .allow('', null)
     .messages({ 'string.pattern.base': 'Phone must be a valid 10-digit Indian mobile number.' }),
   expiresInDays:  Joi.number().integer().min(1).max(90).optional().allow(null),
+  // Phase 6: inline discount at link creation (0–20%, validated against DiscountPolicy server-side)
+  discountPct:    Joi.number().min(0).max(100).optional().allow(null),
 });
 
 /**

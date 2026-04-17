@@ -81,17 +81,15 @@ export default function CounsellorDashboard() {
   const [transactions, setTransactions] = useState([])
   const [testLinks, setTestLinks]     = useState([])
   const [payouts, setPayouts]         = useState([])
-  const [discount, setDiscount]       = useState({ discountPct: 0, planType: 'standard', isActive: false })
   const [training, setTraining]       = useState([])
   const [bizLoading, setBizLoading]   = useState(false)
 
   // Test link creation form
-  const [linkForm, setLinkForm] = useState({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '' })
+  const [linkForm, setLinkForm] = useState({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '', discountPct: 0, applyDiscount: false })
   const [linkCreating, setLinkCreating] = useState(false)
 
-  // Discount update form
-  const [discountForm, setDiscountForm] = useState({ discountPct: 0, planType: 'standard', isActive: false })
-  const [discountSaving, setDiscountSaving] = useState(false)
+  // Phase 6: discount policy (fetched on test-links tab open and when planType changes)
+  const [discountPolicy, setDiscountPolicy] = useState({ minPct: 0, maxPct: 20, isActive: true })
 
   const [activeTab, setActiveTab] = useState('leads')
 
@@ -145,21 +143,17 @@ export default function CounsellorDashboard() {
   const loadBizData = async () => {
     setBizLoading(true)
     try {
-      const [accountRes, txRes, linksRes, payoutsRes, discountRes, trainingRes] = await Promise.all([
+      const [accountRes, txRes, linksRes, payoutsRes, trainingRes] = await Promise.all([
         counsellorBizApi.getAccount(),
         counsellorBizApi.getTransactions(1, 20),
         counsellorBizApi.getTestLinks(1, 20),
         counsellorBizApi.getPayouts(),
-        counsellorBizApi.getDiscount(),
         counsellorBizApi.getTraining(),
       ])
       setAccount(accountRes.data.data)
       setTransactions(txRes.data.data?.sales || [])
       setTestLinks(linksRes.data.data?.links || [])
       setPayouts(payoutsRes.data.data || [])
-      const d = discountRes.data.data
-      setDiscount(d)
-      setDiscountForm({ discountPct: d.discountPct, planType: d.planType || 'standard', isActive: d.isActive })
       setTraining(trainingRes.data.data || [])
     } catch {
       toast.error('Failed to load business data.')
@@ -168,10 +162,21 @@ export default function CounsellorDashboard() {
     }
   }
 
+  // Fetch discount policy for given planType (Phase 6)
+  const loadDiscountPolicy = async (planType) => {
+    try {
+      const res = await counsellorBizApi.getDiscountPolicy(planType)
+      setDiscountPolicy(res.data.data || { minPct: 0, maxPct: planType === '499plan' ? 100 : 20, isActive: true })
+    } catch {
+      // Non-fatal — silently keep defaults
+    }
+  }
+
   // Load biz data when switching to biz tabs
   useEffect(() => {
-    if (['account', 'test-links', 'discount', 'training', 'payouts'].includes(activeTab)) {
+    if (['account', 'test-links', 'training', 'payouts'].includes(activeTab)) {
       loadBizData()
+      if (activeTab === 'test-links') loadDiscountPolicy(linkForm.planType)
     }
   }, [activeTab])
 
@@ -195,10 +200,13 @@ export default function CounsellorDashboard() {
       if (linkForm.candidateEmail) payload.candidateEmail = linkForm.candidateEmail
       if (linkForm.candidatePhone) payload.candidatePhone = linkForm.candidatePhone
       if (linkForm.expiryDays)     payload.expiryDays     = Number(linkForm.expiryDays)
+      if (linkForm.applyDiscount && Number(linkForm.discountPct) > 0) {
+        payload.discountPct = Number(linkForm.discountPct)
+      }
 
       await counsellorBizApi.createTestLink(payload)
       toast.success('Test link created!')
-      setLinkForm({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '' })
+      setLinkForm({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '', discountPct: 0, applyDiscount: false })
       await loadBizData()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create test link.')
@@ -209,20 +217,7 @@ export default function CounsellorDashboard() {
 
   const handleUpdateDiscount = async (e) => {
     e.preventDefault()
-    setDiscountSaving(true)
-    try {
-      await counsellorBizApi.updateDiscount({
-        discountPct: Number(discountForm.discountPct),
-        planType:    discountForm.planType,
-        isActive:    discountForm.isActive,
-      })
-      toast.success('Discount settings saved.')
-      await loadBizData()
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to save discount.')
-    } finally {
-      setDiscountSaving(false)
-    }
+    // Discount tab removed (Phase 6) — this handler is kept for backward compat but not called
   }
 
   const copyUrl = (url) => {
@@ -236,7 +231,7 @@ export default function CounsellorDashboard() {
     navigate('/staff/login')
   }
 
-  const tabs = ['leads', 'students', 'reports', 'account', 'test-links', 'discount', 'training', 'payouts']
+  const tabs = ['leads', 'students', 'reports', 'account', 'test-links', 'training', 'payouts']
 
   const TAB_LABELS = {
     leads: 'Leads',
@@ -244,7 +239,6 @@ export default function CounsellorDashboard() {
     reports: 'Reports',
     account: 'Account',
     'test-links': 'Test Links',
-    discount: 'Discount',
     training: 'Training',
     payouts: 'Payouts',
   }
@@ -376,7 +370,7 @@ export default function CounsellorDashboard() {
             )}
 
             {/* ── CC Business tabs ── */}
-            {bizLoading && ['account', 'test-links', 'discount', 'training', 'payouts'].includes(activeTab) && (
+            {bizLoading && ['account', 'test-links', 'training', 'payouts'].includes(activeTab) && (
               <div className="flex justify-center py-20">
                 <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
               </div>
@@ -427,7 +421,11 @@ export default function CounsellorDashboard() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Plan Type</label>
                       <select
                         value={linkForm.planType}
-                        onChange={(e) => setLinkForm((f) => ({ ...f, planType: e.target.value }))}
+                        onChange={(e) => {
+                          const planType = e.target.value
+                          setLinkForm((f) => ({ ...f, planType, discountPct: 0, applyDiscount: false }))
+                          loadDiscountPolicy(planType)
+                        }}
                         className="input-field text-sm w-full"
                       >
                         <option value="standard">Standard (₹12,000)</option>
@@ -459,6 +457,43 @@ export default function CounsellorDashboard() {
                         {linkCreating ? 'Creating…' : 'Create Link'}
                       </button>
                     </div>
+
+                    {/* Phase 6: Inline Discount */}
+                    {discountPolicy.isActive && discountPolicy.maxPct > 0 && (
+                      <div className="col-span-full border rounded-lg p-4 bg-yellow-50 border-yellow-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <input
+                            type="checkbox"
+                            id="applyDiscount"
+                            checked={linkForm.applyDiscount}
+                            onChange={(e) => setLinkForm((f) => ({ ...f, applyDiscount: e.target.checked }))}
+                            className="w-4 h-4 accent-red-600"
+                          />
+                          <label htmlFor="applyDiscount" className="text-sm font-semibold text-gray-700">Apply Discount to this link</label>
+                        </div>
+                        {linkForm.applyDiscount && (
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">
+                              Discount (%) <span className="text-gray-400">({discountPolicy.minPct}%–{discountPolicy.maxPct}% allowed)</span>
+                            </label>
+                            <input
+                              type="number"
+                              className="input-field text-sm"
+                              min={discountPolicy.minPct}
+                              max={discountPolicy.maxPct}
+                              step="0.5"
+                              value={linkForm.discountPct}
+                              onChange={(e) => setLinkForm((f) => ({ ...f, discountPct: e.target.value }))}
+                            />
+                            {Number(linkForm.discountPct) > 0 && (
+                              <p className="text-xs text-yellow-700 mt-1">
+                                💡 Candidate will receive {linkForm.discountPct}% off the plan fee
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </form>
                 </div>
 
@@ -466,11 +501,12 @@ export default function CounsellorDashboard() {
                 <div className="card">
                   <h3 className="font-bold text-brand-dark text-lg mb-4">My Test Links ({testLinks.length})</h3>
                   <Table
-                    headers={['Code', 'Plan', 'Candidate', 'Status', 'Expires', 'Actions']}
+                    headers={['Code', 'Plan', 'Candidate', 'Discount', 'Status', 'Expires', 'Actions']}
                     rows={testLinks.map((l) => [
                       <code key="c" className="text-xs bg-gray-100 px-1 py-0.5 rounded">{l.code}</code>,
                       l.planType === '499plan' ? '₹499 Plan' : 'Standard',
                       l.candidateName || l.candidateEmail || '—',
+                      l.discountPctUsed > 0 ? <span key="d" className="text-xs text-yellow-600 font-medium">{l.discountPctUsed}% off</span> : '—',
                       l.isUsed
                         ? <span key="u" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Used</span>
                         : l.isExpired
@@ -483,55 +519,6 @@ export default function CounsellorDashboard() {
                     emptyText="No test links yet. Create one above."
                   />
                 </div>
-              </div>
-            )}
-
-            {!bizLoading && activeTab === 'discount' && (
-              <div className="card max-w-md">
-                <h3 className="font-bold text-brand-dark text-lg mb-4">Discount Settings</h3>
-                <form onSubmit={handleUpdateDiscount} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Plan Type</label>
-                    <select
-                      value={discountForm.planType}
-                      onChange={(e) => setDiscountForm((f) => ({ ...f, planType: e.target.value }))}
-                      className="input-field text-sm w-full"
-                    >
-                      <option value="standard">Standard (max 20%)</option>
-                      <option value="499plan">₹499 Plan (max 100%)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Discount % <span className="text-gray-400">(max {discountForm.planType === '499plan' ? '100' : '20'}%)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={discountForm.planType === '499plan' ? 100 : 20}
-                      step="0.5"
-                      value={discountForm.discountPct}
-                      onChange={(e) => setDiscountForm((f) => ({ ...f, discountPct: e.target.value }))}
-                      className="input-field text-sm w-full"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="discountActive"
-                      checked={discountForm.isActive}
-                      onChange={(e) => setDiscountForm((f) => ({ ...f, isActive: e.target.checked }))}
-                      className="w-4 h-4"
-                    />
-                    <label htmlFor="discountActive" className="text-sm text-gray-700">Discount is active</label>
-                  </div>
-                  <button type="submit" disabled={discountSaving} className="btn-primary text-sm">
-                    {discountSaving ? 'Saving…' : 'Save Discount'}
-                  </button>
-                </form>
-                <p className="text-xs text-gray-400 mt-4">
-                  Discount is applied automatically when candidates open your test links. Backend enforces the plan cap.
-                </p>
               </div>
             )}
 
@@ -552,10 +539,41 @@ export default function CounsellorDashboard() {
                         </div>
                         <h4 className="font-semibold text-brand-dark mb-1">{item.title}</h4>
                         {item.description && <p className="text-sm text-gray-500 mb-3">{item.description}</p>}
-                        {item.url && (
-                          <a href={item.url} target="_blank" rel="noopener noreferrer"
-                            className="text-sm text-indigo-600 hover:underline">Open →</a>
-                        )}
+                        <div className="flex gap-3">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await counsellorBizApi.getTrainingFile(item.id)
+                                const url = URL.createObjectURL(res.data)
+                                window.open(url, '_blank')
+                                setTimeout(() => URL.revokeObjectURL(url), 30000)
+                              } catch (err) {
+                                console.error('[Training] open error', err)
+                                toast.error('Could not open file')
+                              }
+                            }}
+                            className="text-sm text-indigo-600 hover:underline"
+                          >Open →</button>
+                          {item.isDownloadable && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await counsellorBizApi.downloadTrainingFile(item.id)
+                                  const url = URL.createObjectURL(res.data)
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = item.title
+                                  a.click()
+                                  setTimeout(() => URL.revokeObjectURL(url), 5000)
+                                } catch (err) {
+                                  console.error('[Training] download error', err)
+                                  toast.error('Download failed')
+                                }
+                              }}
+                              className="text-sm text-green-600 hover:underline"
+                            >⬇ Download</button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
