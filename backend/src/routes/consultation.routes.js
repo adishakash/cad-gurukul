@@ -2,13 +2,23 @@
 const express = require('express');
 const router  = express.Router();
 
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authenticateAdmin } = require('../middleware/auth');
 const consultationController = require('../controllers/consultation.controller');
 
-// ── Public: token-based slot selection (no JWT required) ─────────────────────
+// ── Public: token-based slot selection (no JWT required) ─────────────────
 router.post('/select-slot', consultationController.selectSlot);
 
-// ── Auth-protected: fetch current user's consultation booking ────────────────
+// ── Auth-protected: fetch current user's consultation booking ──────────────
 router.get('/my', authenticate, consultationController.getMyBooking);
+
+// ── Auth-protected: resend slot-selection email (30-min cooldown) ────────────
+router.post('/resend', authenticate, consultationController.resendSlotEmail);
+
+// ── Auth-protected: recover booking for legacy users who paid but never got email
+router.post('/recover', authenticate, consultationController.recoverConsultationBooking);
+
+// ── Admin-only: send a test slot-selection email to verify SMTP ────────────
+// POST /consultation/test-email  {  to?: string  }  (defaults to admin's own email)
+router.post('/test-email', authenticateAdmin, consultationController.testSlotEmail);
 
 module.exports = router;

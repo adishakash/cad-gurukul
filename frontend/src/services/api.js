@@ -306,6 +306,14 @@ export const consultationApi = {
   selectSlot: (data) => api.post('/consultation/select-slot', data),
   /** Auth-protected — returns ConsultationBooking or null */
   getMyBooking: () => api.get('/consultation/my'),
+  /** Auth-protected — re-sends slot-selection email (30-min cooldown) */
+  resend: () => api.post('/consultation/resend'),
+  /**
+   * Auth-protected — recovery for legacy users who paid ₹9,999 but never
+   * received the slot-selection email (no booking record exists).
+   * Creates the booking + sends email. If booking already exists, behaves like resend.
+   */
+  recover: () => api.post('/consultation/recover'),
 }
 
 export default api

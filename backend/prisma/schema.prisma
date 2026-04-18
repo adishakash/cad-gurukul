@@ -1272,6 +1272,10 @@ model ConsultationBooking {
   meetingLink  String?
   meetingNotes String?
 
+  /// Resend tracking — guards against email spam and lets frontend show cooldown.
+  lastResendAt DateTime?       // null = email never manually resent
+  resendCount  Int @default(0) // total manual resend count (not counting initial send)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

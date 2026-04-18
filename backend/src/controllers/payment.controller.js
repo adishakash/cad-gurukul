@@ -552,6 +552,19 @@ const handleWebhook = async (req, res) => {
         const { generateReportAsync } = require('./assessment.controller');
         generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
       }
+
+      // ─── Consultation: create booking + send slot-selection email ───────────
+      // This mirrors the verifyPayment path.  The idempotency guard inside the
+      // helper ensures it's safe even if both paths fire for the same payment.
+      if (planType === 'consultation') {
+        _createConsultationBookingAndSendEmail({
+          userId:    payment.userId,
+          paymentId: updatedPayment.id,
+          leadId:    lead?.id || null,
+        }).catch((err) =>
+          logger.error('[Payment] Webhook: Consultation booking creation failed', { error: err.message }),
+        );
+      }
     }
 
     return successResponse(res, { received: true }, 'Webhook processed');
