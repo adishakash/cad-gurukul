@@ -12,8 +12,13 @@ const logger = require('../../utils/logger');
  *  3. Let Puppeteer use its own bundled Chromium (local dev without skip flag)
  */
 const resolveChromiumPath = () => {
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (envPath) {
+    // Only trust the env var if the file actually exists — guards against bad .env values
+    try {
+      if (fs.existsSync(envPath)) return envPath;
+      logger.warn('[PDFGenerator] PUPPETEER_EXECUTABLE_PATH set but not found, falling back to candidates', { envPath });
+    } catch (_) { /* ignore */ }
   }
   const candidates = [
     '/usr/bin/chromium-browser',    // Alpine: apk add chromium (used in Dockerfile)
