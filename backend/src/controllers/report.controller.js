@@ -435,7 +435,13 @@ const downloadReportPdf = async (req, res) => {
 
     // Normalize before PDF generation so legacy free-report data structures are handled
     const normalizedForPdf = normalizeReportData(report.reportData);
-    const pdfBuffer = await pdfGenerator.generatePdf(normalizedForPdf, profile);
+    let pdfBuffer;
+    try {
+      pdfBuffer = await pdfGenerator.generatePdf(normalizedForPdf, profile);
+    } catch (pdfErr) {
+      logger.error('[Report] PDF generation failed', { error: pdfErr.message, stack: pdfErr.stack, userId: req.user.id, reportId: report.id });
+      return errorResponse(res, `PDF generation failed: ${pdfErr.message}`, 500, 'PDF_ERROR');
+    }
 
     // Log download
     await prisma.reportDownload.create({

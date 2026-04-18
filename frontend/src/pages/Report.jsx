@@ -139,7 +139,8 @@ export default function Report() {
         const blobData = err?.response?.data
         if (blobData instanceof Blob) {
           const text = await blobData.text()
-          msg = JSON.parse(text)?.message || msg
+          const parsed = JSON.parse(text)
+          msg = parsed?.error?.message || parsed?.message || msg
         }
       } catch (_) {}
       toast.error(msg)
