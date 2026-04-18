@@ -153,6 +153,13 @@ model User {
   ccPayouts          CcPayout[]          @relation("CcPayouts")
   ccDiscount         CcDiscount?         @relation("CcDiscount")
 
+  // Partner approval & bank
+  isApproved          Boolean            @default(false)
+  approvedAt          DateTime?
+  suspendedAt         DateTime?
+  partnerApplication  PartnerApplication?
+  bankAccount         BankAccount?
+
   @@index([email])
   @@map("users")
 }
@@ -795,14 +802,19 @@ model CclCommission {
 
 /// Weekly payout record — one per CCL per Thursday cycle. Groups commissions.
 model CclPayout {
-  id           String    @id @default(cuid())
-  cclUserId    String
-  amountPaise  Int
-  status       String    @default("pending") // "pending" | "processing" | "paid" | "failed"
-  scheduledFor DateTime                        // always a Thursday
-  processedAt  DateTime?
-  reference    String?   // bank transfer reference once paid
-  notes        String?
+  id                   String    @id @default(cuid())
+  cclUserId            String
+  amountPaise          Int
+  status               String    @default("pending") // "pending" | "processing" | "paid" | "failed"
+  scheduledFor         DateTime                       // always a Thursday
+  processedAt          DateTime?
+  reference            String?                        // bank transfer reference once paid
+  notes                String?
+  failureCount         Int       @default(0)          // consecutive failure count
+  isFlagged            Boolean   @default(false)
+  bankAccountSnapshot  Json?                          // snapshot of bank details at transfer time
+  transferInitiatedAt  DateTime?
+  transferRef          String?                        // Razorpay Payout ID or NEFT ref
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -935,16 +947,21 @@ model CcCommission {
 
 /// Weekly payout record — one per CC per Thursday cycle. Groups commissions.
 model CcPayout {
-  id           String    @id @default(cuid())
-  ccUserId     String
-  amountPaise  Int
-  status       String    @default("pending")
-  scheduledFor DateTime
-  processedAt  DateTime?
-  reference    String?
-  notes        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  ccUserId             String
+  amountPaise          Int
+  status               String    @default("pending")
+  scheduledFor         DateTime
+  processedAt          DateTime?
+  reference            String?
+  notes                String?
+  failureCount         Int       @default(0)
+  isFlagged            Boolean   @default(false)
+  bankAccountSnapshot  Json?
+  transferInitiatedAt  DateTime?
+  transferRef          String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   ccUser       User           @relation("CcPayouts", fields: [ccUserId], references: [id], onDelete: Restrict)
   commissions  CcCommission[]
@@ -988,3 +1005,230 @@ model DiscountPolicy {
   @@unique([role, planType])
   @@map("discount_policies")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARTNER APPLICATION & APPROVAL — Phase MVP
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ApplicationStatus {
+  pending
+  approved
+  rejected
+  suspended
+}
+
+/// Tracks the onboarding application for CAREER_COUNSELLOR and CAREER_COUNSELLOR_LEAD.
+/// Admin must approve before the partner can log in.
+model PartnerApplication {
+  id            String            @id @default(cuid())
+  userId        String            @unique
+  role          UserRole          // CAREER_COUNSELLOR | CAREER_COUNSELLOR_LEAD
+  status        ApplicationStatus @default(pending)
+  fullName      String
+  phone         String
+  city          String?
+  qualification String?
+  experience    String?
+  referredBy    String?           // cclUserId who referred this CC candidate
+  adminNotes    String?
+  reviewedBy    String?           // adminUserId
+  reviewedAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([role])
+  @@map("partner_applications")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BANK ACCOUNTS — Phase MVP
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Partner bank account for payout routing.
+/// accountNumberEnc is AES-256-GCM encrypted before storage.
+model BankAccount {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  accountHolder    String
+  accountNumberEnc String   // AES-256-GCM encrypted
+  accountNumberLast4 String // last 4 digits for display only
+  ifscCode         String
+  bankName         String
+  accountType      String   @default("savings")  // "savings" | "current"
+  isVerified       Boolean  @default(false)
+  verifiedAt       DateTime?
+  verifiedBy       String?  // adminUserId
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("bank_accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTLEMENT SCHEDULE — Phase MVP
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Admin-configurable settlement schedule. One row per role group.
+/// isPaused=true blocks the Thursday cron for that role.
+model SettlementSchedule {
+  id          String    @id @default(cuid())
+  role        String    @unique  // "CC" | "CCL" | "ALL"
+  dayOfWeek   Int       @default(4)   // 4 = Thursday (JS Date.getDay())
+  isPaused    Boolean   @default(false)
+  pausedBy    String?   // adminUserId
+  pausedAt    DateTime?
+  pauseReason String?
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+
+  @@map("settlement_schedules")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMISSION ADJUSTMENTS — Phase MVP
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AdjustmentType {
+  REFUND_REVERSAL
+  PLATFORM_FEE
+  MANUAL_CREDIT
+  MANUAL_DEBIT
+  TAX_DEDUCTION
+}
+
+/// Manual or automated correction applied to a partner's earning ledger.
+/// Positive amountPaise = credit; negative = debit.
+/// Applied in the next payout calculation, never retroactively changes existing CcPayout.
+model CommissionAdjustment {
+  id           String         @id @default(cuid())
+  role         String                              // "CC" | "CCL"
+  partnerId    String                              // ccUserId or cclUserId
+  commissionId String?
+  type         AdjustmentType
+  amountPaise  Int                                 // positive=credit, negative=debit
+  reason       String
+  createdBy    String                              // adminUserId
+  createdAt    DateTime       @default(now())
+
+  @@index([partnerId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("commission_adjustments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYOUT FRAUD FLAG — Phase MVP
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum FraudFlagStatus {
+  open
+  investigating
+  cleared
+  confirmed_fraud
+}
+
+/// Created automatically after 3 consecutive Thursday payout failures for a partner,
+/// or manually by Admin. Blocks all payouts for the partner until cleared.
+model PayoutFraudFlag {
+  id         String          @id @default(cuid())
+  role       String                               // "CC" | "CCL"
+  partnerId  String
+  payoutId   String?
+  reason     String
+  status     FraudFlagStatus @default(open)
+  resolvedBy String?
+  resolvedAt DateTime?
+  notes      String?
+  createdAt  DateTime        @default(now())
+
+  @@index([partnerId])
+  @@index([status])
+  @@map("payout_fraud_flags")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATION LOG — Phase MVP
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum NotificationChannel {
+  whatsapp
+  email
+  sms
+}
+
+/// Partner-facing notification audit log (approval, commission, payout events).
+model NotificationLog {
+  id          String              @id @default(cuid())
+  userId      String
+  channel     NotificationChannel
+  templateKey String
+  payload     Json
+  status      WhatsAppStatus      @default(queued)
+  sentAt      DateTime?
+  errorMsg    String?
+  createdAt   DateTime            @default(now())
+
+  @@index([userId])
+  @@index([channel])
+  @@index([createdAt])
+  @@map("notification_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ASSESSMENT PERSONALIZATION — Phase 2
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Deterministic rule sets for selecting question category mix.
+/// Evaluated in priority order; first match wins.
+model AssessmentProfileRule {
+  id                 String   @id @default(cuid())
+  name               String
+  classMin           Int?
+  classMax           Int?
+  ageMin             Int?
+  ageMax             Int?
+  boards             String[] @default([])  // empty = all boards
+  streams            String[] @default([])  // empty = all streams
+  requiredCategories String[] @default([])  // QuestionCategory values to emphasise
+  questionCount      Int      @default(10)
+  isActive           Boolean  @default(true)
+  priority           Int      @default(0)   // higher = evaluated first
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("assessment_profile_rules")
+}
+
+/// Reusable question pool. Admin-managed. Seed via prisma/seed.js.
+model QuestionTemplate {
+  id           String           @id @default(cuid())
+  questionText String
+  questionType QuestionType
+  category     QuestionCategory
+  options      Json?
+  tags         String[]         @default([])
+  classMin     Int?
+  classMax     Int?
+  ageMin       Int?
+  ageMax       Int?
+  streams      String[]         @default([])
+  isActive     Boolean          @default(true)
+  usageCount   Int              @default(0)
+  createdBy    String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+  @@map("question_templates")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRICING PLANS — add isPartnerVisible field
+// ─────────────────────────────────────────────────────────────────────────────
