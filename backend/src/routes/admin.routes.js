@@ -131,4 +131,11 @@ router.post('/cc/training',           upload.single('file'), enforceSizeLimit, c
 router.patch('/cc/training/:id',      ccAdminController.updateTrainingContent);
 router.delete('/cc/training/:id',     ccAdminController.deleteTrainingContent);
 
+// ─── Staff Management (Phase 8) ───────────────────────────────────────────────
+// Admin can create, list, promote/demote, and activate/deactivate CC/CCL staff.
+router.get('/staff',              adminController.listStaff);
+router.post('/staff',             adminController.createStaff);
+router.patch('/staff/:id/role',   adminController.updateStaffRole);
+router.patch('/staff/:id/status', adminController.toggleStaffStatus);
+
 module.exports = router;

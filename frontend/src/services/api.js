@@ -316,4 +316,22 @@ export const consultationApi = {
   recover: () => api.post('/consultation/recover'),
 }
 
+// ─── Auth API (student account management) ────────────────────────────────────
+export const authApi = {
+  /**
+   * Soft-deletes the authenticated user's account.
+   * Requires the current password for confirmation.
+   * Returns 200 on success.
+   */
+  deleteAccount: (password) => api.delete('/auth/account', { data: { password } }),
+}
+
+// ─── Admin Staff API (Phase 8) ────────────────────────────────────────────────
+export const adminStaffApi = {
+  list:         ()              => adminApiClient.get('/admin/staff'),
+  create:       (data)          => adminApiClient.post('/admin/staff', data),
+  updateRole:   (id, role)      => adminApiClient.patch(`/admin/staff/${id}/role`, { role }),
+  toggleStatus: (id)            => adminApiClient.patch(`/admin/staff/${id}/status`),
+}
+
 export default api

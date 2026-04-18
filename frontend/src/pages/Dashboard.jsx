@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useSelector } from 'react-redux'
-import { selectUser } from '../store/slices/authSlice'
-import api, { leadApi, consultationApi } from '../services/api'
+import { useSelector, useDispatch } from 'react-redux'
+import { selectUser, clearCredentials } from '../store/slices/authSlice'
+import api, { leadApi, consultationApi, authApi } from '../services/api'
 import toast from 'react-hot-toast'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -505,11 +505,19 @@ function ProfileRow({ label, value }) {
 export default function Dashboard() {
   const user = useSelector(selectUser)
   const navigate = useNavigate()
+  const dispatch = useDispatch()
   const [profile, setProfile]   = useState(null)
   const [reports, setReports]   = useState([])
   const [lead, setLead]         = useState(null)
   const [consultationBooking, setConsultationBooking] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Delete-account modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const DELETE_PHRASE = 'DELETE MY ACCOUNT'
 
   const refreshBooking = useCallback(async () => {
     try {
@@ -519,6 +527,22 @@ export default function Dashboard() {
       // non-fatal — booking shown stale is fine
     }
   }, [])
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== DELETE_PHRASE || !deletePassword) return
+    setDeleting(true)
+    try {
+      await authApi.deleteAccount(deletePassword)
+      toast.success('Account deleted. Goodbye!')
+      dispatch(clearCredentials())
+      navigate('/', { replace: true })
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Failed to delete account. Please try again.'
+      toast.error(msg)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => {
     const loadData = async () => {
@@ -844,7 +868,100 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* ── Account Settings / Danger Zone ──────────────────────────────── */}
+        <div className="mt-10 pt-6 border-t border-gray-200">
+          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Account Settings</h3>
+          <div className="card border border-red-200 bg-red-50">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="font-semibold text-red-700">🗑️ Delete My Account</div>
+                <p className="text-red-600 text-sm mt-0.5">
+                  Permanently remove your account and all associated data. This action cannot be undone.
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowDeleteModal(true); setDeleteConfirmText(''); setDeletePassword('') }}
+                className="shrink-0 bg-red-600 text-white font-bold px-5 py-2 rounded-xl text-sm hover:bg-red-700 transition"
+              >
+                Delete Account
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* ── Delete Account Modal ───────────────────────────────────────────── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">⚠️</span>
+              <div>
+                <h2 className="font-bold text-red-700 text-lg">Delete Account</h2>
+                <p className="text-gray-500 text-xs">This is permanent and cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="space-y-1 mb-4 text-sm text-gray-600">
+              <p>Deleting your account will:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-gray-500 text-xs mt-1">
+                <li>Remove your login access immediately</li>
+                <li>Anonymise your personal data</li>
+                <li>Cancel all active sessions</li>
+                <li>Retain payment and legal records as required by law</li>
+              </ul>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Type <span className="font-mono text-red-600">{DELETE_PHRASE}</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={DELETE_PHRASE}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Enter your current password</label>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Your current password"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                autoComplete="current-password"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 border border-gray-300 text-gray-700 font-semibold py-2 rounded-xl text-sm hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== DELETE_PHRASE || !deletePassword || deleting}
+                className={`flex-1 font-bold py-2 rounded-xl text-sm transition ${
+                  deleteConfirmText === DELETE_PHRASE && deletePassword && !deleting
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {deleting ? 'Deleting…' : 'Yes, Delete My Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../util
 const logger = require('../utils/logger');
 const { triggerAutomation } = require('../services/automation/automationService');
 const { generateReportAsync } = require('./assessment.controller');
+const { sendReportReadyEmail, sendCounsellingReportEmail } = require('../services/email/emailService');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH
@@ -620,10 +621,44 @@ const triggerAdminAction = async (req, res) => {
 
     if (action === 'resend_report_link') {
       await triggerAutomation('premium_report_ready', { leadId: lead.id, reportId: lead.reportId });
+
+      // Also re-send email (fire-and-forget).
+      // NOTE: CareerReport has no 'user' Prisma relation — fetch user separately via report.userId.
+      if (lead.reportId) {
+        (async () => {
+          try {
+            const rpt = await prisma.careerReport.findUnique({ where: { id: lead.reportId } });
+            if (!rpt) return;
+            const rptUser = await prisma.user.findUnique({
+              where: { id: rpt.userId },
+              select: {
+                email: true,
+                studentProfile: {
+                  select: { fullName: true, parentDetail: { select: { email: true, parentName: true } } },
+                },
+              },
+            });
+            if (!rptUser?.email) return;
+            const sName = rptUser.studentProfile?.fullName || rptUser.email.split('@')[0];
+            const args  = { reportId: lead.reportId, accessLevel: rpt.accessLevel, reportType: rpt.reportType };
+            sendReportReadyEmail({ to: rptUser.email, name: sName, ...args })
+              .catch((e) => logger.warn('[Admin] resend email failed', { error: e.message }));
+            const pEmail = rptUser.studentProfile?.parentDetail?.email;
+            const pName  = rptUser.studentProfile?.parentDetail?.parentName;
+            if (pEmail && rpt.accessLevel === 'PAID') {
+              sendReportReadyEmail({ to: pEmail, name: pName || `Parent of ${sName}`, isParent: true, studentName: sName, ...args })
+                .catch((e) => logger.warn('[Admin] resend parent email failed', { error: e.message }));
+            }
+          } catch (err) {
+            logger.warn('[Admin] resend email block failed', { error: err.message });
+          }
+        })();
+      }
+
       await prisma.leadEvent.create({
         data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_resend_report_link', metadata: { adminId: req.user.id } },
       });
-      return successResponse(res, null, 'Report link resent via WhatsApp');
+      return successResponse(res, null, 'Report link resent via WhatsApp and email');
     }
 
     if (action === 'mark_counselling') {
@@ -635,6 +670,47 @@ const triggerAdminAction = async (req, res) => {
         data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_mark_counselling', metadata: { adminId: req.user.id } },
       });
       return successResponse(res, null, 'Lead marked as counselling interested');
+    }
+
+    if (action === 'send_counselling_report') {
+      // Admin manually triggers final counselling-report-ready email after session completion
+      if (!lead.userId) return errorResponse(res, 'Lead has no linked user', 400, 'NO_USER');
+
+      const leadUser = await prisma.user.findUnique({
+        where: { id: lead.userId },
+        select: {
+          email: true,
+          studentProfile: {
+            select: { fullName: true, parentDetail: { select: { email: true, parentName: true } } },
+          },
+        },
+      });
+
+      if (!leadUser?.email) return errorResponse(res, 'User email not found', 400, 'NO_EMAIL');
+
+      const sName = leadUser.studentProfile?.fullName || leadUser.email.split('@')[0];
+      const pEmail = leadUser.studentProfile?.parentDetail?.email;
+      const pName  = leadUser.studentProfile?.parentDetail?.parentName;
+
+      const booking = await prisma.consultationBooking.findFirst({ where: { userId: lead.userId } });
+
+      // Fire-and-forget
+      sendCounsellingReportEmail({
+        to: leadUser.email, name: sName, reportId: lead.reportId, bookingId: booking?.id,
+      }).catch((e) => logger.warn('[Admin] send_counselling_report email failed', { error: e.message }));
+
+      if (pEmail) {
+        sendCounsellingReportEmail({
+          to: pEmail, name: pName || `Parent of ${sName}`, reportId: lead.reportId,
+          bookingId: booking?.id, isParent: true, studentName: sName,
+        }).catch((e) => logger.warn('[Admin] send_counselling_report parent email failed', { error: e.message }));
+      }
+
+      await prisma.leadEvent.create({
+        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_send_counselling_report', metadata: { adminId: req.user.id } },
+      });
+
+      return successResponse(res, null, 'Counselling report email sent to student' + (pEmail ? ' and parent' : ''));
     }
 
     return errorResponse(res, `Unknown action: ${action}`, 400, 'INVALID_ACTION');
@@ -679,4 +755,135 @@ module.exports = {
   getFunnelMetrics,
   updateLeadAdmin,
   triggerAdminAction,
+
+  // ── Staff Management ───────────────────────────────────────────────────────
+  listStaff,
+  createStaff,
+  updateStaffRole,
+  toggleStaffStatus,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STAFF_ROLES = new Set(['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR']);
+
+/**
+ * GET /api/v1/admin/staff
+ * Lists all CC and CCL users.
+ */
+async function listStaff(req, res) {
+  try {
+    const staff = await prisma.user.findMany({
+      where: { role: { in: ['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR'] } },
+      select: {
+        id: true, name: true, email: true, role: true, isActive: true,
+        deletedAt: true, createdAt: true, approvedAt: true, isApproved: true,
+      },
+      orderBy: [{ role: 'asc' }, { createdAt: 'desc' }],
+    });
+    return successResponse(res, { staff, total: staff.length });
+  } catch (err) {
+    logger.error('[Admin] listStaff error', { error: err.message });
+    throw err;
+  }
+}
+
+/**
+ * POST /api/v1/admin/staff
+ * Creates a new CC or CCL user.
+ * Body: { name, email, password, role }
+ */
+async function createStaff(req, res) {
+  try {
+    const { name, email, password, role } = req.body;
+
+    if (!name || !email || !password || !role) {
+      return errorResponse(res, 'name, email, password and role are required', 400, 'VALIDATION_ERROR');
+    }
+    if (!STAFF_ROLES.has(role)) {
+      return errorResponse(res, 'role must be CAREER_COUNSELLOR or CAREER_COUNSELLOR_LEAD', 422, 'INVALID_ROLE');
+    }
+    if (password.length < 8) {
+      return errorResponse(res, 'Password must be at least 8 characters', 400, 'VALIDATION_ERROR');
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return errorResponse(res, 'A user with this email already exists', 409, 'CONFLICT');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const staff = await prisma.user.create({
+      data: { name, email, passwordHash, role, isActive: true, isApproved: true, approvedAt: new Date() },
+      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+    });
+
+    logger.info('[Admin] Staff user created', { newUserId: staff.id, role: staff.role, adminId: req.user.id });
+    return successResponse(res, staff, 'Staff user created successfully', 201);
+  } catch (err) {
+    logger.error('[Admin] createStaff error', { error: err.message });
+    throw err;
+  }
+}
+
+/**
+ * PATCH /api/v1/admin/staff/:id/role
+ * Promotes or demotes a staff user between CC and CCL.
+ * Body: { role }
+ */
+async function updateStaffRole(req, res) {
+  try {
+    const { role } = req.body;
+    if (!STAFF_ROLES.has(role)) {
+      return errorResponse(res, 'role must be CAREER_COUNSELLOR or CAREER_COUNSELLOR_LEAD', 422, 'INVALID_ROLE');
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return errorResponse(res, 'Staff user not found', 404, 'NOT_FOUND');
+    if (!STAFF_ROLES.has(user.role)) {
+      return errorResponse(res, 'Target user is not a staff member', 422, 'INVALID_TARGET');
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { role },
+      select: { id: true, name: true, email: true, role: true, isActive: true },
+    });
+
+    logger.info('[Admin] Staff role updated', { targetId: req.params.id, newRole: role, adminId: req.user.id });
+    return successResponse(res, updated, 'Staff role updated');
+  } catch (err) {
+    logger.error('[Admin] updateStaffRole error', { error: err.message });
+    throw err;
+  }
+}
+
+/**
+ * PATCH /api/v1/admin/staff/:id/status
+ * Activates or deactivates a staff user.
+ */
+async function toggleStaffStatus(req, res) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return errorResponse(res, 'Staff user not found', 404, 'NOT_FOUND');
+    if (!STAFF_ROLES.has(user.role)) {
+      return errorResponse(res, 'Target user is not a staff member', 422, 'INVALID_TARGET');
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isActive: !user.isActive },
+      select: { id: true, name: true, email: true, role: true, isActive: true },
+    });
+
+    const action = updated.isActive ? 'activated' : 'deactivated';
+    logger.info(`[Admin] Staff user ${action}`, { targetId: req.params.id, adminId: req.user.id });
+    return successResponse(res, updated, `Staff user ${action}`);
+  } catch (err) {
+    logger.error('[Admin] toggleStaffStatus error', { error: err.message });
+    throw err;
+  }
+}

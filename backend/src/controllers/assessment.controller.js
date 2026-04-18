@@ -6,6 +6,7 @@ const aiOrchestrator = require('../services/ai/aiOrchestrator');
 const { triggerAutomation } = require('../services/automation/automationService');
 const analytics = require('../services/analytics/analyticsService');
 const { safeLeadUpdateForUser, safeLeadUpdateByReportId } = require('../utils/leadStatusHelper');
+const { sendReportReadyEmail } = require('../services/email/emailService');
 
 // Max questions per plan
 const QUESTION_LIMITS = { FREE: 10, PAID: 30 };
@@ -343,7 +344,7 @@ const generateReportAsync = async (assessment, profile, reportId, reportType) =>
 
     logger.info('[Assessment] Report generated successfully', { reportId });
 
-    // Trigger post-report automation
+    // Trigger post-report automation (WhatsApp)
     const completedReport = await prisma.careerReport.findUnique({ where: { id: reportId } });
     const eventName = completedReport?.accessLevel === 'PAID'
       ? 'premium_report_ready'
@@ -353,6 +354,57 @@ const generateReportAsync = async (assessment, profile, reportId, reportType) =>
       await triggerAutomation(eventName, { leadId: lead.id, reportId });
       // Use safe update — do NOT overwrite a paid/premium_report_generating status with free_report_ready.
       await safeLeadUpdateByReportId(reportId, { status: eventName });
+    }
+
+    // ── Send report-ready email to student (and parent if registered) ─────────
+    // Fire-and-forget: email failures must never crash report generation.
+    try {
+      const reportUser = await prisma.user.findUnique({
+        where: { id: assessment.userId },
+        select: {
+          email: true,
+          studentProfile: {
+            select: {
+              fullName: true,
+              parentDetail: { select: { parentName: true, email: true } },
+            },
+          },
+        },
+      });
+
+      const studentName  = reportUser?.studentProfile?.fullName
+        || reportUser?.email?.split('@')[0]
+        || 'Student';
+      const parentEmail  = reportUser?.studentProfile?.parentDetail?.email;
+      const parentName   = reportUser?.studentProfile?.parentDetail?.parentName;
+
+      const emailArgs = {
+        reportId,
+        accessLevel: completedReport?.accessLevel || assessment.accessLevel,
+        reportType:  resolvedType,
+      };
+
+      // Email to student
+      if (reportUser?.email) {
+        sendReportReadyEmail({ to: reportUser.email, name: studentName, ...emailArgs })
+          .then(() => logger.info('[Assessment] Report email sent to student', { reportId, to: reportUser.email }))
+          .catch((err) => logger.warn('[Assessment] Report email to student failed', { reportId, error: err.message }));
+      }
+
+      // CC parent (only for paid reports — free report parent notification is noisy)
+      if (parentEmail && completedReport?.accessLevel === 'PAID') {
+        sendReportReadyEmail({
+          to:          parentEmail,
+          name:        parentName || `Parent of ${studentName}`,
+          isParent:    true,
+          studentName,
+          ...emailArgs,
+        })
+          .then(() => logger.info('[Assessment] Report email sent to parent', { reportId, to: parentEmail }))
+          .catch((err) => logger.warn('[Assessment] Report email to parent failed', { reportId, error: err.message }));
+      }
+    } catch (emailLookupErr) {
+      logger.warn('[Assessment] Could not look up user for report email', { reportId, error: emailLookupErr.message });
     }
   } catch (err) {
     logger.error('[Assessment] Report generation failed', { reportId, error: err.message });

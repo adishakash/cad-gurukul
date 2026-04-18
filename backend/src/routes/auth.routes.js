@@ -12,6 +12,7 @@ router.post('/register', authLimiter, validate(authValidator.register), authCont
 router.post('/login', authLimiter, validate(authValidator.login), authController.login);
 router.post('/refresh', validate(authValidator.refreshToken), authController.refresh);
 router.post('/logout', authenticate, authController.logout);
+router.delete('/account', authLimiter, authenticate, authController.deleteAccount);
 
 // ⚠️  LEGACY ENDPOINT — authenticates against the old `AdminUser` table and
 //    issues a JWT with { adminId, type:'admin' } which is NOT compatible with

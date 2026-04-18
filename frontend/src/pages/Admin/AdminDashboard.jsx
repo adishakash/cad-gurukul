@@ -213,6 +213,9 @@ export default function AdminDashboard() {
           <span className="text-xs bg-brand-red px-2 py-0.5 rounded-full">{admin.role || 'ADMIN'}</span>
         </div>
         <div className="flex items-center gap-4">
+          <Link to="/admin/staff" className="text-sm text-gray-300 hover:text-white transition-colors">👥 Staff</Link>
+          <Link to="/admin/partners" className="text-sm text-gray-300 hover:text-white transition-colors">🤝 Partners</Link>
+          <Link to="/admin/payouts" className="text-sm text-gray-300 hover:text-white transition-colors">💰 Payouts</Link>
           <span className="text-sm text-gray-300">{admin.name}</span>
           <button onClick={logout} className="text-sm hover:text-brand-red transition-colors">Logout</button>
         </div>

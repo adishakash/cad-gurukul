@@ -63,30 +63,156 @@ const sendWelcomeEmail = async ({ to, name }) => {
 };
 
 /**
- * Send report ready notification
+ * Send report-ready notification email.
+ * Called for free report, ₹499 standard, and ₹1,999 premium after generation.
+ *
+ * @param {object} opts
+ * @param {string} opts.to            - Recipient email
+ * @param {string} opts.name          - Student name
+ * @param {string} opts.reportId      - CareerReport.id for deep-link
+ * @param {'FREE'|'PAID'} opts.accessLevel
+ * @param {'free'|'standard'|'premium'} [opts.reportType]  - defaults to accessLevel mapping
+ * @param {boolean} [opts.isParent]   - true when emailing the parent
+ * @param {string} [opts.studentName] - required when isParent=true
  */
-const sendReportReadyEmail = async ({ to, name, reportId, accessLevel }) => {
+const sendReportReadyEmail = async ({
+  to,
+  name,
+  reportId,
+  accessLevel,
+  reportType,
+  isParent = false,
+  studentName,
+}) => {
+  const isPaid    = accessLevel === 'PAID';
+  const isPremium = reportType === 'premium';
+
+  const planLabel = isPremium
+    ? '₹1,999 Premium AI'
+    : isPaid
+      ? '₹499 Full Career'
+      : 'Free Summary';
+
+  const subject = isPremium
+    ? `🚀 Your Premium AI Career Report is Ready, ${isParent ? studentName : name}!`
+    : isPaid
+      ? `📄 Your Full Career Report is Ready, ${isParent ? studentName : name}!`
+      : `📊 Your Free Career Report is Ready, ${isParent ? studentName : name}!`;
+
+  const greeting = isParent
+    ? `Hi ${name},<br>Your ward <strong>${studentName}</strong>'s career report is ready.`
+    : `Hi ${name}! 🎉<br>Your <strong>${planLabel} Career Report</strong> is ready.`;
+
+  const upgradeBlock = !isPaid
+    ? `<div style="margin:24px 0;padding:16px 20px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;">
+        <div style="font-size:13px;font-weight:bold;color:#9a3412;margin-bottom:6px;">🚀 Want deeper career clarity?</div>
+        <p style="font-size:13px;color:#7c2d12;margin:0 0 12px;">Upgrade to the Full Report (₹499) for 7+ detailed career paths, a year-by-year roadmap, and a downloadable PDF.</p>
+        <a href="${config.frontendUrl}/payment?plan=standard" style="background:#ea580c;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px;">Upgrade Now →</a>
+      </div>`
+    : '';
+
+  const downloadBlock = isPaid
+    ? `<div style="margin:20px 0;padding:14px 18px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:13px;color:#14532d;">
+        <strong>✅ PDF Download Included</strong> — Open your report and click "Download PDF" to save a copy.
+      </div>`
+    : '';
+
   return sendEmail({
     to,
-    subject: `Your ${accessLevel === 'PAID' ? 'Premium' : 'Free'} Career Report is Ready!`,
+    subject,
     html: `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;">
-        <div style="background:#0f3460;padding:30px;text-align:center;">
-          <h1 style="color:#e94560;margin:0;">CAD Gurukul</h1>
+      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+        <div style="background:#0f3460;padding:28px 30px;text-align:center;">
+          <h1 style="color:#e94560;margin:0;font-size:26px;">CAD Gurukul</h1>
+          <p style="color:#ccd6f6;margin:6px 0 0;font-size:13px;">AI Career Guidance for Indian Students</p>
         </div>
         <div style="padding:30px;">
-          <h2>Your Career Report is Ready, ${name}! 🎉</h2>
-          <p>Your ${accessLevel === 'PAID' ? 'comprehensive Premium' : 'Free Summary'} Career Guidance Report has been generated.</p>
-          ${accessLevel === 'PAID' ? '<p>Download your detailed PDF report from the dashboard.</p>' : '<p>Upgrade to Premium for a complete analysis with roadmaps, detailed career fits, and PDF download.</p>'}
-          <p style="margin-top:24px;"><a href="${config.frontendUrl}/reports/${reportId}" style="background:#e94560;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">View My Report</a></p>
+          <p style="font-size:16px;color:#1a1a2e;margin:0 0 10px;">${greeting}</p>
+
+          <!-- Report badge -->
+          <div style="margin:20px 0;padding:16px 20px;background:#f0f4ff;border-left:4px solid #0f3460;border-radius:6px;">
+            <div style="font-size:12px;font-weight:bold;color:#0f3460;letter-spacing:0.5px;margin-bottom:4px;">YOUR REPORT</div>
+            <div style="font-size:18px;font-weight:bold;color:#1a1a2e;">${planLabel} Career Report</div>
+            ${isPremium ? `<div style="font-size:13px;color:#555;margin-top:4px;">7+ career paths · Year-by-year roadmap · Subject strategy · Scholarship list</div>` : ''}
+          </div>
+
+          ${upgradeBlock}
+          ${downloadBlock}
+
+          <div style="margin:24px 0;">
+            <a href="${config.frontendUrl}/reports/${reportId}"
+               style="display:inline-block;background:#e94560;color:#fff;padding:14px 30px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
+              📊 View My Report →
+            </a>
+          </div>
+
+          <p style="font-size:13px;color:#666;margin:0;">If the button doesn't work, open: <a href="${config.frontendUrl}/reports/${reportId}" style="color:#e94560;">${config.frontendUrl}/reports/${reportId}</a></p>
         </div>
         <div style="background:#f5f5f5;padding:16px;text-align:center;font-size:12px;color:#888;">
-          © ${new Date().getFullYear()} CAD Gurukul
+          © ${new Date().getFullYear()} CAD Gurukul. All rights reserved.
         </div>
       </div>
     `,
   });
 };
+
+/**
+ * Send counselling (₹9,999 final) report-ready email after meeting completion.
+ * Sent to student (and optionally parent) when the admin marks the counselling report as ready.
+ */
+const sendCounsellingReportEmail = async ({
+  to,
+  name,
+  reportId,
+  bookingId,
+  counsellorName = 'Adish Gupta',
+  isParent = false,
+  studentName,
+}) => {
+  const recipientDesc = isParent
+    ? `Your ward <strong>${studentName}</strong>`
+    : `You`;
+
+  return sendEmail({
+    to,
+    subject: `🎓 Your Personalised Counselling Report is Ready${isParent ? ` — ${studentName}` : ''}!`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+        <div style="background:#0f3460;padding:28px 30px;text-align:center;">
+          <h1 style="color:#e94560;margin:0;font-size:26px;">CAD Gurukul</h1>
+          <p style="color:#ccd6f6;margin:6px 0 0;font-size:13px;">AI Career Guidance for Indian Students</p>
+        </div>
+        <div style="padding:30px;">
+          <p style="font-size:16px;color:#1a1a2e;margin:0 0 8px;">Hi ${name}! 🎓</p>
+          <p style="font-size:14px;color:#444;line-height:1.6;">${recipientDesc} completed the 1:1 Career Blueprint Session with <strong>${counsellorName}</strong>. Your personalised counselling report is now ready.</p>
+
+          <div style="margin:20px 0;padding:16px 20px;background:#fff7ed;border-left:4px solid #ea580c;border-radius:6px;">
+            <div style="font-size:12px;font-weight:bold;color:#9a3412;letter-spacing:0.5px;margin-bottom:4px;">YOUR COUNSELLING REPORT INCLUDES</div>
+            <ul style="font-size:13px;color:#7c2d12;margin:8px 0 0;padding-left:18px;line-height:1.8;">
+              <li>Personalised career roadmap from your session</li>
+              <li>Recommended stream and subject choices</li>
+              <li>Action plan for the next 12 months</li>
+              <li>Session notes and follow-up guidance</li>
+            </ul>
+          </div>
+
+          <div style="margin:24px 0;">
+            <a href="${config.frontendUrl}/dashboard"
+               style="display:inline-block;background:#ea580c;color:#fff;padding:14px 30px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
+              📋 View Counselling Report →
+            </a>
+          </div>
+
+          <p style="font-size:13px;color:#666;">Have questions? Reply to this email or contact us at <a href="mailto:support@cadgurukul.com" style="color:#e94560;">support@cadgurukul.com</a></p>
+        </div>
+        <div style="background:#f5f5f5;padding:16px;text-align:center;font-size:12px;color:#888;">
+          © ${new Date().getFullYear()} CAD Gurukul. All rights reserved.
+        </div>
+      </div>
+    `,
+  });
+};
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSULTATION EMAILS — Phase 7
@@ -285,5 +411,5 @@ const sendAdminSlotNotification = async ({
   });
 };
 
-module.exports = { sendEmail, sendWelcomeEmail, sendReportReadyEmail, sendConsultationSlotEmail, sendSlotConfirmationEmail, sendAdminSlotNotification };
+module.exports = { sendEmail, sendWelcomeEmail, sendReportReadyEmail, sendCounsellingReportEmail, sendConsultationSlotEmail, sendSlotConfirmationEmail, sendAdminSlotNotification };
 

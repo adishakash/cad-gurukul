@@ -125,6 +125,7 @@ model User {
 
   isEmailVerified Boolean  @default(false)
   isActive        Boolean  @default(true)
+  deletedAt       DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -164,6 +165,7 @@ model User {
   consultationBookings ConsultationBooking[]
 
   @@index([email])
+  @@index([deletedAt])
   @@map("users")
 }
 
