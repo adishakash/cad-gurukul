@@ -8,6 +8,8 @@ const { staffLoginSchema, staffLeadListQuerySchema } = require('../validators/st
 const { createTestLinkSchema, updateDiscountSchema } = require('../validators/cc.validator');
 const staffController                  = require('../controllers/staff.controller');
 const ccController                     = require('../controllers/cc.controller');
+const { getBankAccount, saveBankAccount } = require('../controllers/bankAccount.controller');
+const { bulkSendTestLinks }              = require('../controllers/bulkSend.controller');
 
 // ─── Public route ─────────────────────────────────────────────────────────────
 
@@ -55,5 +57,12 @@ router.get('/training/:id/file',   ccController.serveTrainingFile);
 // Payouts
 router.get('/payouts',              ccController.listPayouts);
 router.get('/payouts/:id',          ccController.getPayoutDetail);
+
+// Bank account
+router.get('/bank-account', getBankAccount);
+router.put('/bank-account', saveBankAccount);
+
+// Bulk send
+router.post('/test-links/bulk', bulkSendTestLinks);
 
 module.exports = router;

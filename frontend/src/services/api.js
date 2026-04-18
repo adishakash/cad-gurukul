@@ -233,6 +233,59 @@ export const counsellorBizApi = {
   downloadTrainingFile:(id)             => staffApiClient.get(`/counsellor/training/${id}/file?download=true`, { responseType: 'blob' }),
   getPayouts:       ()                  => staffApiClient.get('/counsellor/payouts'),
   getPayoutDetail:  (id)                => staffApiClient.get(`/counsellor/payouts/${id}`),
+  // Bank account
+  getBankAccount:   ()                  => staffApiClient.get('/counsellor/bank-account'),
+  saveBankAccount:  (data)              => staffApiClient.put('/counsellor/bank-account', data),
+  // Bulk send
+  bulkSendTestLinks: (data)             => staffApiClient.post('/counsellor/test-links/bulk', data),
+}
+
+// ─── CCL Biz API (lead staff) ──────────────────────────────────────────────────
+export const staffLeadBizApi = {
+  getAccount:       ()                  => staffApiClient.get('/staff/account'),
+  getTransactions:  (page = 1)          => staffApiClient.get(`/staff/account/transactions?page=${page}`),
+  getJoiningLinks:  (page = 1)          => staffApiClient.get(`/staff/joining-links?page=${page}`),
+  createJoiningLink: (data)             => staffApiClient.post('/staff/joining-links', data),
+  getDiscountPolicy: (planType = 'standard') => staffApiClient.get('/staff/discount-policy', { params: { planType } }),
+  getDiscount:      ()                  => staffApiClient.get('/staff/discount'),
+  updateDiscount:   (data)              => staffApiClient.put('/staff/discount', data),
+  getTraining:      ()                  => staffApiClient.get('/staff/training'),
+  getPayouts:       ()                  => staffApiClient.get('/staff/payouts'),
+  getPayoutDetail:  (id)                => staffApiClient.get(`/staff/payouts/${id}`),
+  // Bank account
+  getBankAccount:   ()                  => staffApiClient.get('/staff/bank-account'),
+  saveBankAccount:  (data)              => staffApiClient.put('/staff/bank-account', data),
+  // Bulk send
+  bulkSendJoiningLinks: (data)          => staffApiClient.post('/staff/joining-links/bulk', data),
+}
+
+// ─── Partner Auth API (public) ────────────────────────────────────────────────
+export const partnerAuthApi = {
+  register: (data) => api.post('/auth/partner/register', data),
+  login:    (data) => api.post('/auth/partner/login', data),
+}
+
+// ─── Partner Admin API ────────────────────────────────────────────────────────
+export const partnerAdminApi = {
+  list:              (params)   => adminApiClient.get('/admin/partners', { params }),
+  get:               (id)       => adminApiClient.get(`/admin/partners/${id}`),
+  approve:           (id)       => adminApiClient.patch(`/admin/partners/${id}/approve`),
+  reject:            (id, data) => adminApiClient.patch(`/admin/partners/${id}/reject`, data),
+  suspend:           (id, data) => adminApiClient.patch(`/admin/partners/${id}/suspend`, data),
+  verifyBank:        (id)       => adminApiClient.patch(`/admin/partners/${id}/bank-account/verify`),
+  createAdjustment:  (id, data) => adminApiClient.post(`/admin/partners/${id}/adjustments`, data),
+  listAdjustments:   (id)       => adminApiClient.get(`/admin/partners/${id}/adjustments`),
+}
+
+// ─── Settlement Admin API ─────────────────────────────────────────────────────
+export const settlementApi = {
+  trigger:   (data)  => adminApiClient.post('/admin/settlement/trigger', data),
+  pause:     ()      => adminApiClient.post('/admin/settlement/pause'),
+  resume:    ()      => adminApiClient.post('/admin/settlement/resume'),
+  getStatus: ()      => adminApiClient.get('/admin/settlement/status'),
+  retry:     (id)    => adminApiClient.post(`/admin/settlement/payouts/${id}/retry`),
+  clearFlag: (id)    => adminApiClient.post(`/admin/settlement/payouts/${id}/clear-flag`),
+  exportCsv: (params)=> adminApiClient.get('/admin/settlement/export', { params, responseType: 'blob' }),
 }
 
 // ─── Public Test Link API (no auth required) ──────────────────────────────────

@@ -9,6 +9,8 @@ const staffController                  = require('../controllers/staff.controlle
 const cclController                    = require('../controllers/ccl.controller');
 const { staffLoginSchema, staffLeadListQuerySchema } = require('../validators/staff.validator');
 const { createJoiningLinkSchema, updateDiscountSchema } = require('../validators/ccl.validator');
+const { getBankAccount, saveBankAccount } = require('../controllers/bankAccount.controller');
+const { bulkSendJoiningLinks }           = require('../controllers/bulkSend.controller');
 
 // ─── Public route ─────────────────────────────────────────────────────────────
 
@@ -76,5 +78,12 @@ router.get('/training/:id/file',   cclController.serveTrainingFile);
 // Payouts — CCL can view their own payout batches
 router.get('/payouts',     cclController.listPayouts);
 router.get('/payouts/:id', cclController.getPayoutDetail);
+
+// Bank account
+router.get('/bank-account', getBankAccount);
+router.put('/bank-account', saveBankAccount);
+
+// Bulk send
+router.post('/joining-links/bulk', bulkSendJoiningLinks);
 
 module.exports = router;

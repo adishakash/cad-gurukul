@@ -34,6 +34,17 @@ const start = async () => {
       env: config.env,
       url: `http://localhost:${config.port}/api/v1/health`,
     });
+
+    // Start payout scheduler (Thursday 10AM IST cron)
+    if (process.env.ENABLE_PAYOUT_SCHEDULER === 'true') {
+      try {
+        const { start: startPayoutScheduler } = require('./services/payout/payoutScheduler');
+        startPayoutScheduler();
+        logger.info('[Server] Payout scheduler started');
+      } catch (schedErr) {
+        logger.warn('[Server] Payout scheduler failed to start', { error: schedErr.message });
+      }
+    }
   });
 };
 

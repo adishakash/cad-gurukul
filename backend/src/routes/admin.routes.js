@@ -87,7 +87,28 @@ router.delete('/ccl/training/:id',   cclAdminController.deleteTrainingContent);
 // ─── CC Business Layer Oversight (Phase 5) ────────────────────────────────────
 // Admin can inspect and manage the entire CC financial layer.
 
-const ccAdminController = require('../controllers/cc.admin.controller');
+const ccAdminController         = require('../controllers/cc.admin.controller');
+const partnerAdminController    = require('../controllers/partner.admin.controller');
+const settlementAdminController = require('../controllers/settlement.admin.controller');
+
+// ─── Partner Management ───────────────────────────────────────────────────────
+router.get('/partners',                          partnerAdminController.listPartners);
+router.get('/partners/:id',                      partnerAdminController.getPartner);
+router.patch('/partners/:id/approve',            partnerAdminController.approvePartner);
+router.patch('/partners/:id/reject',             partnerAdminController.rejectPartner);
+router.patch('/partners/:id/suspend',            partnerAdminController.suspendPartner);
+router.patch('/partners/:id/bank-account/verify', partnerAdminController.verifyBankAccount);
+router.post('/partners/:id/adjustments',         partnerAdminController.createAdjustment);
+router.get('/partners/:id/adjustments',          partnerAdminController.listAdjustments);
+
+// ─── Settlement Controls ──────────────────────────────────────────────────────
+router.post('/settlement/trigger',               settlementAdminController.triggerSettlement);
+router.post('/settlement/pause',                 settlementAdminController.pauseSettlement);
+router.post('/settlement/resume',                settlementAdminController.resumeSettlement);
+router.get('/settlement/status',                 settlementAdminController.getScheduleStatus);
+router.post('/settlement/payouts/:id/retry',     settlementAdminController.retryPayout);
+router.post('/settlement/payouts/:id/clear-flag', settlementAdminController.clearFraudFlag);
+router.get('/settlement/export',                 settlementAdminController.exportPayoutsCSV);
 
 // Test links
 router.get('/cc/test-links',          ccAdminController.listAllTestLinks);

@@ -27,10 +27,14 @@ import AdminLogin     from './pages/Admin/AdminLogin'
 import AdminDashboard from './pages/Admin/AdminDashboard'
 import LeadList       from './pages/Admin/LeadList'
 import LeadDetail     from './pages/Admin/LeadDetail'
+import AdminPartners  from './pages/Admin/AdminPartners'
+import AdminPayouts   from './pages/Admin/AdminPayouts'
 
 // Staff pages (Career Counsellor Lead portal)
-import StaffLogin    from './pages/Staff/StaffLogin'
-import LeadDashboard from './pages/Staff/LeadDashboard'
+import StaffLogin       from './pages/Staff/StaffLogin'
+import LeadDashboard    from './pages/Staff/LeadDashboard'
+import PartnerRegister  from './pages/Staff/PartnerRegister'
+import PendingApproval  from './pages/Staff/PendingApproval'
 
 // Counsellor pages (Career Counsellor portal)
 import CounsellorDashboard from './pages/Counsellor/CounsellorDashboard'
@@ -116,6 +120,12 @@ export default function App() {
         <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/leads" element={<AdminRoute><LeadList /></AdminRoute>} />
         <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
+        <Route path="/admin/partners" element={<AdminRoute><AdminPartners /></AdminRoute>} />
+        <Route path="/admin/payouts" element={<AdminRoute><AdminPayouts /></AdminRoute>} />
+
+        {/* Partner registration (public) */}
+        <Route path="/partner/register" element={<PartnerRegister />} />
+        <Route path="/partner/pending-approval" element={<PendingApproval />} />
 
         {/* Staff (Career Counsellor Lead) routes */}
         <Route path="/staff/login" element={<StaffLogin />} />

@@ -312,6 +312,55 @@ const handleWebhook = async (req, res) => {
     }
 
     const payload = JSON.parse(bodyBuffer.toString('utf8'));
+
+    // ── Refund event: create CommissionAdjustment to reverse commission ────────
+    if (payload.event === 'payment.refunded' || payload.event === 'refund.created') {
+      try {
+        const refundEntity  = payload.payload?.refund?.entity || payload.payload?.payment?.entity;
+        const rzpPaymentId  = refundEntity?.payment_id || refundEntity?.id;
+        const refundAmount  = Math.round((refundEntity?.amount || 0) / 100); // paise → rupees
+
+        if (rzpPaymentId && refundAmount > 0) {
+          const payment = await prisma.payment.findFirst({
+            where: { razorpayPaymentId: rzpPaymentId },
+            select: { id: true, ccCommissionId: true, cclCommissionId: true, userId: true },
+          });
+
+          if (payment) {
+            // Create reversal adjustments for any linked commissions
+            if (payment.ccCommissionId) {
+              await prisma.commissionAdjustment.create({
+                data: {
+                  targetId:   payment.ccCommissionId,
+                  targetType: 'CC',
+                  type:       'REFUND_REVERSAL',
+                  amountDelta: -refundAmount,
+                  reason:      `Razorpay refund for payment ${rzpPaymentId}`,
+                  createdBy:   'SYSTEM',
+                },
+              }).catch(() => {});
+            }
+            if (payment.cclCommissionId) {
+              await prisma.commissionAdjustment.create({
+                data: {
+                  targetId:   payment.cclCommissionId,
+                  targetType: 'CCL',
+                  type:       'REFUND_REVERSAL',
+                  amountDelta: -refundAmount,
+                  reason:      `Razorpay refund for payment ${rzpPaymentId}`,
+                  createdBy:   'SYSTEM',
+                },
+              }).catch(() => {});
+            }
+            logger.info('[Payment] Refund adjustments created', { rzpPaymentId, refundAmount });
+          }
+        }
+      } catch (refundErr) {
+        logger.error('[Payment] Refund commission adjustment error', { error: refundErr.message });
+      }
+      return successResponse(res, { received: true }, 'Refund processed');
+    }
+
     if (payload.event !== 'payment.captured') {
       return successResponse(res, { received: true, ignored: true }, 'Webhook ignored');
     }

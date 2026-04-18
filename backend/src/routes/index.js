@@ -17,6 +17,7 @@ const leadRoutes  = require('./lead.routes');
 const staffRoutes = require('./staff.routes');
 const counsellorRoutes = require('./counsellor.routes');
 const joiningRoutes = require('./joining.routes');
+const partnerAuthRoutes = require('./partner.auth.routes');
 
 // Health check
 router.get('/health', async (req, res) => {
@@ -61,5 +62,6 @@ router.use('/staff', staffRoutes);
 router.use('/counsellor', counsellorRoutes);
 router.use('/join', joiningRoutes);
 router.use('/testlink', testlinkRoutes);
+router.use('/auth/partner', partnerAuthRoutes);
 
 module.exports = router;
