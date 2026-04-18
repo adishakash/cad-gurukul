@@ -357,9 +357,32 @@ const getReport = async (req, res) => {
  */
 const downloadReportPdf = async (req, res) => {
   try {
-    const report = await prisma.careerReport.findFirst({
+    let report = await prisma.careerReport.findFirst({
       where: { id: req.params.id, userId: req.user.id, accessLevel: 'PAID', status: 'COMPLETED' },
     });
+
+    // Fallback: some legacy reports have accessLevel=FREE even though the user paid.
+    // Check lead entitlement and allow download if the lead is in a paid status.
+    if (!report) {
+      const candidateReport = await prisma.careerReport.findFirst({
+        where: { id: req.params.id, userId: req.user.id, status: 'COMPLETED' },
+      });
+      if (candidateReport) {
+        const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
+        const lead = await prisma.lead.findFirst({
+          where: { userId: req.user.id },
+          select: { status: true },
+        });
+        if (lead && PAID_STATUSES.includes(lead.status)) {
+          // Heal the DB record so future queries work correctly
+          await prisma.careerReport.update({
+            where: { id: candidateReport.id },
+            data: { accessLevel: 'PAID' },
+          }).catch(() => {}); // non-fatal
+          report = { ...candidateReport, accessLevel: 'PAID' };
+        }
+      }
+    }
 
     if (!report) {
       return errorResponse(res, 'Paid report not found. Please upgrade to access PDF download.', 403, 'FORBIDDEN');

@@ -605,16 +605,22 @@ const triggerAdminAction = async (req, res) => {
         include: { parentDetail: true },
       });
 
+      // Determine target plan type: use lead.planType for paid leads, else keep existing
+      const PAID_LEAD_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
+      const leadIsPaid = PAID_LEAD_STATUSES.includes(lead.status);
+      const targetAccessLevel = leadIsPaid ? 'PAID' : report.accessLevel;
+      const targetReportType = (leadIsPaid && report.reportType === 'free') ? (lead.planType || 'standard') : (report.reportType || 'standard');
+
       await prisma.careerReport.update({
         where: { id: lead.reportId },
-        data: { status: 'GENERATING' },
+        data: { status: 'GENERATING', accessLevel: targetAccessLevel, reportType: targetReportType },
       });
       await prisma.leadEvent.create({
         data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_regenerate_report', metadata: { adminId: req.user.id } },
       });
 
       // Fire-and-forget — never throws
-      generateReportAsync(report.assessment, profile, lead.reportId, report.reportType);
+      generateReportAsync(report.assessment, profile, lead.reportId, targetReportType);
 
       return successResponse(res, null, 'Report regeneration queued');
     }
