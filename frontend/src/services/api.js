@@ -73,7 +73,7 @@ export const reportApi = {
   getMyReports:   ()         => api.get('/reports/my'),
   getReport:      (id)       => api.get(`/reports/${id}`),
   getReportStatus:(id)       => api.get(`/reports/${id}/status`),
-  downloadPdf:    (id)       => api.get(`/reports/${id}/pdf`, { responseType: 'blob' }),
+  downloadPdf:    (id)       => api.get(`/reports/${id}/pdf`, { responseType: 'blob', timeout: 120000 }),
 }
 
 // ─── Payment API ──────────────────────────────────────────────────────────────

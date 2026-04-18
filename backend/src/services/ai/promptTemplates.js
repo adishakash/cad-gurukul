@@ -144,6 +144,11 @@ Scores: ${JSON.stringify(scores)}
 Personality: ${personalityType}
 Strengths: ${strengthAreas.join(', ')}
 
+IMPORTANT: topCareers must be structured objects with a genuine fitScore computed from the
+provided Scores above. fitScore must reflect how well the student's aptitude and interest
+scores actually match each career — do NOT use the same score for all careers.
+Do NOT include course paths, entrance exams, or college lists — those are paid-only.
+
 Respond with ONLY this JSON:
 {
   "studentSummary": "2-3 sentence summary of the student",
@@ -151,10 +156,19 @@ Respond with ONLY this JSON:
   "aptitudeHighlights": "Key aptitude observations (2-3 sentences)",
   "recommendedStream": "Science|Commerce|Arts|Vocational",
   "streamReason": "1-2 sentence reason",
-  "topCareers": ["Career 1", "Career 2", "Career 3"],
+  "topCareers": [
+    {
+      "name": "Career name",
+      "fitScore": 0-100,
+      "description": "One sentence: why this career fits this student's profile"
+    }
+  ],
   "nextStep": "One actionable next step",
   "upgradeTeaser": "What paid report adds (2 sentences)"
 }
+
+topCareers must have exactly 3 entries. fitScore values must vary meaningfully (e.g. 78, 65, 59)
+based on the actual aptitude scores provided — the highest-fit career should score highest.
 `;
 
 /**

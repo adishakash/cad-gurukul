@@ -1,6 +1,31 @@
 'use strict';
+const fs = require('fs');
 const puppeteer = require('puppeteer');
 const logger = require('../../utils/logger');
+
+/**
+ * Resolve the Chromium/Chrome executable path.
+ *
+ * Priority:
+ *  1. PUPPETEER_EXECUTABLE_PATH env var (set in Dockerfile ENV for Alpine containers)
+ *  2. Probe common system paths (Alpine apk chromium, Debian apt chromium)
+ *  3. Let Puppeteer use its own bundled Chromium (local dev without skip flag)
+ */
+const resolveChromiumPath = () => {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  const candidates = [
+    '/usr/bin/chromium-browser',    // Alpine: apk add chromium (used in Dockerfile)
+    '/usr/bin/chromium',            // Some Alpine versions
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+  ];
+  for (const p of candidates) {
+    try { if (fs.existsSync(p)) return p; } catch (_) { /* ignore */ }
+  }
+  return undefined; // fall back to Puppeteer bundled binary (local dev)
+};
 
 /**
  * Generates a PDF from the career report data.
@@ -10,15 +35,21 @@ const generatePdf = async (reportData, profile) => {
   logger.info('[PDFGenerator] Generating PDF report', { userId: profile.userId });
 
   const html = buildReportHtml(reportData, profile);
+  const executablePath = resolveChromiumPath();
+
+  logger.info('[PDFGenerator] Using Chromium', { executablePath: executablePath || 'puppeteer-bundled' });
 
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: true,
+    executablePath,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
 
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    page.setDefaultNavigationTimeout(60000);
+    // Use domcontentloaded — our HTML is fully self-contained (no external resources)
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
@@ -27,7 +58,7 @@ const generatePdf = async (reportData, profile) => {
     });
 
     logger.info('[PDFGenerator] PDF generated successfully');
-    return pdfBuffer;
+    return Buffer.from(pdfBuffer); // ensure Buffer for res.end() + Content-Length
   } finally {
     await browser.close();
   }
@@ -45,8 +76,8 @@ const buildReportHtml = (report, profile) => {
       return `
         <li class="career-item">
           <div class="career-header">
-            <strong>${career.title}</strong>
-            <span class="fit-score">Fit Score: ${career.fitScore}%</span>
+            <strong>${career.name || career.title || ''}</strong>
+            <span class="fit-score">${career.fitScore != null ? `Fit Score: ${career.fitScore}%` : ''}</span>
           </div>
           <p>${career.reason || ''}</p>
           ${career.coursePath ? `<p><em>Path: ${career.coursePath}</em></p>` : ''}

@@ -10,12 +10,90 @@ const formatRoadmapLabel = (key) => key
   .replace(/^./, (char) => char.toUpperCase())
   .trim();
 
-const normalizeCareerEntry = (career, index) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// Career affinity: maps keyword fragments → { dimensionName: weight }
+// Weights sum to 1.0 per career. Dimensions correspond to the scores object
+// produced by the evaluation step (stem, creative, social, logical, analytical,
+// leadership, communication, technical, entrepreneurial, research).
+// Used ONLY for legacy free reports whose topCareers were stored as string arrays
+// with no fitScore. The resulting score is derived from real AI-computed scores.
+// ─────────────────────────────────────────────────────────────────────────────
+const CAREER_AFFINITY = [
+  { keywords: ['actor', 'actress', 'performer'],            dims: { creative: 0.5, social: 0.3, communication: 0.2 } },
+  { keywords: ['artist', 'painter', 'sculptor', 'illustrator'], dims: { creative: 0.7, analytical: 0.2, technical: 0.1 } },
+  { keywords: ['architect'],                                dims: { technical: 0.3, creative: 0.3, stem: 0.2, analytical: 0.2 } },
+  { keywords: ['blogger', 'content', 'influencer', 'youtuber'], dims: { creative: 0.4, communication: 0.4, social: 0.2 } },
+  { keywords: ['chef', 'cook', 'culinary', 'baker'],        dims: { creative: 0.5, entrepreneurial: 0.3, social: 0.2 } },
+  { keywords: ['coach', 'trainer', 'fitness'],              dims: { social: 0.4, leadership: 0.3, communication: 0.3 } },
+  { keywords: ['counsellor', 'therapist', 'psychologist'],  dims: { social: 0.5, communication: 0.3, research: 0.2 } },
+  { keywords: ['data', 'analyst', 'analytics'],             dims: { analytical: 0.4, technical: 0.3, stem: 0.2, research: 0.1 } },
+  { keywords: ['designer', 'ux', 'ui', 'graphic', 'fashion', 'interior'], dims: { creative: 0.5, technical: 0.3, analytical: 0.2 } },
+  { keywords: ['director', 'filmmaker', 'producer'],        dims: { creative: 0.4, leadership: 0.3, communication: 0.2, entrepreneurial: 0.1 } },
+  { keywords: ['doctor', 'physician', 'surgeon', 'medicine', 'medical'], dims: { stem: 0.4, social: 0.3, research: 0.2, analytical: 0.1 } },
+  { keywords: ['economist', 'economist'],                   dims: { analytical: 0.4, research: 0.3, logical: 0.3 } },
+  { keywords: ['engineer', 'engineering'],                  dims: { stem: 0.4, technical: 0.3, analytical: 0.2, logical: 0.1 } },
+  { keywords: ['entrepreneur', 'startup', 'founder'],       dims: { entrepreneurial: 0.4, leadership: 0.3, creative: 0.2, communication: 0.1 } },
+  { keywords: ['event', 'organiser', 'organizer', 'coordinator'], dims: { social: 0.4, leadership: 0.3, communication: 0.3 } },
+  { keywords: ['financial', 'finance', 'banker', 'ca', 'accountant'], dims: { analytical: 0.4, logical: 0.3, technical: 0.2, stem: 0.1 } },
+  { keywords: ['historian', 'archivist'],                   dims: { research: 0.5, analytical: 0.3, communication: 0.2 } },
+  { keywords: ['hotel', 'hospitality', 'tourism'],          dims: { social: 0.5, communication: 0.3, leadership: 0.2 } },
+  { keywords: ['journalist', 'reporter', 'news'],           dims: { communication: 0.5, social: 0.3, research: 0.2 } },
+  { keywords: ['judge', 'lawyer', 'advocate', 'attorney', 'legal'], dims: { logical: 0.4, communication: 0.3, research: 0.2, analytical: 0.1 } },
+  { keywords: ['manager', 'management', 'mba'],             dims: { leadership: 0.4, communication: 0.3, analytical: 0.2, entrepreneurial: 0.1 } },
+  { keywords: ['marketing', 'brand', 'advertising'],        dims: { creative: 0.3, communication: 0.3, entrepreneurial: 0.2, analytical: 0.2 } },
+  { keywords: ['musician', 'singer', 'composer', 'musician'], dims: { creative: 0.6, communication: 0.2, social: 0.2 } },
+  { keywords: ['nurse', 'nursing'],                         dims: { social: 0.5, stem: 0.3, communication: 0.2 } },
+  { keywords: ['photographer', 'cinematographer'],          dims: { creative: 0.5, technical: 0.3, entrepreneurial: 0.2 } },
+  { keywords: ['pilot', 'aviation'],                        dims: { technical: 0.4, stem: 0.3, logical: 0.2, analytical: 0.1 } },
+  { keywords: ['politician', 'diplomat', 'policy'],         dims: { communication: 0.4, social: 0.3, leadership: 0.3 } },
+  { keywords: ['researcher', 'scientist', 'professor', 'academic'], dims: { research: 0.4, analytical: 0.3, stem: 0.2, logical: 0.1 } },
+  { keywords: ['social worker', 'ngo', 'nonprofit'],        dims: { social: 0.5, communication: 0.3, leadership: 0.2 } },
+  { keywords: ['software', 'developer', 'programmer', 'coder', 'fullstack', 'backend', 'frontend'], dims: { technical: 0.4, stem: 0.3, logical: 0.2, analytical: 0.1 } },
+  { keywords: ['sports', 'athlete'],                        dims: { social: 0.3, leadership: 0.3, communication: 0.2, entrepreneurial: 0.2 } },
+  { keywords: ['teacher', 'educator', 'lecturer', 'tutor'], dims: { social: 0.4, communication: 0.4, research: 0.2 } },
+  { keywords: ['vet', 'veterinary', 'animal'],              dims: { stem: 0.4, social: 0.3, research: 0.3 } },
+  { keywords: ['writer', 'author', 'novelist', 'poet'],     dims: { creative: 0.5, communication: 0.3, research: 0.2 } },
+];
+
+/**
+ * Compute a deterministic fit score for a career string from real AI evaluation scores.
+ * Only used for legacy free reports stored as string arrays.
+ * Returns null when scores are unavailable so that nothing is shown rather than a fake value.
+ */
+const computeLegacyFitScore = (careerName, scores, position, totalCareers) => {
+  if (!scores || typeof scores !== 'object') return null;
+  const lc = careerName.toLowerCase();
+
+  // Find best matching affinity rule
+  const match = CAREER_AFFINITY.find((rule) => rule.keywords.some((kw) => lc.includes(kw)));
+
+  let rawScore;
+  if (match) {
+    // Weighted sum of real AI score dimensions
+    rawScore = Object.entries(match.dims).reduce((sum, [dim, weight]) => {
+      const dimScore = typeof scores[dim] === 'number' ? scores[dim] : 50; // 50 = neutral if dim missing
+      return sum + dimScore * weight;
+    }, 0);
+  } else {
+    // Unrecognised career: use average of all available score dimensions
+    const values = Object.values(scores).filter((v) => typeof v === 'number');
+    if (values.length === 0) return null;
+    rawScore = values.reduce((a, b) => a + b, 0) / values.length;
+  }
+
+  // Apply a mild positional decay: first career ranked highest by AI is best match
+  // decay: 0 → 0%, last position → −10% (linear), capped at 10 point spread across list
+  const decayFactor = totalCareers > 1 ? (position / (totalCareers - 1)) * 0.10 : 0;
+  const finalScore = Math.round(rawScore * (1 - decayFactor));
+  return Math.min(99, Math.max(1, finalScore));
+};
+
+const normalizeCareerEntry = (career, index, scores, totalCareers) => {
   if (typeof career === 'string') {
     return {
       name: career,
       description: 'Suggested based on your assessment answers.',
-      fitScore: null,
+      fitScore: computeLegacyFitScore(career, scores, index, totalCareers),
       stream: null,
       subjects: [],
     };
@@ -39,9 +117,10 @@ const normalizeTopCareers = (reportData) => {
     : Array.isArray(reportData?.careers)
       ? reportData.careers
       : [];
+  const scores = reportData?.scores || null;
 
   return rawTopCareers
-    .map((career, index) => normalizeCareerEntry(career, index))
+    .map((career, index) => normalizeCareerEntry(career, index, scores, rawTopCareers.length))
     .filter(Boolean);
 };
 
