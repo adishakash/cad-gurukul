@@ -114,14 +114,35 @@ export default function Report() {
     setDownloading(true)
     try {
       const response = await reportApi.downloadPdf(id)
-      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+
+      // Guard: if the response is a JSON error blob (not a real PDF), surface the message
+      if (blob.size < 500 || response.headers?.['content-type']?.includes('application/json')) {
+        const text = await blob.text()
+        let msg = 'PDF download failed. Try again.'
+        try { msg = JSON.parse(text)?.message || msg } catch (_) {}
+        toast.error(msg)
+        return
+      }
+
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `CAD-Gurukul-Report-${id}.pdf`
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('PDF download failed. Try again.')
+      setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a) }, 100)
+    } catch (err) {
+      // Axios rejects non-2xx — try to extract server message from blob response
+      let msg = 'PDF download failed. Try again.'
+      try {
+        const blobData = err?.response?.data
+        if (blobData instanceof Blob) {
+          const text = await blobData.text()
+          msg = JSON.parse(text)?.message || msg
+        }
+      } catch (_) {}
+      toast.error(msg)
     } finally {
       setDownloading(false)
     }

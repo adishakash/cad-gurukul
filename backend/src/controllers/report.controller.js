@@ -429,7 +429,13 @@ const downloadReportPdf = async (req, res) => {
 
     const profile = await prisma.studentProfile.findUnique({ where: { userId: req.user.id } });
 
-    const pdfBuffer = await pdfGenerator.generatePdf(report.reportData, profile);
+    if (!profile) {
+      return errorResponse(res, 'Student profile not found.', 400, 'PROFILE_MISSING');
+    }
+
+    // Normalize before PDF generation so legacy free-report data structures are handled
+    const normalizedForPdf = normalizeReportData(report.reportData);
+    const pdfBuffer = await pdfGenerator.generatePdf(normalizedForPdf, profile);
 
     // Log download
     await prisma.reportDownload.create({
@@ -443,7 +449,7 @@ const downloadReportPdf = async (req, res) => {
 
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="CAD-Gurukul-Report-${profile.fullName.replace(/\s+/g, '-')}.pdf"`,
+      'Content-Disposition': `attachment; filename="CAD-Gurukul-Report-${(profile.fullName || 'Student').replace(/\s+/g, '-')}.pdf"`,
       'Content-Length': pdfBuffer.length,
     });
 

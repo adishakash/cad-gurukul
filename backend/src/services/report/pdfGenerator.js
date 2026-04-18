@@ -79,32 +79,39 @@ const buildReportHtml = (report, profile) => {
             <strong>${career.name || career.title || ''}</strong>
             <span class="fit-score">${career.fitScore != null ? `Fit Score: ${career.fitScore}%` : ''}</span>
           </div>
-          <p>${career.reason || ''}</p>
+          <p>${career.description || career.reason || ''}</p>
           ${career.coursePath ? `<p><em>Path: ${career.coursePath}</em></p>` : ''}
           ${career.indiaScope ? `<p><em>India Scope: ${career.indiaScope}</em></p>` : ''}
+          ${career.stream ? `<p><em>Stream: ${career.stream}</em></p>` : ''}
         </li>`;
     })
     .join('');
 
-  const roadmapHtml = report.oneYearRoadmap
-    ? `
-    <div class="section">
-      <h2>📅 1-Year Roadmap</h2>
-      <ul>
-        <li><strong>Q1 (Months 1-3):</strong> ${report.oneYearRoadmap.quarter1 || ''}</li>
-        <li><strong>Q2 (Months 4-6):</strong> ${report.oneYearRoadmap.quarter2 || ''}</li>
-        <li><strong>Q3 (Months 7-9):</strong> ${report.oneYearRoadmap.quarter3 || ''}</li>
-        <li><strong>Q4 (Months 10-12):</strong> ${report.oneYearRoadmap.quarter4 || ''}</li>
-      </ul>
-    </div>
-    <div class="section">
-      <h2>🚀 3-Year Roadmap</h2>
-      <ul>
-        <li><strong>Year 1:</strong> ${report.threeYearRoadmap?.year1 || ''}</li>
-        <li><strong>Year 2:</strong> ${report.threeYearRoadmap?.year2 || ''}</li>
-        <li><strong>Year 3:</strong> ${report.threeYearRoadmap?.year3 || ''}</li>
-      </ul>
-    </div>`
+  // Build roadmap HTML from the normalized roadmaps array (handles all report formats)
+  const roadmapsArray = Array.isArray(report.roadmaps) && report.roadmaps.length > 0
+    ? report.roadmaps
+    : report.oneYearRoadmap
+      ? [
+          { career: '1-Year Action Plan', steps: [
+              `Q1 (Months 1-3): ${report.oneYearRoadmap.quarter1 || ''}`,
+              `Q2 (Months 4-6): ${report.oneYearRoadmap.quarter2 || ''}`,
+              `Q3 (Months 7-9): ${report.oneYearRoadmap.quarter3 || ''}`,
+              `Q4 (Months 10-12): ${report.oneYearRoadmap.quarter4 || ''}`,
+          ]},
+          { career: '3-Year Career Roadmap', steps: [
+              `Year 1: ${report.threeYearRoadmap?.year1 || ''}`,
+              `Year 2: ${report.threeYearRoadmap?.year2 || ''}`,
+              `Year 3: ${report.threeYearRoadmap?.year3 || ''}`,
+          ]},
+        ]
+      : [];
+
+  const roadmapHtml = roadmapsArray.length > 0
+    ? `<div class="section"><h2>📅 Career Roadmap</h2>${roadmapsArray.map((rm) => `
+      <div style="margin-bottom:14px">
+        <strong style="color:#0f3460">${rm.career || ''}</strong>
+        <ul style="margin-top:6px">${(rm.steps || []).map((s) => `<li>${s}</li>`).join('')}</ul>
+      </div>`).join('')}</div>`
     : '';
 
   return `<!DOCTYPE html>
