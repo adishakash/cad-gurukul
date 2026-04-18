@@ -263,6 +263,45 @@ const getReport = async (req, res) => {
         hasPaidPlan = userHasPaid;
       } catch (_) { /* non-fatal */ }
 
+      // ── Heal legacy records: paid user whose CareerReport.accessLevel was never upgraded ──
+      // For these users the DB still says FREE but they've paid. Upgrade the record in-place
+      // so the correct PAID view (with download button) is served from now on.
+      if (hasPaidPlan && report.status === 'COMPLETED') {
+        const healedReportType = userPlanType === 'consultation' ? 'standard' : (userPlanType || 'standard');
+        await prisma.careerReport.update({
+          where: { id: report.id },
+          data: { accessLevel: 'PAID', reportType: healedReportType },
+        }).catch(() => {}); // non-fatal — don't block the response
+
+        // Fall through to the PAID branch below by re-using normalized data
+        const premiumUpsell = !['premium', 'consultation'].includes(userPlanType)
+          ? {
+              show: true,
+              price: '₹1,999',
+              headline: 'Unlock your Deep AI Career Blueprint',
+              benefits: [
+                'Year-by-year roadmap from Class 11 → first job',
+                'Subject strategy with must-take vs avoid list',
+                'Competitive exam timeline (JEE/NEET/CAT)',
+                'Scholarship opportunities',
+                'Exhaustive 7+ career matches with salary outlook',
+              ],
+            }
+          : null;
+
+        return successResponse(res, {
+          id: report.id,
+          assessmentId: report.assessmentId,
+          accessLevel: 'PAID',
+          reportType: healedReportType,
+          userPlanType,
+          consultationPurchased,
+          ...normalizedReportData,
+          premiumUpsell,
+          generatedAt: report.generatedAt,
+        });
+      }
+
       const freeView = {
         id: report.id,
         assessmentId: report.assessmentId,
