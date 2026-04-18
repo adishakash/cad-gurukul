@@ -163,6 +163,27 @@ const getReport = async (req, res) => {
         }
       } catch (_) { /* non-fatal */ }
 
+      // ── Determine user's true entitlement from lead ──────────────────────
+      // IMPORTANT: Lead.planType has a DB-level DEFAULT 'standard', so ALL leads
+      // (including free users who never paid) have planType = 'standard'.
+      // We must use lead.status as the primary payment indicator, and planType only
+      // to distinguish *which* plan was purchased for users who have actually paid.
+      const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
+      let userPlanType = 'free';
+      let consultationPurchased = false;
+      let hasPaidPlan = false;
+      try {
+        const leadForPlan = await prisma.lead.findFirst({
+          where: { userId: req.user.id },
+          select: { planType: true, status: true },
+        });
+        const userHasPaid = PAID_STATUSES.includes(leadForPlan?.status);
+        // Only trust planType when status confirms payment; otherwise treat as free
+        userPlanType = userHasPaid ? (leadForPlan?.planType || 'standard') : 'free';
+        consultationPurchased = userPlanType === 'consultation';
+        hasPaidPlan = userHasPaid;
+      } catch (_) { /* non-fatal */ }
+
       const freeView = {
         id: report.id,
         assessmentId: report.assessmentId,
@@ -177,7 +198,11 @@ const getReport = async (req, res) => {
         roadmaps: normalizedReportData.roadmaps,
         topCareers: normalizedReportData.topCareers.slice(0, 3),
         confidenceScore: report.confidenceScore,
-        upgradeCTA: {
+        userPlanType,
+        consultationPurchased,
+        // Suppress upgrade CTAs for users who have already purchased a paid plan.
+        // Their paid/premium/consultation report is either generating or delivered separately.
+        upgradeCTA: hasPaidPlan ? null : {
           message: 'Based on your answers, you are NOT suited for random stream selection. Unlock your exact career path — stream, subjects, 3-year roadmap, and top colleges.',
           standard: { price: '₹499', label: 'Full Report' },
           premium:  { price: '₹1,999', label: 'Premium AI Report' },
@@ -188,11 +213,34 @@ const getReport = async (req, res) => {
       return successResponse(res, freeView);
     }
 
-    // PAID report (standard ₹499 or premium ₹1,999)
+    // ── PAID report (standard ₹499 or premium ₹1,999) ─────────────────────────
     const reportType = report.reportType || 'standard';
 
-    // For standard-paid users: add upsell nudge to upgrade to premium
-    const premiumUpsell = reportType === 'standard'
+    // Fetch the user's current plan type to suppress inappropriate upsells.
+    // IMPORTANT: Lead.planType defaults to 'standard' in DB for all rows — must
+    // check lead.status to confirm the user actually paid before trusting planType.
+    const PAID_STATUSES_PAID = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
+    let userPlanType = reportType; // safe default: at minimum they paid for this report tier
+    let consultationPurchased = false;
+    try {
+      const leadForPlan = await prisma.lead.findFirst({
+        where: { userId: req.user.id },
+        select: { planType: true, status: true },
+      });
+      const userHasPaid = PAID_STATUSES_PAID.includes(leadForPlan?.status);
+      // Use planType to detect tier upgrades (e.g. standard report holder who later
+      // bought consultation) — but only if lead.status confirms payment.
+      userPlanType = userHasPaid ? (leadForPlan?.planType || reportType) : reportType;
+      consultationPurchased = userPlanType === 'consultation';
+    } catch (_) { /* non-fatal — don't break report delivery */ }
+
+    // Show standard → premium upsell ONLY when:
+    //  - this is a standard-tier report, AND
+    //  - the user has NOT already purchased premium or consultation
+    const premiumUpsell = (
+      reportType === 'standard' &&
+      !['premium', 'consultation'].includes(userPlanType)
+    )
       ? {
           show: true,
           price: '₹1,999',
@@ -212,6 +260,8 @@ const getReport = async (req, res) => {
       assessmentId: report.assessmentId,
       accessLevel: 'PAID',
       reportType,
+      userPlanType,
+      consultationPurchased,
       ...normalizedReportData,
       premiumUpsell,
       generatedAt: report.generatedAt,

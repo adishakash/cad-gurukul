@@ -42,6 +42,9 @@ import CounsellorDashboard from './pages/Counsellor/CounsellorDashboard'
 // Public joining page (no auth required)
 import JoinPage from './pages/Public/JoinPage'
 
+// Public consultation slot-selection page (no auth required — link from email)
+import ConsultationSlotPage from './pages/Public/ConsultationSlotPage'
+
 // Public test link page (no auth required — candidate payment via CC link)
 import TestLinkPage from './pages/Public/TestLinkPage'
 
@@ -110,6 +113,9 @@ export default function App() {
 
         {/* Public joining page (no login required — candidate enrolment via CCL link) */}
         <Route path="/join" element={<JoinPage />} />
+
+        {/* Public consultation slot-selection page (no login required — link from email) */}
+        <Route path="/consultation/select-slot" element={<ConsultationSlotPage />} />
 
         {/* Public test link page (no login required — candidate assessment via CC link) */}
         <Route path="/testlink" element={<TestLinkPage />} />

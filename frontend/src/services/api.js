@@ -300,4 +300,12 @@ export const trackEvent = (event, metadata = {}) => {
   leadApi.appendEvent(event, metadata).catch(() => {/* silent */})
 }
 
+// ─── Consultation API ─────────────────────────────────────────────────────────
+export const consultationApi = {
+  /** Public — no auth required */
+  selectSlot: (data) => api.post('/consultation/select-slot', data),
+  /** Auth-protected — returns ConsultationBooking or null */
+  getMyBooking: () => api.get('/consultation/my'),
+}
+
 export default api

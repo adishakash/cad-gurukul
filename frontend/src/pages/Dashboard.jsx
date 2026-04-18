@@ -5,7 +5,7 @@ import { selectUser } from '../store/slices/authSlice'
 import api, { leadApi } from '../services/api'
 import toast from 'react-hot-toast'
 
-// ── Funnel progress bar ───────────────────────────────────────────────────────
+// ── Funnel progress bar (non-consultation users) ──────────────────────────────
 const FUNNEL_STEPS = [
   { key: 'new_lead',             label: 'Lead Created',         icon: '✅', includes: ['new_lead', 'onboarding_started', 'plan_selected'] },
   { key: 'assessment_started',   label: 'Assessment Started',   icon: '📝', includes: ['assessment_started', 'assessment_in_progress'] },
@@ -18,6 +18,80 @@ const FUNNEL_STEPS = [
 const resolveStatusIndex = (status) => {
   const idx = FUNNEL_STEPS.findIndex((step) => step.includes.includes(status))
   return idx >= 0 ? idx : 0
+}
+
+// ── Consultation timeline (₹9,999 buyers only) ───────────────────────────────
+const CONSULTATION_STEPS = [
+  { key: 'slot_mail_sent',            label: 'Booking Confirmed',       icon: '💳', description: 'Payment captured — slot-selection email sent' },
+  { key: 'slot_selected',             label: 'Slot Selected',           icon: '📅', description: 'You chose a preferred session window' },
+  { key: 'meeting_scheduled',         label: 'Meeting Scheduled',       icon: '📆', description: 'Team confirmed your exact date & meeting link' },
+  { key: 'meeting_completed',         label: 'Session Completed',       icon: '🎤', description: '45-min 1:1 Career Blueprint Session done' },
+  { key: 'counselling_report_ready',  label: 'Counselling Report Ready',icon: '📄', description: 'Your personalised counselling report is available' },
+]
+
+const SLOT_LABELS = {
+  morning_9_12:  'Morning — 9:00 AM to 12:00 PM',
+  afternoon_2_5: 'Afternoon — 2:00 PM to 5:00 PM',
+  evening_6_9:   'Evening — 6:00 PM to 9:00 PM',
+}
+
+function ConsultationTimeline({ booking }) {
+  if (!booking) return null
+  const statusOrder = CONSULTATION_STEPS.map((s) => s.key)
+  const currentIdx  = statusOrder.indexOf(booking.status)
+
+  return (
+    <div className="card mb-6 border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-white">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-2xl">📞</span>
+        <h3 className="font-bold text-brand-dark">Your 1:1 Career Session — Progress</h3>
+      </div>
+
+      <div className="space-y-3">
+        {CONSULTATION_STEPS.map((step, idx) => {
+          const done    = idx <= currentIdx
+          const current = idx === currentIdx
+          return (
+            <div key={step.key} className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${current ? 'bg-orange-100 border border-orange-300' : done ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-100 opacity-50'}`}>
+              <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${current ? 'border-orange-500 text-orange-700 bg-white' : done ? 'border-green-500 text-green-700 bg-white' : 'border-gray-300 text-gray-400 bg-white'}`}>
+                {done ? '✓' : step.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className={`font-semibold text-sm ${done ? 'text-brand-dark' : 'text-gray-400'}`}>{step.label}</div>
+                <div className={`text-xs mt-0.5 ${done ? 'text-gray-500' : 'text-gray-300'}`}>{step.description}</div>
+                {step.key === 'slot_selected' && booking.selectedSlot && (
+                  <div className="text-xs text-orange-700 font-semibold mt-1">📍 {SLOT_LABELS[booking.selectedSlot] || booking.selectedSlot}</div>
+                )}
+                {step.key === 'meeting_scheduled' && booking.meetingDate && (
+                  <div className="text-xs text-blue-700 font-semibold mt-1">📆 {new Date(booking.meetingDate).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+                )}
+                {step.key === 'meeting_scheduled' && booking.meetingLink && (
+                  <a href={booking.meetingLink} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-red underline mt-1 block">Join Meeting →</a>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Slot not yet selected — remind user */}
+      {booking.status === 'slot_mail_sent' && (
+        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+          <strong>⏰ Action Required:</strong> Check your email to select a session time slot. The link was sent to your registered email address.
+        </div>
+      )}
+
+      {/* Counsellor info */}
+      <div className="mt-4 pt-4 border-t border-orange-100 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-xl shrink-0">👨‍💼</div>
+        <div>
+          <div className="font-bold text-sm text-brand-dark">{booking.counsellorName}</div>
+          <div className="text-xs text-gray-500">{booking.counsellorExpertise}</div>
+          <div className="text-xs text-brand-red">{booking.counsellorContact}</div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function FunnelProgress({ status }) {
@@ -65,19 +139,22 @@ export default function Dashboard() {
   const [profile, setProfile]   = useState(null)
   const [reports, setReports]   = useState([])
   const [lead, setLead]         = useState(null)
+  const [consultationBooking, setConsultationBooking] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [profileRes, reportsRes, leadRes] = await Promise.all([
+        const [profileRes, reportsRes, leadRes, consultationRes] = await Promise.all([
           api.get('/students/me').catch(() => ({ data: { data: null } })),
           api.get('/reports/my').catch(() => ({ data: { data: [] } })),
           leadApi.getMe().catch(() => ({ data: { data: null } })),
+          api.get('/consultation/my').catch(() => ({ data: { data: null } })),
         ])
         setProfile(profileRes.data.data)
         setReports(reportsRes.data.data || [])
         setLead(leadRes.data.data)
+        setConsultationBooking(consultationRes.data.data)
       } catch {
         toast.error('Failed to load dashboard data')
       } finally {
@@ -91,9 +168,21 @@ export default function Dashboard() {
   const generatingReports = reports.filter((r) => r.status === 'GENERATING')
   const freeReport        = completedReports.find((r) => r.accessLevel === 'FREE')
   const paidReport        = completedReports.find((r) => r.accessLevel === 'PAID')
-  const planType          = lead?.planType || 'free'   // "free" | "standard" | "premium" | "consultation"
-  const hasPremium        = planType === 'premium' || planType === 'consultation'
+
+  // ── Payment detection ─────────────────────────────────────────────────────
+  // IMPORTANT: Lead.planType has a DB-level DEFAULT 'standard', meaning every lead
+  // record — including free users who never paid — has planType = 'standard'.
+  // We must use lead.status as the primary payment gate; only use planType to
+  // distinguish *which* plan was purchased (for users who have actually paid).
+  const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed']
+  const leadStatus  = lead?.status || 'new_lead'
+  const userHasPaid = PAID_STATUSES.includes(leadStatus)
+  const planType    = userHasPaid ? (lead?.planType || 'standard') : 'free'
+
+  const hasConsultation   = planType === 'consultation'
+  const hasPremium        = planType === 'premium' || hasConsultation
   const hasStandard       = planType === 'standard'
+  const hasAnyPaidPlan    = userHasPaid   // simplest, most reliable
 
   if (isLoading) {
     return (
@@ -117,8 +206,11 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Funnel progress */}
-        {lead && <FunnelProgress status={lead.status} />}
+        {/* Funnel progress — skip for consultation users (they get ConsultationTimeline instead) */}
+        {lead && !hasConsultation && <FunnelProgress status={lead.status} />}
+
+        {/* Consultation timeline — only for ₹9,999 buyers */}
+        {hasConsultation && <ConsultationTimeline booking={consultationBooking} />}
 
         {/* Profile not complete notice */}
         {(!profile || !profile.isOnboardingComplete) && (
@@ -133,7 +225,7 @@ export default function Dashboard() {
 
         {/* ── Revenue upsell banners ─────────────────────────────────────────────── */}
 
-        {/* Paid ₹499 → Upsell ₹1,999 */}
+        {/* Standard ₹499 → Upsell ₹1,999 (only when user has standard and a paid report) */}
         {hasStandard && paidReport && (
           <div className="mb-6 rounded-2xl border-2 border-purple-400 bg-gradient-to-r from-purple-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -150,8 +242,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Paid ₹1,999 → Upsell ₹9,999 session */}
-        {hasPremium && planType !== 'consultation' && (
+        {/* Premium ₹1,999 → Upsell ₹9,999 session (only premium, NOT consultation who already bought it) */}
+        {hasPremium && !hasConsultation && (
           <div className="mb-6 rounded-2xl border-2 border-orange-400 bg-gradient-to-r from-orange-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">🔥 Limited — 3 slots/day</div>
@@ -179,15 +271,53 @@ export default function Dashboard() {
             <div className="mt-3 text-brand-red text-sm font-semibold">Start Now →</div>
           </button>
 
-          <button
-            onClick={() => navigate('/payment?plan=standard')}
-            className="card hover:shadow-lg transition-shadow text-left border-l-4 border-green-500 cursor-pointer"
-          >
-            <div className="text-3xl mb-2">💎</div>
-            <div className="font-bold text-brand-dark">Full Report</div>
-            <div className="text-sm text-gray-500 mt-1">7 careers · roadmap · PDF · ₹499</div>
-            <div className="mt-3 text-green-600 text-sm font-semibold">Get Report →</div>
-          </button>
+          {/* Context-aware card 2: depends on what the user has purchased */}
+          {hasConsultation ? (
+            // ₹9,999 buyer — show their session status/link
+            <button
+              onClick={() =>
+                consultationBooking?.status === 'slot_mail_sent'
+                  ? toast('Check your email to select a session slot.')
+                  : navigate('/consultation/select-slot')
+              }
+              className="card hover:shadow-lg transition-shadow text-left border-l-4 border-orange-500 cursor-pointer"
+            >
+              <div className="text-3xl mb-2">📞</div>
+              <div className="font-bold text-brand-dark">My 1:1 Session</div>
+              <div className="text-sm text-gray-500 mt-1">{consultationBooking ? `Status: ${consultationBooking.status.replace(/_/g, ' ')}` : 'Session booked'}</div>
+              <div className="mt-3 text-orange-600 text-sm font-semibold">View Details →</div>
+            </button>
+          ) : paidReport ? (
+            // Has a paid completed report — link to it
+            <button
+              onClick={() => navigate(`/reports/${paidReport.id}`)}
+              className="card hover:shadow-lg transition-shadow text-left border-l-4 border-green-500 cursor-pointer"
+            >
+              <div className="text-3xl mb-2">📄</div>
+              <div className="font-bold text-brand-dark">View Your Report</div>
+              <div className="text-sm text-gray-500 mt-1">{paidReport.reportType === 'premium' ? 'Premium AI Report' : 'Full Career Report'}</div>
+              <div className="mt-3 text-green-600 text-sm font-semibold">Open Report →</div>
+            </button>
+          ) : generatingReports.length > 0 ? (
+            // Report is generating — show non-clickable placeholder
+            <div className="card border-l-4 border-blue-300 opacity-70">
+              <div className="text-3xl mb-2">⏳</div>
+              <div className="font-bold text-brand-dark">Report Generating...</div>
+              <div className="text-sm text-gray-500 mt-1">AI is preparing your report. Should be ready in 1–2 min.</div>
+              <div className="mt-3 text-blue-500 text-sm font-semibold">Please wait…</div>
+            </div>
+          ) : (
+            // Free user — show upgrade prompt
+            <button
+              onClick={() => navigate('/payment?plan=standard')}
+              className="card hover:shadow-lg transition-shadow text-left border-l-4 border-green-500 cursor-pointer"
+            >
+              <div className="text-3xl mb-2">💎</div>
+              <div className="font-bold text-brand-dark">Full Report</div>
+              <div className="text-sm text-gray-500 mt-1">7 careers · roadmap · PDF · ₹499</div>
+              <div className="mt-3 text-green-600 text-sm font-semibold">Get Report →</div>
+            </button>
+          )}
 
           <button
             onClick={() => navigate('/onboarding')}
@@ -285,8 +415,8 @@ export default function Dashboard() {
                     </div>
                   ))}
 
-                  {/* Conversion: has free report but no paid */}
-                  {freeReport && !paidReport && (
+                  {/* Conversion: has free report but no paid plan at all */}
+                  {freeReport && !paidReport && !hasAnyPaidPlan && (
                     <div className="bg-gradient-to-r from-brand-dark to-brand-navy text-white rounded-xl p-5 mt-2">
                       <div className="flex items-start gap-3">
                         <span className="text-3xl shrink-0">🔐</span>

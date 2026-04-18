@@ -164,6 +164,13 @@ export default function Report() {
   const streamRec    = report.streamRecommendation || report.recommendedStream || evaluation.recommendedStream
   const subjectStrategy = report.subjectStrategy
 
+  // ── Plan-type awareness from backend ────────────────────────────────────────
+  // Backend now sends `userPlanType` and `consultationPurchased` on all report responses.
+  const consultationPurchased = report.consultationPurchased || false
+  const userPlanType          = report.userPlanType || (isPaid ? reportType : 'free')
+  // Only show upgrade CTAs when upgradeCTA is present (backend suppresses it for paid-plan users)
+  const showUpgradeCTA = !isPaid && Boolean(report.upgradeCTA)
+
   // Header label
   const reportLabel = isPremium ? '🚀 Premium AI Report' : isPaid ? '💎 Full Report' : '🆓 Free Preview'
 
@@ -226,8 +233,8 @@ export default function Report() {
           </div>
         )}
 
-        {/* 🔐 FREE REPORT: dual-CTA lock banner */}
-        {!isPaid && (
+        {/* 🔐 FREE REPORT: dual-CTA lock banner — only for users who have NOT yet purchased any paid plan */}
+        {showUpgradeCTA && (
           <div className="mb-6 rounded-2xl bg-gradient-to-r from-brand-dark to-brand-navy text-white p-5 shadow-xl">
             <div className="flex items-start gap-3">
               <span className="text-3xl shrink-0">🔐</span>
@@ -266,8 +273,8 @@ export default function Report() {
             <CareerCard key={career.name || i} career={career} index={i} />
           ))}
 
-          {/* Blurred locked careers preview for free users */}
-          {!isPaid && (
+          {/* Blurred locked careers preview — only for free users without a paid plan */}
+          {!isPaid && showUpgradeCTA && (
             <div className="relative mt-2">
               <div className="blur-sm pointer-events-none select-none">
                 {[
@@ -353,8 +360,8 @@ export default function Report() {
           </div>
         )}
 
-        {/* Consultation CTA — shown for premium report holders */}
-        {isPremium && (
+        {/* Consultation CTA — shown for premium report holders who have NOT yet purchased consultation */}
+        {isPremium && !consultationPurchased && (
           <div className="card mb-6 border-2 border-orange-400 bg-gradient-to-br from-orange-50 to-white">
             <div className="flex items-start gap-3">
               <span className="text-3xl">📞</span>
@@ -374,8 +381,8 @@ export default function Report() {
           </div>
         )}
 
-        {/* Inline upsell for free users */}
-        {!isPaid && (
+        {/* Inline upsell — only for free users who have not yet purchased any plan */}
+        {!isPaid && showUpgradeCTA && (
           <div className="space-y-4">
             <PremiumUpsell
               assessmentId={report.assessmentId}
@@ -386,8 +393,8 @@ export default function Report() {
         )}
       </div>
 
-      {/* Floating sticky upgrade bar on mobile for free report */}
-      {!isPaid && (
+      {/* Floating sticky upgrade bar — only for free users without a paid plan */}
+      {showUpgradeCTA && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-brand-red text-white px-4 py-3 flex items-center justify-between shadow-2xl md:hidden">
           <div>
             <div className="font-bold text-sm">Unlock My Career Path 🔓</div>
@@ -402,8 +409,8 @@ export default function Report() {
         </div>
       )}
 
-      {/* Auto-show upsell modal */}
-      {showUpsell && !isPaid && (
+      {/* Auto-show upsell modal — only for free users without a paid plan */}
+      {showUpsell && showUpgradeCTA && (
         <PremiumUpsell
           assessmentId={report.assessmentId}
           onClose={() => setShowUpsell(false)}

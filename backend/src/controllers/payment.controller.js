@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const { triggerAutomation } = require('../services/automation/automationService');
 const analytics = require('../services/analytics/analyticsService');
+const { sendConsultationSlotEmail } = require('../services/email/emailService');
 const { getEffectiveChargeAmount } = require('../utils/testPricing');
 
 // ── Value Ladder pricing ─────────────────────────────────────────────────────
@@ -274,8 +275,20 @@ const verifyPayment = async (req, res) => {
       generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
     }
 
+    // ─── Consultation: create booking + send slot-selection email ─────────────
+    if (planType === 'consultation') {
+      // Run async so we don't block the response — errors are caught internally
+      _createConsultationBookingAndSendEmail({
+        userId:    req.user.id,
+        paymentId: updatedPayment.id,
+        leadId:    lead?.id || null,
+      }).catch((err) =>
+        logger.error('[Payment] Consultation booking creation failed', { error: err.message }),
+      );
+    }
+
     const successMsg = planType === 'consultation'
-      ? 'Booking confirmed! Our team will call you within 24 hours.'
+      ? 'Booking confirmed! Check your email to select your preferred session slot.'
       : 'Payment successful! Your report is being generated.';
 
     return successResponse(res, { paymentId: payment.id, status: 'CAPTURED', planType }, successMsg);
@@ -594,5 +607,113 @@ const getPaymentStatus = async (req, res) => {
     throw err;
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSULTATION BOOKING HELPER (private, fire-and-forget)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Creates a ConsultationBooking record and sends slot-selection emails to the
+ * student and (if present) their parent.  Called immediately after a ₹9,999
+ * consultation payment is captured in verifyPayment / handleWebhook.
+ *
+ * Idempotent — if a booking already exists for this paymentId it returns early.
+ */
+async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadId }) {
+  // Idempotency guard
+  const existing = await prisma.consultationBooking.findUnique({ where: { paymentId } });
+  if (existing) {
+    logger.info('[Payment] ConsultationBooking already exists, skipping', { paymentId });
+    return existing;
+  }
+
+  // Secure, unguessable 64-char hex token for email links
+  const slotToken = crypto.randomBytes(32).toString('hex');
+
+  const booking = await prisma.consultationBooking.create({
+    data: {
+      id:        crypto.randomUUID(),
+      userId,
+      leadId:    leadId || null,
+      paymentId,
+      slotToken,
+      status:    'slot_mail_sent',
+    },
+  });
+
+  // Append timeline event
+  if (leadId) {
+    await prisma.leadEvent.create({
+      data: {
+        id:       crypto.randomUUID(),
+        leadId,
+        event:    'consultation_slot_mail_sent',
+        metadata: { bookingId: booking.id },
+      },
+    }).catch((err) =>
+      logger.warn('[Payment] ConsultationBooking LeadEvent failed', { error: err.message }),
+    );
+  }
+
+  // Fetch user + parent for email sending
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      studentProfile: {
+        select: {
+          fullName: true,
+          parentDetail: { select: { parentName: true, email: true } },
+        },
+      },
+    },
+  });
+
+  const studentName = user?.studentProfile?.fullName
+    || user?.email?.split('@')[0]
+    || 'Student';
+  const parentEmail = user?.studentProfile?.parentDetail?.email;
+  const parentName  = user?.studentProfile?.parentDetail?.parentName;
+
+  const emailArgs = {
+    slotToken,
+    counsellorName:      booking.counsellorName,
+    counsellorExpertise: booking.counsellorExpertise,
+    counsellorContact:   booking.counsellorContact,
+  };
+
+  // Send to student
+  if (user?.email) {
+    await sendConsultationSlotEmail({
+      to:   user.email,
+      name: studentName,
+      ...emailArgs,
+    }).catch((err) =>
+      logger.warn('[Payment] Slot-selection email to student failed', { error: err.message }),
+    );
+  }
+
+  // Send to parent
+  if (parentEmail) {
+    await sendConsultationSlotEmail({
+      to:          parentEmail,
+      name:        parentName || `Parent of ${studentName}`,
+      isParent:    true,
+      studentName,
+      ...emailArgs,
+    }).catch((err) =>
+      logger.warn('[Payment] Slot-selection email to parent failed', { error: err.message }),
+    );
+  }
+
+  logger.info('[Payment] ConsultationBooking created + slot email sent', {
+    bookingId: booking.id,
+    userId,
+    studentEmail: user?.email,
+    hasParentEmail: Boolean(parentEmail),
+  });
+
+  return booking;
+}
 
 module.exports = { createOrder, verifyPayment, handleWebhook, getPaymentHistory, getPaymentStatus };

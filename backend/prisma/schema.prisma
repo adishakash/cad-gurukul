@@ -160,6 +160,9 @@ model User {
   partnerApplication  PartnerApplication?
   bankAccount         BankAccount?
 
+  // Consultation booking (one per ₹9,999 session purchase)
+  consultationBookings ConsultationBooking[]
+
   @@index([email])
   @@map("users")
 }
@@ -1232,3 +1235,50 @@ model QuestionTemplate {
 // ─────────────────────────────────────────────────────────────────────────────
 // PRICING PLANS — add isPartnerVisible field
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSULTATION BOOKINGS — Phase 7
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Created immediately after a ₹9,999 consultation payment is captured.
+/// Tracks the full counselling lifecycle from slot-selection email → meeting completed.
+model ConsultationBooking {
+  id        String @id @default(cuid())
+  userId    String
+  leadId    String?   // nullable for backward compat
+  paymentId String @unique   // Payment.id — soft reference (no Prisma relation on Payment side)
+
+  /// Secure 64-char hex token included in the slot-selection email link.
+  /// Used to authenticate the slot selection without requiring the student to log in.
+  slotToken String @unique
+
+  /// Counsellor details — can be updated by admin before the session.
+  counsellorName      String @default("Adish Gupta")
+  counsellorExpertise String @default("Career Guidance Specialist | 10+ years | IIT Alumni")
+  counsellorContact   String @default("adish@cadgurukul.com")
+
+  /// Slot selected by the student via email link.
+  /// Values: 'morning_9_12' | 'afternoon_2_5' | 'evening_6_9'
+  selectedSlot   String?
+  slotSelectedAt DateTime?
+
+  /// Booking lifecycle — driven by backend events.
+  /// Values: 'slot_mail_sent' | 'slot_selected' | 'meeting_scheduled'
+  ///        | 'meeting_completed' | 'counselling_report_ready'
+  status String @default("slot_mail_sent")
+
+  /// Meeting details set externally by the team once a slot is confirmed.
+  meetingDate  DateTime?
+  meetingLink  String?
+  meetingNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([slotToken])
+  @@index([status])
+  @@map("consultation_bookings")
+}
