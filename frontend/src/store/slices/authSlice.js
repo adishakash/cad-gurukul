@@ -58,6 +58,9 @@ const authSlice = createSlice({
       localStorage.removeItem('cg_access_token')
       localStorage.removeItem('cg_refresh_token')
     },
+    clearError: (state) => {
+      state.error = null
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -93,7 +96,6 @@ const authSlice = createSlice({
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false
         state.error = action.payload
-        toast.error(action.payload)
       })
       // Logout
       .addCase(logoutUser.fulfilled, (state) => {
@@ -107,8 +109,9 @@ const authSlice = createSlice({
   },
 })
 
-export const { setCredentials, clearCredentials } = authSlice.actions
+export const { setCredentials, clearCredentials, clearError } = authSlice.actions
 export const selectUser = (state) => state.auth.user
 export const selectIsAuthenticated = (state) => !!state.auth.accessToken
 export const selectAuthLoading = (state) => state.auth.isLoading
+export const selectAuthError = (state) => state.auth.error
 export default authSlice.reducer

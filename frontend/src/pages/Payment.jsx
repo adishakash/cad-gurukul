@@ -111,7 +111,11 @@ export default function Payment() {
     }
     setLoading(true)
     try {
-      leadApi.update({ status: 'payment_pending', planType: planId }).catch(() => {})
+      // Fire-and-forget: only advance lead status to payment_pending — the backend
+      // guard will silently drop this if the lead is already at a later stage (e.g. paid).
+      // planType is intentionally NOT sent here; the backend sets it authoritatively on
+      // verifyPayment. Sending it pre-payment risks overwriting a higher-tier planType.
+      leadApi.update({ status: 'payment_pending' }).catch(() => {})
 
       const loaded = await loadRazorpay()
       if (!loaded) {

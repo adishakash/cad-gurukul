@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const aiOrchestrator = require('../services/ai/aiOrchestrator');
 const { triggerAutomation } = require('../services/automation/automationService');
 const analytics = require('../services/analytics/analyticsService');
+const { safeLeadUpdateForUser, safeLeadUpdateByReportId } = require('../utils/leadStatusHelper');
 
 // Max questions per plan
 const QUESTION_LIMITS = { FREE: 10, PAID: 30 };
@@ -283,9 +284,10 @@ const completeAssessment = async (req, res) => {
       await triggerAutomation('assessment_completed', {
         leadId: lead.id, assessmentId: assessment.id, reportId: report.id,
       });
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { reportId: report.id, status: 'assessment_completed' },
+      // Use safe update — paid users must not regress to 'assessment_completed'.
+      await safeLeadUpdateForUser(req.user.id, {
+        reportId: report.id,
+        status: 'assessment_completed',
       });
     }
 
@@ -349,7 +351,8 @@ const generateReportAsync = async (assessment, profile, reportId, reportType) =>
     const lead = await prisma.lead.findFirst({ where: { reportId } });
     if (lead) {
       await triggerAutomation(eventName, { leadId: lead.id, reportId });
-      await prisma.lead.update({ where: { id: lead.id }, data: { status: eventName } });
+      // Use safe update — do NOT overwrite a paid/premium_report_generating status with free_report_ready.
+      await safeLeadUpdateByReportId(reportId, { status: eventName });
     }
   } catch (err) {
     logger.error('[Assessment] Report generation failed', { reportId, error: err.message });

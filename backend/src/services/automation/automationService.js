@@ -21,6 +21,7 @@ const prisma  = require('../../config/database');
 const logger  = require('../../utils/logger');
 const { randomUUID } = require('crypto');
 const whatsappService = require('../whatsapp/whatsappService');
+const { LEAD_STATUS_ORDER } = require('../../utils/leadStatusHelper');
 
 // ── Template map: event → WhatsApp template name ─────────────────────────────
 const WA_TEMPLATE_MAP = {
@@ -147,8 +148,19 @@ async function _updateLeadStatus(eventName, payload) {
   try {
     const currentLead = await prisma.lead.findUnique({ where: { id: leadId }, select: { status: true } });
 
-    // Avoid downgrading premium generation state back to paid during payment_success automation.
-    if (eventName === 'payment_success' && currentLead?.status === 'premium_report_generating') {
+    // Full forward-only guard: never allow automation events to regress a lead.
+    // Purchased/paid state is the authoritative source of truth — it must survive
+    // any automation event that fires later (e.g. a background free report completing
+    // after a premium payment, or a second assessment completion for a paid user).
+    const currentIdx  = LEAD_STATUS_ORDER.indexOf(currentLead?.status);
+    const requestedIdx = LEAD_STATUS_ORDER.indexOf(newStatus);
+
+    if (requestedIdx < currentIdx) {
+      logger.warn('[Automation] Status downgrade blocked', {
+        leadId, eventName,
+        currentStatus: currentLead?.status,
+        requestedStatus: newStatus,
+      });
       return;
     }
 

@@ -1,16 +1,21 @@
+import { useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
-import { loginUser, selectAuthLoading } from '../store/slices/authSlice'
+import { loginUser, selectAuthLoading, selectAuthError, clearError } from '../store/slices/authSlice'
 
 export default function Login() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isLoading = useSelector(selectAuthLoading)
+  const authError = useSelector(selectAuthError)
   const sessionExpired = searchParams.get('session') === 'expired'
 
   const { register, handleSubmit, formState: { errors } } = useForm()
+
+  // Clear any stale error from a previous action (e.g. a failed registration) when this page mounts.
+  useEffect(() => { dispatch(clearError()) }, [dispatch])
 
   const registerHref = searchParams.toString() ? `/register?${searchParams.toString()}` : '/register'
 
@@ -54,6 +59,12 @@ export default function Login() {
         {sessionExpired && (
           <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm text-center">
             ⚠️ Your session expired. Please log in again.
+          </div>
+        )}
+
+        {authError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
+            {authError}
           </div>
         )}
 

@@ -104,9 +104,28 @@ const updateProfile = async (req, res) => {
       return errorResponse(res, 'Complete onboarding first', 404, 'NOT_FOUND');
     }
 
+    // Explicitly list only the fields this endpoint is allowed to modify.
+    // The Joi validator already strips unknowns, but being explicit here ensures
+    // no accidental fields (e.g. isOnboardingComplete, userId) can ever be patched.
+    const {
+      fullName, age, schoolName, city, state,
+      hobbies, interests, careerAspirations, specialNotes,
+    } = req.body;
+
+    const updateData = {};
+    if (fullName          !== undefined) updateData.fullName          = fullName;
+    if (age               !== undefined) updateData.age               = age;
+    if (schoolName        !== undefined) updateData.schoolName        = schoolName;
+    if (city              !== undefined) updateData.city              = city;
+    if (state             !== undefined) updateData.state             = state;
+    if (hobbies           !== undefined) updateData.hobbies           = hobbies;
+    if (interests         !== undefined) updateData.interests         = interests;
+    if (careerAspirations !== undefined) updateData.careerAspirations = careerAspirations;
+    if (specialNotes      !== undefined) updateData.specialNotes      = specialNotes;
+
     const updated = await prisma.studentProfile.update({
       where: { userId: req.user.id },
-      data: req.body,
+      data: updateData,
     });
 
     return successResponse(res, updated, 'Profile updated');

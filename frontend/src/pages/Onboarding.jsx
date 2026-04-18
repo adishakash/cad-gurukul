@@ -19,6 +19,15 @@ const HOBBIES = ['Reading', 'Sports', 'Coding', 'Painting', 'Music', 'Dance', 'C
 const INTERESTS = ['Science & Technology', 'Medicine & Healthcare', 'Business & Finance', 'Law & Justice', 'Arts & Design', 'Education & Teaching', 'Government & Public Service', 'Sports & Fitness', 'Media & Entertainment', 'Environment & Nature', 'Social Work', 'Research & Academia']
 const INDIAN_STATES = ['Andhra Pradesh', 'Assam', 'Bihar', 'Chandigarh', 'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu & Kashmir', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal']
 
+// Ordered funnel statuses — used to guard against status regression.
+const LEAD_STATUS_ORDER = [
+  'new_lead', 'onboarding_started', 'plan_selected',
+  'assessment_started', 'assessment_in_progress', 'assessment_completed',
+  'free_report_ready', 'payment_pending', 'paid',
+  'premium_report_generating', 'premium_report_ready',
+  'counselling_interested', 'closed',
+]
+
 const ProgressBar = ({ currentStep, totalSteps }) => (
   <div className="mb-8">
     <div className="flex justify-between mb-2">
@@ -82,24 +91,99 @@ export default function Onboarding() {
   const [selectedHobbies, setSelectedHobbies] = useState([])
   const [selectedInterests, setSelectedInterests] = useState([])
   const [selectedLocationPref, setSelectedLocationPref] = useState([])
+  const [leadStatus, setLeadStatus] = useState(null)
   const navigate = useNavigate()
 
-  const { register, handleSubmit, getValues, formState: { errors }, trigger } = useForm({ mode: 'onBlur' })
+  const { register, handleSubmit, getValues, setError, setFocus, getFieldState, reset, formState: { errors }, trigger } = useForm({
+    mode: 'onBlur',
+    reValidateMode: 'onChange', // clear errors in real-time as user corrects fields
+  })
 
   useEffect(() => {
-    leadApi.update({ status: 'onboarding_started' }).catch(() => {})
-  }, [])
+    // On mount: load existing profile + lead so we can:
+    //   • Pre-populate the form (prevents erasing existing data on re-edit)
+    //   • Know the current lead status before touching it
+    const loadData = async () => {
+      try {
+        const [profileRes, leadRes] = await Promise.all([
+          api.get('/students/me').catch(() => ({ data: { data: null } })),
+          leadApi.getMe().catch(() => ({ data: { data: null } })),
+        ])
+        const profile = profileRes.data.data
+        const lead    = leadRes.data.data
+
+        if (lead?.status) setLeadStatus(lead.status)
+
+        if (profile) {
+          // Restore all RHF-controlled fields so the user sees their existing data.
+          reset({
+            fullName:           profile.fullName            || '',
+            age:                profile.age                 || '',
+            schoolName:         profile.schoolName          || '',
+            city:               profile.city                || '',
+            state:              profile.state               || '',
+            mobileNumber:       profile.mobileNumber        || '',
+            pinCode:            profile.pinCode             || '',
+            languagePreference: profile.languagePreference  || 'English',
+            classStandard:      profile.classStandard       || '',
+            board:              profile.board               || '',
+            careerAspirations:  profile.careerAspirations   || '',
+            specialNotes:       profile.specialNotes        || '',
+            budgetPreference:   profile.budgetPreference    || '',
+            parentName:         profile.parentDetail?.parentName    || '',
+            parentContact:      profile.parentDetail?.contactNumber || '',
+            parentEmail:        profile.parentDetail?.email         || '',
+            parentOccupation:   profile.parentDetail?.occupation    || '',
+          })
+          // Restore tag-selector state (not RHF-controlled).
+          setSelectedSubjects(profile.preferredSubjects   || [])
+          setSelectedHobbies(profile.hobbies              || [])
+          setSelectedInterests(profile.interests          || [])
+          setSelectedLocationPref(profile.locationPreference || [])
+        }
+
+        // Only advance lead status to 'onboarding_started' if not already past it.
+        // This prevents a paid/assessed user from being silently downgraded just by
+        // visiting the Edit Profile page.
+        const currentIdx = LEAD_STATUS_ORDER.indexOf(lead?.status)
+        const targetIdx  = LEAD_STATUS_ORDER.indexOf('onboarding_started')
+        if (currentIdx <= targetIdx) {
+          leadApi.update({ status: 'onboarding_started' }).catch(() => {})
+        }
+      } catch {
+        // Non-fatal — form stays empty; first-time onboarding still works.
+      }
+    }
+    loadData()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Maps each step index to the RHF field names that have validation rules on that step.
+  // Only these fields are checked when the user clicks "Continue".
+  const FIELDS_PER_STEP = [
+    ['fullName', 'age', 'city', 'state', 'schoolName', 'mobileNumber', 'pinCode'], // Step 0
+    ['classStandard', 'board', 'careerAspirations', 'specialNotes'],               // Step 1
+    [],                                                                             // Step 2 – tag selectors, no RHF fields
+    ['budgetPreference'],                                                           // Step 3
+    ['parentName', 'parentContact', 'parentEmail', 'parentOccupation'],            // Step 4 – all fields with length/format rules
+  ]
+
+  // Maps RHF field names to the step they live on — used to navigate back on backend errors.
+  const FIELD_TO_STEP = {
+    fullName: 0, age: 0, city: 0, state: 0, schoolName: 0, mobileNumber: 0, pinCode: 0,
+    classStandard: 1, board: 1, careerAspirations: 1, specialNotes: 1,
+    budgetPreference: 3,
+    parentName: 4, parentContact: 4, parentEmail: 4, parentOccupation: 4,
+  }
 
   const nextStep = async () => {
-    const fieldsPerStep = [
-      ['fullName', 'age', 'city', 'state'],
-      ['classStandard', 'board'],
-      [],
-      ['budgetPreference'],
-      [],
-    ]
-    const valid = await trigger(fieldsPerStep[step])
-    if (valid) setStep((s) => Math.min(s + 1, STEPS.length - 1))
+    const valid = await trigger(FIELDS_PER_STEP[step])
+    if (valid) {
+      setStep((s) => Math.min(s + 1, STEPS.length - 1))
+    } else {
+      // Focus the first invalid field so the user sees exactly what needs fixing.
+      const firstError = FIELDS_PER_STEP[step].find((name) => getFieldState(name).invalid)
+      if (firstError) setFocus(firstError)
+    }
   }
 
   const prevStep = () => setStep((s) => Math.max(s - 1, 0))
@@ -115,12 +199,33 @@ export default function Onboarding() {
         interests: selectedInterests,
         locationPreference: selectedLocationPref,
       })
-      // Advance lead funnel status — fire-and-forget
-      leadApi.update({ status: 'onboarding_started' }).catch(() => {})
+      // Advance lead status only if not already past onboarding_started — prevents downgrade.
+      const currentIdx = LEAD_STATUS_ORDER.indexOf(leadStatus)
+      const targetIdx  = LEAD_STATUS_ORDER.indexOf('onboarding_started')
+      if (currentIdx <= targetIdx) {
+        leadApi.update({ status: 'onboarding_started' }).catch(() => {})
+      }
       toast.success('Profile saved! Now start your assessment.')
       navigate('/dashboard')
     } catch (err) {
-      toast.error(err.response?.data?.error?.message || 'Failed to save profile')
+      const errData = err.response?.data?.error
+      if (errData?.code === 'VALIDATION_ERROR' && Array.isArray(errData.details) && errData.details.length > 0) {
+        // Apply each backend field error to the RHF field and jump to the first affected step.
+        let firstAffectedStep = null
+        errData.details.forEach(({ field, message }) => {
+          if (field) {
+            setError(field, { type: 'server', message })
+            const fieldStep = FIELD_TO_STEP[field]
+            if (fieldStep !== undefined && (firstAffectedStep === null || fieldStep < firstAffectedStep)) {
+              firstAffectedStep = fieldStep
+            }
+          }
+        })
+        if (firstAffectedStep !== null) setStep(firstAffectedStep)
+        toast.error(errData.details[0]?.message || 'Please correct the highlighted fields and try again.')
+      } else {
+        toast.error(errData?.message || 'Failed to save profile. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -145,28 +250,42 @@ export default function Onboarding() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="input-label">Full Name *</label>
-                    <input {...register('fullName', { required: 'Required' })} className="input-field" placeholder="Your full name" />
+                    <input {...register('fullName', {
+                      required: 'Please fill this mandatory field.',
+                      minLength: { value: 2, message: 'Please enter at least 2 characters.' },
+                      maxLength: { value: 100, message: 'Only 100 characters are allowed.' },
+                    })} className="input-field" placeholder="Your full name" />
                     {errors.fullName && <p className="text-red-500 text-xs mt-1">{errors.fullName.message}</p>}
                   </div>
                   <div>
                     <label className="input-label">Age *</label>
-                    <input {...register('age', { required: 'Required', min: { value: 13, message: 'Min 13' }, max: { value: 20, message: 'Max 20' } })} type="number" className="input-field" placeholder="e.g. 16" />
+                    <input {...register('age', {
+                      required: 'Please fill this mandatory field.',
+                      min: { value: 13, message: 'Age must be at least 13.' },
+                      max: { value: 20, message: 'Age must be 20 or under.' },
+                    })} type="number" className="input-field" placeholder="e.g. 16" />
                     {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age.message}</p>}
                   </div>
                 </div>
                 <div>
                   <label className="input-label">School Name</label>
-                  <input {...register('schoolName')} className="input-field" placeholder="Your school name" />
+                  <input {...register('schoolName', {
+                    maxLength: { value: 200, message: 'Only 200 characters are allowed.' },
+                  })} className="input-field" placeholder="Your school name" />
+                  {errors.schoolName && <p className="text-red-500 text-xs mt-1">{errors.schoolName.message}</p>}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="input-label">City *</label>
-                    <input {...register('city', { required: 'Required' })} className="input-field" placeholder="Your city" />
+                    <input {...register('city', {
+                      required: 'Please fill this mandatory field.',
+                      maxLength: { value: 100, message: 'Only 100 characters are allowed.' },
+                    })} className="input-field" placeholder="Your city" />
                     {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city.message}</p>}
                   </div>
                   <div>
                     <label className="input-label">State *</label>
-                    <select {...register('state', { required: 'Required' })} className="input-field">
+                    <select {...register('state', { required: 'Please select an option.' })} className="input-field">
                       <option value="">Select State</option>
                       {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -176,12 +295,16 @@ export default function Onboarding() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="input-label">Mobile Number</label>
-                    <input {...register('mobileNumber', { pattern: { value: /^[6-9]\d{9}$/, message: 'Invalid Indian mobile number' } })} className="input-field" placeholder="10-digit mobile number" />
+                    <input {...register('mobileNumber', {
+                      pattern: { value: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit Indian mobile number (starting with 6–9).' },
+                    })} className="input-field" placeholder="10-digit mobile number" />
                     {errors.mobileNumber && <p className="text-red-500 text-xs mt-1">{errors.mobileNumber.message}</p>}
                   </div>
                   <div>
                     <label className="input-label">Pin Code</label>
-                    <input {...register('pinCode', { pattern: { value: /^\d{6}$/, message: '6-digit pin code' } })} className="input-field" placeholder="6-digit pin code" />
+                    <input {...register('pinCode', {
+                      pattern: { value: /^\d{6}$/, message: 'Pin code must be exactly 6 digits.' },
+                    })} className="input-field" placeholder="6-digit pin code" />
                     {errors.pinCode && <p className="text-red-500 text-xs mt-1">{errors.pinCode.message}</p>}
                   </div>
                 </div>
@@ -203,7 +326,7 @@ export default function Onboarding() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="input-label">Class / Standard *</label>
-                    <select {...register('classStandard', { required: 'Required' })} className="input-field">
+                    <select {...register('classStandard', { required: 'Please select an option.' })} className="input-field">
                       <option value="">Select Class</option>
                       {CLASSES.map((c) => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
                     </select>
@@ -211,7 +334,7 @@ export default function Onboarding() {
                   </div>
                   <div>
                     <label className="input-label">Board *</label>
-                    <select {...register('board', { required: 'Required' })} className="input-field">
+                    <select {...register('board', { required: 'Please select an option.' })} className="input-field">
                       <option value="">Select Board</option>
                       {BOARDS.map((b) => <option key={b} value={b}>{b.replace('_', ' ')}</option>)}
                     </select>
@@ -224,11 +347,17 @@ export default function Onboarding() {
                 </div>
                 <div>
                   <label className="input-label">Career Aspirations (if any)</label>
-                  <textarea {...register('careerAspirations')} className="input-field" rows={3} placeholder="e.g. I want to become a doctor, or I'm interested in technology startups..." />
+                  <textarea {...register('careerAspirations', {
+                    maxLength: { value: 500, message: 'Only 500 characters are allowed.' },
+                  })} className="input-field" rows={3} placeholder="e.g. I want to become a doctor, or I'm interested in technology startups..." />
+                  {errors.careerAspirations && <p className="text-red-500 text-xs mt-1">{errors.careerAspirations.message}</p>}
                 </div>
                 <div>
                   <label className="input-label">Special Notes (optional)</label>
-                  <textarea {...register('specialNotes')} className="input-field" rows={2} placeholder="Anything else you want us to know..." />
+                  <textarea {...register('specialNotes', {
+                    maxLength: { value: 1000, message: 'Only 1000 characters are allowed.' },
+                  })} className="input-field" rows={2} placeholder="Anything else you want us to know..." />
+                  {errors.specialNotes && <p className="text-red-500 text-xs mt-1">{errors.specialNotes.message}</p>}
                 </div>
               </div>
             )}
@@ -254,7 +383,7 @@ export default function Onboarding() {
                 <h2 className="text-lg font-bold text-brand-dark mb-4">⚙️ Higher Education Preferences</h2>
                 <div>
                   <label className="input-label">Budget for Higher Education *</label>
-                  <select {...register('budgetPreference', { required: 'Required' })} className="input-field">
+                  <select {...register('budgetPreference', { required: 'Please select an option.' })} className="input-field">
                     <option value="">Select budget range</option>
                     <option value="under-5L">Under ₹5 Lakh per year</option>
                     <option value="5-10L">₹5 – ₹10 Lakh per year</option>
@@ -285,22 +414,33 @@ export default function Onboarding() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="input-label">Parent Name</label>
-                    <input {...register('parentName')} className="input-field" placeholder="Parent's full name" />
+                    <input {...register('parentName', {
+                      maxLength: { value: 100, message: 'Only 100 characters are allowed.' },
+                    })} className="input-field" placeholder="Parent's full name" />
+                    {errors.parentName && <p className="text-red-500 text-xs mt-1">{errors.parentName.message}</p>}
                   </div>
                   <div>
                     <label className="input-label">Contact Number</label>
-                    <input {...register('parentContact', { pattern: { value: /^[6-9]\d{9}$/, message: 'Invalid number' } })} className="input-field" placeholder="10-digit mobile" />
+                    <input {...register('parentContact', {
+                      pattern: { value: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit Indian mobile number (starting with 6–9).' },
+                    })} className="input-field" placeholder="10-digit mobile" />
                     {errors.parentContact && <p className="text-red-500 text-xs mt-1">{errors.parentContact.message}</p>}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="input-label">Parent Email</label>
-                    <input {...register('parentEmail')} type="email" className="input-field" placeholder="parent@email.com" />
+                    <input {...register('parentEmail', {
+                      pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address.' },
+                    })} type="email" className="input-field" placeholder="parent@email.com" />
+                    {errors.parentEmail && <p className="text-red-500 text-xs mt-1">{errors.parentEmail.message}</p>}
                   </div>
                   <div>
                     <label className="input-label">Occupation</label>
-                    <input {...register('parentOccupation')} className="input-field" placeholder="e.g. Teacher, Engineer" />
+                    <input {...register('parentOccupation', {
+                      maxLength: { value: 100, message: 'Only 100 characters are allowed.' },
+                    })} className="input-field" placeholder="e.g. Teacher, Engineer" />
+                    {errors.parentOccupation && <p className="text-red-500 text-xs mt-1">{errors.parentOccupation.message}</p>}
                   </div>
                 </div>
               </div>

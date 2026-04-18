@@ -21,6 +21,7 @@ const {
 const logger           = require('../utils/logger');
 const analytics        = require('../services/analytics/analyticsService');
 const { triggerAutomation } = require('../services/automation/automationService');
+const { LEAD_STATUS_ORDER, PLAN_TYPE_ORDER } = require('../utils/leadStatusHelper');
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 
@@ -138,9 +139,44 @@ const updateMyLead = async (req, res) => {
     const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
     if (!lead) return errorResponse(res, 'Lead not found', 404, 'NOT_FOUND');
 
+    const data = { ...req.body };
+
+    // ── Guard: status — never regress the funnel ──────────────────────────────
+    if (data.status) {
+      const currentIdx   = LEAD_STATUS_ORDER.indexOf(lead.status);
+      const requestedIdx = LEAD_STATUS_ORDER.indexOf(data.status);
+      if (requestedIdx < currentIdx) {
+        logger.warn('[Lead] Status downgrade blocked', {
+          userId: req.user.id,
+          currentStatus: lead.status,
+          requestedStatus: data.status,
+        });
+        delete data.status;
+      }
+    }
+
+    // ── Guard: planType — never downgrade a paid plan tier ───────────────────
+    if (data.planType !== undefined && lead.planType) {
+      const currentPlanIdx   = PLAN_TYPE_ORDER.indexOf(lead.planType);
+      const requestedPlanIdx = PLAN_TYPE_ORDER.indexOf(data.planType);
+      if (currentPlanIdx !== -1 && requestedPlanIdx !== -1 && requestedPlanIdx < currentPlanIdx) {
+        logger.warn('[Lead] planType downgrade blocked', {
+          userId: req.user.id,
+          currentPlanType: lead.planType,
+          requestedPlanType: data.planType,
+        });
+        delete data.planType;
+      }
+    }
+
+    // Nothing left to update.
+    if (Object.keys(data).length === 0) {
+      return successResponse(res, lead, 'Lead unchanged');
+    }
+
     const updated = await prisma.lead.update({
       where: { id: lead.id },
-      data: { ...req.body },
+      data,
     });
 
     return successResponse(res, updated, 'Lead updated');

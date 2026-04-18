@@ -7,10 +7,12 @@ import toast from 'react-hot-toast'
 export default function AdminLogin() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [serverError, setServerError] = useState(null)
   const { register, handleSubmit, formState: { errors } } = useForm()
 
   const onSubmit = async (data) => {
     setLoading(true)
+    setServerError(null)
     try {
       const response = await api.post('/admin/login', data)
       const { accessToken, refreshToken, user } = response.data.data
@@ -20,7 +22,7 @@ export default function AdminLogin() {
       toast.success('Welcome, ' + (user.name || user.email))
       navigate('/admin')
     } catch (err) {
-      toast.error(err?.response?.data?.error?.message || 'Invalid credentials')
+      setServerError(err?.response?.data?.error?.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
@@ -34,6 +36,12 @@ export default function AdminLogin() {
           <h1 className="text-2xl font-extrabold text-white">Admin Access</h1>
           <p className="text-gray-400 text-sm mt-1">CAD Gurukul Control Panel</p>
         </div>
+
+        {serverError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
+            {serverError}
+          </div>
+        )}
 
         <div className="card shadow-2xl">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
