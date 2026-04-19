@@ -174,6 +174,22 @@ export default function LeadList() {
     ))
   }
 
+  const [clearingLeadId, setClearingLeadId] = useState(null)
+
+  const handleClearAssignment = async (lead) => {
+    if (!lead.assignedStaffId) return
+    setClearingLeadId(lead.id)
+    try {
+      await adminLeadApi.assign(lead.id, null)
+      toast.success('Assignment cleared — lead is now Unassigned')
+      handleAssigned(lead.id, null, null)
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to clear assignment')
+    } finally {
+      setClearingLeadId(null)
+    }
+  }
+
   const totalPages = Math.ceil(total / LIMIT)
 
   return (
@@ -311,7 +327,7 @@ export default function LeadList() {
                       {new Date(lead.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           to={`/admin/leads/${lead.id}`}
                           className="text-xs text-brand-red font-semibold hover:underline"
@@ -324,6 +340,16 @@ export default function LeadList() {
                         >
                           Assign
                         </button>
+                        {lead.assignedStaffId && (
+                          <button
+                            onClick={() => handleClearAssignment(lead)}
+                            disabled={clearingLeadId === lead.id}
+                            className="text-xs px-2 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20 font-semibold transition disabled:opacity-50"
+                            title="Remove current assignment"
+                          >
+                            {clearingLeadId === lead.id ? '…' : '✕ Clear'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { selectUser, clearCredentials } from '../store/slices/authSlice'
 import api, { leadApi, consultationApi, authApi } from '../services/api'
 import toast from 'react-hot-toast'
+import ThemeToggle from '../components/ThemeToggle'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 const SLOT_LABELS = {
@@ -21,16 +22,24 @@ function fmt(dt) {
 function TimelineStep({ done, current, icon, label, description, children }) {
   return (
     <div className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${
-      current ? 'bg-orange-50 border-orange-300' : done ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100 opacity-40'
+      current
+        ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-700'
+        : done
+          ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'
+          : 'bg-gray-50 dark:bg-gray-800/30 border-gray-100 dark:border-gray-700 opacity-40'
     }`}>
       <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
-        current ? 'border-orange-500 text-orange-700 bg-white' : done ? 'border-green-500 text-green-700 bg-white' : 'border-gray-300 text-gray-400 bg-white'
+        current
+          ? 'border-orange-500 text-orange-700 dark:text-orange-400 bg-white dark:bg-gray-900'
+          : done
+            ? 'border-green-500 text-green-700 dark:text-green-400 bg-white dark:bg-gray-900'
+            : 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-900'
       }`}>
         {done ? '✓' : icon}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`font-semibold text-sm ${done ? 'text-brand-dark' : 'text-gray-400'}`}>{label}</div>
-        <div className={`text-xs mt-0.5 ${done ? 'text-gray-500' : 'text-gray-300'}`}>{description}</div>
+        <div className={`font-semibold text-sm ${done ? 'text-brand-dark dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>{label}</div>
+        <div className={`text-xs mt-0.5 ${done ? 'text-gray-500 dark:text-gray-400' : 'text-gray-300 dark:text-gray-600'}`}>{description}</div>
         {children}
       </div>
     </div>
@@ -43,52 +52,91 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
   const generating  = Boolean(generatingReport) || ['paid', 'premium_report_generating'].includes(leadStatus)
   const reportDone  = reportReady || leadStatus === 'premium_report_ready'
 
+  const statusLabel = reportReady ? 'Delivered' : generating ? 'Generating' : 'Processing'
+  const statusColor = reportReady
+    ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700'
+    : generating
+      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700'
+      : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700'
+
   const steps = [
     {
-      key:    'purchased',
-      label:  'Full Report Plan — ₹499',
-      icon:   '💳',
-      desc:   'Payment confirmed. Lifetime access to your detailed career report.',
-      done:   true,  // always done when this timeline shows
+      key:     'purchased',
+      label:   'Plan Purchased — ₹499 Full Report',
+      icon:    '💳',
+      desc:    'Payment confirmed. Lifetime access to your detailed career report.',
+      done:    true,
     },
     {
-      key:    'generating',
-      label:  generating ? 'AI Analysis Underway…' : 'Report Generation',
-      icon:   '🤖',
-      desc:   generating ? 'Our AI is building your personalised career blueprint.' : 'Report will be generated after payment.',
-      done:   reportDone || generating,
+      key:     'data_locked',
+      label:   'Assessment Data Locked',
+      icon:    '🔒',
+      desc:    'Your 30-question assessment answers are secured for AI analysis.',
+      done:    true,  // data is locked as soon as payment confirms
+    },
+    {
+      key:     'generating',
+      label:   generating ? 'Report Generation Started…' : 'Report Generation',
+      icon:    '🤖',
+      desc:    generating
+        ? 'Our AI is building your personalised career blueprint — 7+ paths, roadmap, PDF.'
+        : 'AI analysis queued. Will begin shortly.',
+      done:    reportDone || generating,
       current: generating && !reportDone,
     },
     {
-      key:    'report_ready',
-      label:  'Full Report Ready',
-      icon:   '📄',
-      desc:   reportReady ? `Ready on ${fmt(paidReport.generatedAt || paidReport.createdAt)}` : 'Your detailed report will appear here.',
-      done:   reportReady,
+      key:     'report_ready',
+      label:   'Full Report Ready',
+      icon:    '📄',
+      desc:    reportReady
+        ? `Ready on ${fmt(paidReport.generatedAt || paidReport.createdAt)}`
+        : 'Your detailed report will appear here once generated.',
+      done:    reportReady,
     },
     {
-      key:    'pdf',
-      label:  'PDF Download Available',
-      icon:   '⬇️',
-      desc:   'Download your complete career blueprint as a PDF anytime.',
-      done:   reportReady,
+      key:     'report_emailed',
+      label:   'Report Emailed to You',
+      icon:    '📧',
+      desc:    reportReady
+        ? 'A link to your full report was sent to your registered email.'
+        : 'Email will be sent as soon as the report is ready.',
+      done:    reportReady,
+    },
+    {
+      key:     'downloadable',
+      label:   'PDF Download Available',
+      icon:    '⬇️',
+      desc:    'Download your complete career blueprint as a PDF anytime.',
+      done:    reportReady,
     },
   ]
 
   return (
-    <div className="card mb-6 border-2 border-green-300 bg-gradient-to-br from-green-50 to-white">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-2xl">💎</span>
-        <div>
-          <h3 className="font-bold text-brand-dark">Your Full Report — Journey</h3>
-          <p className="text-xs text-gray-500">₹499 plan · {paidReport ? 'Report ready' : generating ? 'Generating…' : 'Processing'}</p>
+    <div className="card mb-6 border-2 border-green-300 dark:border-green-700 bg-gradient-to-br from-green-50 to-white dark:from-green-950/20 dark:to-gray-900">
+      {/* Status card */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl shrink-0">📋</div>
+          <div>
+            <h3 className="font-bold text-brand-dark dark:text-gray-100 text-base">₹499 Full Report — Your Journey</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Career Report Plan</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className="text-xs font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700 px-2 py-0.5 rounded-full">
+            ₹499 Report
+          </span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${statusColor}`}>
+            {statusLabel}
+          </span>
         </div>
       </div>
+
       <div className="space-y-2">
-        {steps.map((s, idx) => (
+        {steps.map((s) => (
           <TimelineStep key={s.key} done={s.done} current={s.current} icon={s.icon} label={s.label} description={s.desc}>
             {s.key === 'generating' && generating && !reportDone && (
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-blue-600">
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
                 <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
@@ -98,7 +146,12 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
             )}
             {s.key === 'report_ready' && paidReport && (
               <Link to={`/reports/${paidReport.id}`} className="inline-block mt-1 text-xs text-brand-red font-semibold hover:underline">
-                Open Report →
+                Open Full Report →
+              </Link>
+            )}
+            {s.key === 'downloadable' && paidReport && (
+              <Link to={`/reports/${paidReport.id}`} className="inline-block mt-1 text-xs text-gray-600 dark:text-gray-400 hover:underline">
+                Open Report &amp; Download PDF →
               </Link>
             )}
           </TimelineStep>
@@ -110,57 +163,95 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
 
 // ── ₹1,999 Premium Plan Timeline ─────────────────────────────────────────────
 function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
-  const generating = Boolean(generatingReport) || leadStatus === 'premium_report_generating'
+  const generating  = Boolean(generatingReport) || leadStatus === 'premium_report_generating'
   const reportReady = Boolean(paidReport)
+  const reportDone  = reportReady || leadStatus === 'premium_report_ready'
+
+  const statusLabel = reportReady ? 'Delivered' : generating ? 'Analysing' : 'Processing'
+  const statusColor = reportReady
+    ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700'
+    : generating
+      ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-700'
+      : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700'
 
   const steps = [
     {
-      key:    'purchased',
-      label:  'Premium AI Report Plan — ₹1,999',
-      icon:   '🚀',
-      desc:   'Payment confirmed. Deep AI analysis of your career fit, roadmap, and subject strategy.',
-      done:   true,
+      key:     'purchased',
+      label:   'Premium Plan Purchased — ₹1,999 Deep Analysis',
+      icon:    '🚀',
+      desc:    'Payment confirmed. Premium AI deep-dive into your career fit, roadmap & subject strategy.',
+      done:    true,
     },
     {
-      key:    'generating',
-      label:  generating ? 'Deep AI Analysis Running…' : 'Premium AI Analysis',
-      icon:   '🤖',
-      desc:   generating
-        ? 'Building your year-by-year roadmap, subject strategy, and scholarship list.'
-        : 'Premium report generation queued.',
-      done:   reportReady || generating,
-      current: generating && !reportReady,
+      key:     'data_locked',
+      label:   'Assessment Data Locked',
+      icon:    '🔒',
+      desc:    'Your 30-question assessment answers are secured for premium AI analysis.',
+      done:    true,
     },
     {
-      key:    'report_ready',
-      label:  'Premium Report Ready',
-      icon:   '📊',
-      desc:   reportReady ? `Ready on ${fmt(paidReport.generatedAt || paidReport.createdAt)}` : '7+ career paths · roadmap · subject strategy · scholarship list',
-      done:   reportReady,
+      key:     'generating',
+      label:   generating ? 'Deep Analysis Started…' : 'Deep AI Analysis',
+      icon:    '🤖',
+      desc:    generating
+        ? 'Building your year-by-year roadmap, subject strategy, exam timeline & scholarship list.'
+        : 'Premium AI analysis queued.',
+      done:    reportDone || generating,
+      current: generating && !reportDone,
     },
     {
-      key:    'pdf',
-      label:  'Full Blueprint PDF Available',
-      icon:   '⬇️',
-      desc:   'Download your complete premium career blueprint — share with parents & teachers.',
-      done:   reportReady,
+      key:     'report_ready',
+      label:   'Premium Report Ready',
+      icon:    '📊',
+      desc:    reportReady
+        ? `Ready on ${fmt(paidReport.generatedAt || paidReport.createdAt)} · 7+ careers · roadmap · subject strategy`
+        : '7+ career paths · Year-by-year roadmap · Subject strategy · Scholarship list',
+      done:    reportReady,
+    },
+    {
+      key:     'report_emailed',
+      label:   'Premium Report Emailed to You',
+      icon:    '📧',
+      desc:    reportReady
+        ? 'Your premium report link was sent to your registered email address.'
+        : 'Email will be sent as soon as your premium report is ready.',
+      done:    reportReady,
+    },
+    {
+      key:     'downloadable',
+      label:   'Full Blueprint PDF Available',
+      icon:    '⬇️',
+      desc:    'Download your complete premium career blueprint — share with parents & teachers.',
+      done:    reportReady,
     },
   ]
 
   return (
-    <div className="card mb-6 border-2 border-purple-300 bg-gradient-to-br from-purple-50 to-white">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-2xl">🚀</span>
-        <div>
-          <h3 className="font-bold text-brand-dark">Your Premium AI Report — Journey</h3>
-          <p className="text-xs text-gray-500">₹1,999 plan · {paidReport ? 'Report ready' : generating ? 'Generating…' : 'Processing'}</p>
+    <div className="card mb-6 border-2 border-purple-300 dark:border-purple-700 bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-gray-900">
+      {/* Status card */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl shrink-0">🚀</div>
+          <div>
+            <h3 className="font-bold text-brand-dark dark:text-gray-100 text-base">₹1,999 Premium AI Report — Your Journey</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Premium Deep-Analysis Plan</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className="text-xs font-bold text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 border border-purple-300 dark:border-purple-700 px-2 py-0.5 rounded-full">
+            ₹1,999 Premium
+          </span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${statusColor}`}>
+            {statusLabel}
+          </span>
         </div>
       </div>
+
       <div className="space-y-2">
         {steps.map((s) => (
           <TimelineStep key={s.key} done={s.done} current={s.current} icon={s.icon} label={s.label} description={s.desc}>
-            {s.key === 'generating' && generating && !reportReady && (
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-purple-600">
+            {s.key === 'generating' && generating && !reportDone && (
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400">
                 <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
@@ -173,6 +264,11 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
                 Open Premium Report →
               </Link>
             )}
+            {s.key === 'downloadable' && paidReport && (
+              <Link to={`/reports/${paidReport.id}`} className="inline-block mt-1 text-xs text-gray-600 dark:text-gray-400 hover:underline">
+                Open Report &amp; Download PDF →
+              </Link>
+            )}
           </TimelineStep>
         ))}
       </div>
@@ -182,12 +278,12 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
 
 // ── ₹9,999 Consultation Timeline ─────────────────────────────────────────────
 const CONSULTATION_STEPS = [
-  { key: 'purchased',              label: 'Booking Confirmed',         icon: '💳', desc: 'Payment captured — ₹9,999 consultation booked' },
-  { key: 'slot_mail_sent',         label: 'Slot-Selection Email Sent', icon: '📧', desc: 'Email with slot-selection link sent to your inbox' },
-  { key: 'slot_selected',          label: 'Slot Selected',             icon: '📅', desc: 'You chose a preferred session window' },
-  { key: 'meeting_scheduled',      label: 'Meeting Scheduled',         icon: '📆', desc: 'Team confirmed exact date & meeting link' },
-  { key: 'meeting_completed',      label: 'Session Completed',         icon: '🎤', desc: '45-min 1:1 Career Blueprint Session done' },
-  { key: 'counselling_report_ready', label: 'Counselling Report Ready', icon: '📄', desc: 'Your personalised counselling report is available' },
+  { key: 'purchased',                label: 'Booking Confirmed',           icon: '💳', desc: 'Payment captured — ₹9,999 consultation booked' },
+  { key: 'slot_mail_sent',           label: 'Slot-Selection Email Sent',   icon: '📧', desc: 'Email with slot-selection link sent to your inbox' },
+  { key: 'slot_selected',            label: 'Slot Selected',               icon: '📅', desc: 'You chose a preferred session window' },
+  { key: 'meeting_scheduled',        label: 'Meeting Scheduled',           icon: '📆', desc: 'Team confirmed exact date & meeting link' },
+  { key: 'meeting_completed',        label: 'Session Completed',           icon: '🎤', desc: '45-min 1:1 Career Blueprint Session done' },
+  { key: 'counselling_report_ready', label: 'Personalised Report Ready',   icon: '🎓', desc: 'Your 1:1 counselling report has been prepared and emailed to you' },
 ]
 
 // Derive current step index from booking.status
@@ -259,26 +355,26 @@ function ConsultationTimeline({ booking, onResend }) {
   // ── Null booking state: payment captured but booking not yet created ────────
   if (!booking) {
     return (
-      <div className="card mb-6 border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-white">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-2xl">📞</span>
+      <div className="card mb-6 border-2 border-orange-300 dark:border-orange-700 bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-gray-900">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-xl shrink-0">📞</div>
           <div>
-            <h3 className="font-bold text-brand-dark">Your 1:1 Career Session</h3>
-            <p className="text-xs text-gray-500">₹9,999 consultation · Booking setup in progress</p>
+            <h3 className="font-bold text-brand-dark dark:text-gray-100">₹9,999 Career Blueprint Session</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">1:1 Consultation · Booking setup in progress</p>
           </div>
         </div>
 
-        <div className="p-4 bg-yellow-50 border border-yellow-300 rounded-xl">
-          <div className="font-semibold text-yellow-800 text-sm mb-1">⏳ Setting Up Your Booking</div>
-          <p className="text-yellow-700 text-xs mb-3">
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-300 dark:border-yellow-700 rounded-xl">
+          <div className="font-semibold text-yellow-800 dark:text-yellow-300 text-sm mb-1">⏳ Setting Up Your Booking</div>
+          <p className="text-yellow-700 dark:text-yellow-400 text-xs mb-3">
             Your payment was received but your booking record is still being created. This usually resolves in a few seconds — try refreshing the page.
           </p>
-          <p className="text-yellow-700 text-xs mb-4">
+          <p className="text-yellow-700 dark:text-yellow-400 text-xs mb-4">
             If this persists, click <strong>"Send Slot Email"</strong> below and we'll set up your booking immediately.
           </p>
 
           {recoverResult ? (
-            <div className={`text-xs px-3 py-2 rounded-lg mb-3 ${recoverResult.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+            <div className={`text-xs px-3 py-2 rounded-lg mb-3 ${recoverResult.ok ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700'}`}>
               {recoverResult.ok ? '✅ ' : '❌ '}{recoverResult.message}
             </div>
           ) : null}
@@ -314,25 +410,30 @@ function ConsultationTimeline({ booking, onResend }) {
   }
 
   return (
-    <div className="card mb-6 border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-white">
+    <div className="card mb-6 border-2 border-orange-300 dark:border-orange-700 bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-gray-900">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">📞</span>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-xl shrink-0">📞</div>
           <div>
-            <h3 className="font-bold text-brand-dark">Your 1:1 Career Session — Progress</h3>
-            <p className="text-xs text-gray-500">₹9,999 plan · {booking.counsellorName}</p>
+            <h3 className="font-bold text-brand-dark dark:text-gray-100 text-base">₹9,999 Career Blueprint Session — Progress</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">1:1 Consultation · {booking.counsellorName}</p>
           </div>
         </div>
         {/* Status chip */}
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
-          booking.status === 'counselling_report_ready' ? 'bg-green-100 text-green-700 border-green-300' :
-          booking.status === 'meeting_completed'        ? 'bg-blue-100 text-blue-700 border-blue-300' :
-          booking.status === 'meeting_scheduled'        ? 'bg-purple-100 text-purple-700 border-purple-300' :
-          booking.status === 'slot_selected'            ? 'bg-teal-100 text-teal-700 border-teal-300' :
-                                                          'bg-yellow-100 text-yellow-700 border-yellow-300'
-        }`}>
-          {booking.status.replace(/_/g, ' ')}
-        </span>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className="text-xs font-bold text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/40 border border-orange-300 dark:border-orange-700 px-2 py-0.5 rounded-full">
+            ₹9,999 Session
+          </span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+            booking.status === 'counselling_report_ready' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700' :
+            booking.status === 'meeting_completed'        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700' :
+            booking.status === 'meeting_scheduled'        ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-700' :
+            booking.status === 'slot_selected'            ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-400 border-teal-300 dark:border-teal-700' :
+                                                            'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700'
+          }`}>
+            {booking.status.replace(/_/g, ' ')}
+          </span>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -343,7 +444,7 @@ function ConsultationTimeline({ booking, onResend }) {
             <TimelineStep key={step.key} done={done} current={current} icon={step.icon} label={step.label} description={step.desc}>
               {/* Slot email step: show sent-at + resend button */}
               {step.key === 'slot_mail_sent' && done && (
-                <div className="mt-1 text-xs text-gray-500">
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   First sent: {fmt(booking.createdAt)}
                   {booking.resendCount > 0 && ` · Resent ${booking.resendCount}×`}
                   {booking.lastResendAt && ` (last: ${fmt(booking.lastResendAt)})`}
@@ -352,7 +453,7 @@ function ConsultationTimeline({ booking, onResend }) {
 
               {/* Slot selected detail */}
               {step.key === 'slot_selected' && booking.selectedSlot && (
-                <div className="mt-1 text-xs text-teal-700 font-semibold">
+                <div className="mt-1 text-xs text-teal-700 dark:text-teal-400 font-semibold">
                   📍 {SLOT_LABELS[booking.selectedSlot] || booking.selectedSlot}
                   {booking.slotSelectedAt && ` · ${fmt(booking.slotSelectedAt)}`}
                 </div>
@@ -361,7 +462,7 @@ function ConsultationTimeline({ booking, onResend }) {
               {/* Meeting detail */}
               {step.key === 'meeting_scheduled' && booking.meetingDate && (
                 <div className="mt-1 space-y-0.5">
-                  <div className="text-xs text-purple-700 font-semibold">
+                  <div className="text-xs text-purple-700 dark:text-purple-400 font-semibold">
                     📆 {fmt(booking.meetingDate)}
                   </div>
                   {booking.meetingLink && (
@@ -372,41 +473,64 @@ function ConsultationTimeline({ booking, onResend }) {
                   )}
                 </div>
               )}
+
+              {/* Counselling report ready — view dashboard CTA */}
+              {step.key === 'counselling_report_ready' && done && (
+                <div className="mt-1 text-xs text-green-700 dark:text-green-400 font-semibold">
+                  🎓 Your personalised report has been emailed to you. Check your inbox.
+                </div>
+              )}
             </TimelineStep>
           )
         })}
       </div>
 
+      {/* ── Counselling Report Ready — success banner ── */}
+      {booking.status === 'counselling_report_ready' && (
+        <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-300 dark:border-green-700 rounded-xl">
+          <div className="font-semibold text-green-800 dark:text-green-300 text-sm mb-1">🎉 Your Counselling Report is Ready!</div>
+          <p className="text-green-700 dark:text-green-400 text-xs mb-3">
+            Your personalised 1:1 career counselling report has been prepared by <strong>{booking.counsellorName || 'Adish Gupta'}</strong> and emailed to your registered address. Check your inbox (and spam folder if not visible).
+          </p>
+          <p className="text-green-700 dark:text-green-400 text-xs">
+            Questions? Reach us at{' '}
+            <a href={`mailto:${booking.counsellorContact || 'adish@cadgurukul.com'}`} className="underline font-semibold">
+              {booking.counsellorContact || 'adish@cadgurukul.com'}
+            </a>
+          </p>
+        </div>
+      )}
+
       {/* ── Action Required: Slot not yet selected ── */}
       {booking.status === 'slot_mail_sent' && (
-        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-300 rounded-xl">
-          <div className="font-semibold text-yellow-800 text-sm mb-1">⏰ Action Required — Select Your Session Slot</div>
-          <p className="text-yellow-700 text-xs mb-3">
+        <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-300 dark:border-yellow-700 rounded-xl">
+          <div className="font-semibold text-yellow-800 dark:text-yellow-300 text-sm mb-1">⏰ Action Required — Select Your Session Slot</div>
+          <p className="text-yellow-700 dark:text-yellow-400 text-xs mb-3">
             A slot-selection link was sent to your registered email ({booking.resendCount > 0 ? `resent ${booking.resendCount} time${booking.resendCount !== 1 ? 's' : ''}` : 'initial send'}). Click the link in the email to choose your preferred session time.
           </p>
 
           {/* Resend section */}
-          <div className="border-t border-yellow-200 pt-3">
-            <div className="text-xs text-yellow-700 font-semibold mb-2">Didn't receive the email?</div>
+          <div className="border-t border-yellow-200 dark:border-yellow-700 pt-3">
+            <div className="text-xs text-yellow-700 dark:text-yellow-400 font-semibold mb-2">Didn't receive the email?</div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
               <button
                 onClick={handleResend}
                 disabled={resending || !cooldownOver}
                 className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition ${
                   resending || !cooldownOver
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600 cursor-not-allowed'
                     : 'bg-yellow-600 text-white border-yellow-700 hover:bg-yellow-700'
                 }`}
               >
                 {resending ? '⏳ Sending…' : cooldownOver ? '📧 Resend Slot-Selection Email' : `⏳ Resend in ${minutesLeft} min`}
               </button>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
                 Also check spam/junk folder · 
                 <a href="mailto:support@cadgurukul.com" className="text-brand-red ml-1 underline">Contact support</a>
               </span>
             </div>
             {resendResult && (
-              <div className={`mt-2 text-xs px-3 py-2 rounded-lg ${resendResult.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              <div className={`mt-2 text-xs px-3 py-2 rounded-lg ${resendResult.ok ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700'}`}>
                 {resendResult.ok ? '✅ ' : '❌ '}{resendResult.message}
               </div>
             )}
@@ -416,15 +540,15 @@ function ConsultationTimeline({ booking, onResend }) {
 
       {/* Slot selected — waiting for team to schedule */}
       {booking.status === 'slot_selected' && (
-        <div className="mt-4 p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-800">
+        <div className="mt-4 p-3 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-700 rounded-xl text-xs text-teal-800 dark:text-teal-300">
           <strong>✅ Slot confirmed!</strong> Our team will send you the exact meeting date and Zoom/Meet link within <strong>24 hours</strong>. Check your email inbox.
         </div>
       )}
 
       {/* Meeting scheduled — action link */}
       {booking.status === 'meeting_scheduled' && booking.meetingLink && (
-        <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-xl">
-          <div className="text-xs text-purple-800 font-semibold mb-2">Your meeting is confirmed!</div>
+        <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-700 rounded-xl">
+          <div className="text-xs text-purple-800 dark:text-purple-300 font-semibold mb-2">Your meeting is confirmed!</div>
           <a href={booking.meetingLink} target="_blank" rel="noopener noreferrer"
             className="inline-block bg-purple-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-purple-700 transition">
             Join Meeting →
@@ -433,11 +557,11 @@ function ConsultationTimeline({ booking, onResend }) {
       )}
 
       {/* Counsellor card */}
-      <div className="mt-4 pt-4 border-t border-orange-100 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-xl shrink-0">👨‍💼</div>
+      <div className="mt-4 pt-4 border-t border-orange-100 dark:border-orange-900/40 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-xl shrink-0">👨‍💼</div>
         <div>
-          <div className="font-bold text-sm text-brand-dark">{booking.counsellorName || 'Adish Gupta'}</div>
-          <div className="text-xs text-gray-500">{booking.counsellorExpertise || 'Career Guidance Specialist'}</div>
+          <div className="font-bold text-sm text-brand-dark dark:text-gray-100">{booking.counsellorName || 'Adish Gupta'}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">{booking.counsellorExpertise || 'Career Guidance Specialist'}</div>
           <a href={`mailto:${booking.counsellorContact || 'adish@cadgurukul.com'}`} className="text-xs text-brand-red">
             {booking.counsellorContact || 'adish@cadgurukul.com'}
           </a>
@@ -466,7 +590,7 @@ function FunnelProgress({ status }) {
   const currentIdx = resolveStatusIndex(status)
   return (
     <div className="card mb-6">
-      <h3 className="font-bold text-brand-dark mb-4 text-sm">🗺️ Your Career Journey Progress</h3>
+      <h3 className="font-bold text-brand-dark dark:text-gray-100 mb-4 text-sm">🗺️ Your Career Journey Progress</h3>
       <div className="flex items-center gap-1 overflow-x-auto pb-2">
         {FUNNEL_STEPS.map((step, idx) => {
           const done    = idx <= currentIdx
@@ -474,19 +598,23 @@ function FunnelProgress({ status }) {
           return (
             <div key={step.key} className="flex items-center gap-1 shrink-0">
               <div className={`flex flex-col items-center gap-1 ${done ? 'opacity-100' : 'opacity-40'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 ${current ? 'border-brand-red bg-red-50' : done ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 ${
+                  current ? 'border-brand-red bg-red-50 dark:bg-red-950/30' :
+                  done    ? 'border-green-500 bg-green-50 dark:bg-green-950/30' :
+                             'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800'
+                }`}>
                   {step.icon}
                 </div>
-                <span className="text-[10px] text-center text-gray-500 leading-tight max-w-[56px]">{step.label}</span>
+                <span className="text-[10px] text-center text-gray-500 dark:text-gray-400 leading-tight max-w-[56px]">{step.label}</span>
               </div>
               {idx < FUNNEL_STEPS.length - 1 && (
-                <div className={`w-4 h-0.5 mb-4 rounded ${idx < currentIdx ? 'bg-green-400' : 'bg-gray-200'}`} />
+                <div className={`w-4 h-0.5 mb-4 rounded ${idx < currentIdx ? 'bg-green-400' : 'bg-gray-200 dark:bg-gray-600'}`} />
               )}
             </div>
           )
         })}
       </div>
-      <p className="mt-2 text-xs text-gray-500">Current: {status?.replace(/_/g, ' ') || 'new lead'}</p>
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Current: {status?.replace(/_/g, ' ') || 'new lead'}</p>
     </div>
   )
 }
@@ -588,22 +716,25 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-gray-500">Loading your dashboard...</p>
+          <p className="text-gray-500 dark:text-gray-400">Loading your dashboard...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header strip */}
       <div className="bg-gradient-to-r from-brand-dark to-brand-navy text-white py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold">Welcome back, {profile?.fullName || user?.email?.split('@')[0]}! 👋</h1>
-          <p className="text-gray-300 text-sm mt-1">Your career journey dashboard</p>
+        <div className="max-w-6xl mx-auto flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Welcome back, {profile?.fullName || user?.email?.split('@')[0]}! 👋</h1>
+            <p className="text-gray-300 text-sm mt-1">Your career journey dashboard</p>
+          </div>
+          <ThemeToggle className="mt-1" />
         </div>
       </div>
 
@@ -630,10 +761,10 @@ export default function Dashboard() {
 
         {/* Profile not complete notice */}
         {(!profile || !profile.isOnboardingComplete) && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-xl p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <div className="font-semibold text-amber-800">⚠️ Complete Your Profile First</div>
-              <p className="text-amber-700 text-sm mt-0.5">Fill in your details to get an accurate, personalized career report.</p>
+              <div className="font-semibold text-amber-800 dark:text-amber-300">⚠️ Complete Your Profile First</div>
+              <p className="text-amber-700 dark:text-amber-400 text-sm mt-0.5">Fill in your details to get an accurate, personalized career report.</p>
             </div>
             <Link to="/onboarding" className="btn-primary shrink-0 text-sm px-5 py-2">Complete Profile →</Link>
           </div>

@@ -58,9 +58,11 @@ router.patch('/leads/:id', adminController.updateLeadAdmin);
 router.put('/leads/:id/assign', adminController.assignLead);
 router.post('/leads/:id/actions', validate(triggerActionSchema), adminController.triggerAdminAction);
 
-// ─── Discount Policies (Phase 6) ─────────────────────────────────────────────
-router.get('/discount-policies', cclAdminController.listPolicies);
-router.put('/discount-policies', cclAdminController.upsertPolicy);
+// ─── Discount Policies (Phase 6 + Phase 9) ───────────────────────────────────
+router.get('/discount-policies/history', cclAdminController.listPolicyHistory);
+router.get('/discount-policies',         cclAdminController.listPolicies);
+router.put('/discount-policies',         cclAdminController.upsertPolicy);
+router.delete('/discount-policies/:id',  cclAdminController.deletePolicy);
 
 // ─── CCL Business Layer Oversight ────────────────────────────────────────────
 // Admin can inspect and manage the entire CCL financial layer.

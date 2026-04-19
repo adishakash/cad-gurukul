@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { staffApiClient, staffLeadApi, staffApi, staffLeadBizApi } from '../../services/api'
+import ThemeToggle from '../../components/ThemeToggle'
 
 const StatCard = ({ icon, label, value }) => (
   <div className="card text-center hover:shadow-lg transition-shadow">
     <div className="text-3xl mb-2">{icon}</div>
-    <div className="text-3xl font-extrabold text-brand-dark">{value ?? '—'}</div>
-    <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
+    <div className="text-3xl font-extrabold text-brand-dark dark:text-gray-100">{value ?? '—'}</div>
+    <div className="text-sm font-semibold text-gray-600 dark:text-gray-300 mt-1">{label}</div>
   </div>
 )
 
@@ -15,19 +16,19 @@ const Table = ({ headers, rows, emptyText = 'No data.' }) => (
   <div className="overflow-x-auto">
     <table className="w-full text-sm">
       <thead>
-        <tr className="bg-gray-50 border-b">
+        <tr className="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
           {headers.map((h) => (
-            <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">{h}</th>
+            <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{h}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {rows.length === 0 ? (
-          <tr><td colSpan={headers.length} className="text-center py-8 text-gray-400">{emptyText}</td></tr>
+          <tr><td colSpan={headers.length} className="text-center py-8 text-gray-400 dark:text-gray-500">{emptyText}</td></tr>
         ) : rows.map((row, i) => (
-          <tr key={i} className="border-b hover:bg-gray-50 transition-colors">
+          <tr key={i} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
             {row.map((cell, j) => (
-              <td key={j} className="px-4 py-3 text-gray-700">{cell}</td>
+              <td key={j} className="px-4 py-3 text-gray-700 dark:text-gray-300">{cell}</td>
             ))}
           </tr>
         ))}
@@ -76,6 +77,7 @@ export default function LeadDashboard() {
   // Assigned Prospects
   const [prospects, setProspects]     = useState([])
   const [prospectsLoading, setProspectsLoading] = useState(false)
+  const prospectsLastFetched = useRef(null) // 30-second cache TTL
 
   const staff = JSON.parse(localStorage.getItem('cg_staff') || '{}')
 
@@ -172,17 +174,21 @@ export default function LeadDashboard() {
     }
   }, [])
 
+  const fetchProspects = useCallback((force = false) => {
+    const now = Date.now()
+    if (!force && prospectsLastFetched.current && now - prospectsLastFetched.current < 30_000) return
+    setProspectsLoading(true)
+    staffLeadBizApi.getAssignedProspects()
+      .then((r) => { setProspects(r.data.data?.prospects || []); prospectsLastFetched.current = Date.now() })
+      .catch(() => toast.error('Failed to load assigned prospects'))
+      .finally(() => setProspectsLoading(false))
+  }, [])
+
   const handleTabChange = (tab) => {
     setActiveTab(tab)
     const bizTabs = ['account', 'joining-links', 'payouts', 'training']
     if (bizTabs.includes(tab)) loadBizData(tab)
-    if (tab === 'assigned-prospects' && prospects.length === 0) {
-      setProspectsLoading(true)
-      staffLeadBizApi.getAssignedProspects()
-        .then((r) => setProspects(r.data.data?.prospects || []))
-        .catch(() => toast.error('Failed to load assigned prospects'))
-        .finally(() => setProspectsLoading(false))
-    }
+    if (tab === 'assigned-prospects') fetchProspects()
   }
 
   const loadTxPage = async (page) => {
@@ -244,15 +250,16 @@ export default function LeadDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
       {/* Navbar */}
-      <div className="bg-brand-dark text-white px-6 py-3 flex items-center justify-between">
+      <div className="bg-brand-dark dark:bg-gray-900 border-b border-gray-800 text-white px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="font-extrabold text-lg">🎓 CAD Gurukul — Staff Portal</span>
           <span className="text-xs bg-blue-600 px-2 py-0.5 rounded-full">{staff.role || 'CAREER_COUNSELLOR_LEAD'}</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-300">{staff.name}</span>
+          <ThemeToggle />
           <button onClick={logout} className="text-sm hover:text-brand-red transition-colors">Logout</button>
         </div>
       </div>
@@ -272,7 +279,7 @@ export default function LeadDashboard() {
               key={t}
               onClick={() => handleTabChange(t)}
               className={`px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
-                activeTab === t ? 'bg-brand-red text-white' : 'bg-white text-gray-600 hover:bg-gray-100 border'
+                activeTab === t ? 'bg-brand-red text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border dark:border-gray-700'
               }`}
             >
               {TAB_LABELS[t] || t}
@@ -708,9 +715,12 @@ export default function LeadDashboard() {
             )}
             {activeTab === 'assigned-prospects' && (
               <div className="space-y-4">
-                <div>
-                  <h3 className="font-bold text-brand-dark text-lg">Assigned Prospects</h3>
-                  <p className="text-sm text-gray-500 mt-1">Leads assigned to you by the admin team for follow-up.</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Assigned Prospects</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Leads assigned to you by the admin team for follow-up.</p>
+                  </div>
+                  <button onClick={() => fetchProspects(true)} disabled={prospectsLoading} className="btn-secondary text-sm px-4 py-2 disabled:opacity-50">↻ Refresh</button>
                 </div>
                 {prospectsLoading ? (
                   <div className="flex justify-center py-12">

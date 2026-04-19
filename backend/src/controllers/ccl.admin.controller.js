@@ -380,6 +380,7 @@ const updatePayoutStatus = async (req, res) => {
 const listAllTraining = async (req, res) => {
   try {
     const content = await prisma.cclTrainingContent.findMany({
+      where: { deletedAt: null },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
     });
     return successResponse(res, content);
@@ -528,11 +529,12 @@ const listTrainingHistory = async (req, res) => {
 
 /**
  * GET /api/v1/admin/discount-policies
- * List all discount policy records.
+ * List all active (non-deleted) discount policy records.
  */
 const listPolicies = async (req, res) => {
   try {
     const policies = await prisma.discountPolicy.findMany({
+      where: { deletedAt: null },
       orderBy: [{ role: 'asc' }, { planType: 'asc' }],
     });
     return successResponse(res, policies);
@@ -564,7 +566,7 @@ const upsertPolicy = async (req, res) => {
 
     const policy = await prisma.discountPolicy.upsert({
       where:  { role_planType: { role, planType } },
-      update: { minPct: Number(minPct), maxPct: Number(maxPct), isActive: Boolean(isActive) },
+      update: { minPct: Number(minPct), maxPct: Number(maxPct), isActive: Boolean(isActive), deletedAt: null, deletedBy: null },
       create: { role, planType, minPct: Number(minPct), maxPct: Number(maxPct), isActive: Boolean(isActive) },
     });
 
@@ -573,6 +575,46 @@ const upsertPolicy = async (req, res) => {
   } catch (err) {
     logger.error('[Admin] upsertPolicy error', { error: err.message });
     return errorResponse(res, 'Failed to save discount policy', 500);
+  }
+};
+
+/**
+ * DELETE /api/v1/admin/discount-policies/:id
+ * Soft-delete a discount policy by ID. Preserves audit trail.
+ */
+const deletePolicy = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.discountPolicy.findUnique({ where: { id } });
+    if (!existing) return errorResponse(res, 'Discount policy not found', 404, 'NOT_FOUND');
+    if (existing.deletedAt) return errorResponse(res, 'Discount policy is already deleted', 409, 'ALREADY_DELETED');
+
+    await prisma.discountPolicy.update({
+      where: { id },
+      data: { isActive: false, deletedAt: new Date(), deletedBy: req.user?.id || null },
+    });
+    logger.info('[Admin] DiscountPolicy soft-deleted', { id, adminId: req.user?.id });
+    return successResponse(res, null, 'Discount policy deleted and preserved in history');
+  } catch (err) {
+    logger.error('[Admin] deletePolicy error', { error: err.message });
+    return errorResponse(res, 'Failed to delete discount policy', 500);
+  }
+};
+
+/**
+ * GET /api/v1/admin/discount-policies/history
+ * List all soft-deleted discount policies for audit / history view.
+ */
+const listPolicyHistory = async (req, res) => {
+  try {
+    const policies = await prisma.discountPolicy.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+    return successResponse(res, policies);
+  } catch (err) {
+    logger.error('[Admin] listPolicyHistory error', { error: err.message });
+    return errorResponse(res, 'Failed to load discount policy history', 500);
   }
 };
 
@@ -594,7 +636,9 @@ module.exports = {
   updateTrainingContent,
   deleteTrainingContent,
   listTrainingHistory,
-  // Discount policies (Phase 6)
+  // Discount policies (Phase 6 + Phase 9)
   listPolicies,
   upsertPolicy,
+  deletePolicy,
+  listPolicyHistory,
 };

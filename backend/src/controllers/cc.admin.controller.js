@@ -377,6 +377,7 @@ const updatePayoutStatus = async (req, res) => {
 const listAllTraining = async (req, res) => {
   try {
     const content = await prisma.cclTrainingContent.findMany({
+      where: { deletedAt: null },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
     });
     return successResponse(res, content);

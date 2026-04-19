@@ -1011,16 +1011,22 @@ model CcDiscount {
 /// Admin-managed discount policy per role+planType.
 /// Defines the allowed min/max discount range staff can apply at link creation.
 model DiscountPolicy {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   role      String   // "CAREER_COUNSELLOR_LEAD" | "CAREER_COUNSELLOR"
   planType  String   // "joining" | "499plan" | "standard" | "premium" | "consultation"
   minPct    Float    @default(0)
   maxPct    Float    @default(20)
   isActive  Boolean  @default(true)
+
+  // Soft delete / history
+  deletedAt DateTime?
+  deletedBy String?   // adminUser.id
+
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 
   @@unique([role, planType])
+  @@index([deletedAt])
   @@map("discount_policies")
 }
 

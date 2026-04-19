@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi, adminUserApi } from '../../services/api'
+import ThemeToggle from '../../components/ThemeToggle'
 
 const StatCard = ({ icon, label, value, sub, highlight }) => (
-  <div className={`card text-center hover:shadow-lg transition-shadow ${highlight ? 'border-2 border-brand-red bg-red-50' : ''}`}>
+  <div className={`card text-center hover:shadow-lg transition-shadow ${highlight ? 'border-2 border-brand-red bg-red-50 dark:bg-red-950/30' : ''}`}>
     <div className="text-3xl mb-2">{icon}</div>
-    <div className="text-3xl font-extrabold text-brand-dark">{value ?? '—'}</div>
-    <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
-    {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+    <div className="text-3xl font-extrabold text-brand-dark dark:text-gray-100">{value ?? '—'}</div>
+    <div className="text-sm font-semibold text-gray-600 dark:text-gray-300 mt-1">{label}</div>
+    {sub && <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{sub}</div>}
   </div>
 )
 
@@ -16,19 +17,19 @@ const Table = ({ headers, rows, emptyText = 'No data.' }) => (
   <div className="overflow-x-auto">
     <table className="w-full text-sm">
       <thead>
-        <tr className="bg-gray-50 border-b">
+        <tr className="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
           {headers.map((h) => (
-            <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">{h}</th>
+            <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{h}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {rows.length === 0 ? (
-          <tr><td colSpan={headers.length} className="text-center py-8 text-gray-400">{emptyText}</td></tr>
+          <tr><td colSpan={headers.length} className="text-center py-8 text-gray-400 dark:text-gray-500">{emptyText}</td></tr>
         ) : rows.map((row, i) => (
-          <tr key={i} className="border-b hover:bg-gray-50 transition-colors">
+          <tr key={i} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
             {row.map((cell, j) => (
-              <td key={j} className="px-4 py-3 text-gray-700">{cell}</td>
+              <td key={j} className="px-4 py-3 text-gray-700 dark:text-gray-300">{cell}</td>
             ))}
           </tr>
         ))}
@@ -48,10 +49,13 @@ export default function AdminDashboard() {
   const [loading, setLoading]     = useState(true)
 
   // Phase 6: Discount policy state
-  const [policies, setPolicies]           = useState([])
-  const [policyForm, setPolicyForm]       = useState({ role: 'CAREER_COUNSELLOR_LEAD', planType: 'joining', minPct: 0, maxPct: 20, isActive: true })
-  const [policySaving, setPolicySaving]   = useState(false)
-  const [discountLoaded, setDiscountLoaded] = useState(false)
+  const [policies, setPolicies]               = useState([])
+  const [policyHistory, setPolicyHistory]     = useState([])
+  const [policyForm, setPolicyForm]           = useState({ role: 'CAREER_COUNSELLOR_LEAD', planType: 'joining', minPct: 0, maxPct: 20, isActive: true })
+  const [policySaving, setPolicySaving]       = useState(false)
+  const [discountLoaded, setDiscountLoaded]   = useState(false)
+  const [discountSubTab, setDiscountSubTab]   = useState('current') // 'current' | 'history'
+  const [deletingPolicyId, setDeletingPolicyId] = useState(null)
 
   // Phase 6: Training state
   const [trainingItems, setTrainingItems]   = useState([])
@@ -119,11 +123,15 @@ export default function AdminDashboard() {
     navigate('/admin/login')
   }
 
-  // Phase 6: load discount policies on tab switch
+  // Phase 6 + Phase 9: load discount policies + history
   const loadDiscountPolicies = async () => {
     try {
-      const res = await adminDiscountApi.listPolicies()
-      setPolicies(res.data.data || [])
+      const [activeRes, historyRes] = await Promise.all([
+        adminDiscountApi.listPolicies(),
+        adminDiscountApi.listHistory(),
+      ])
+      setPolicies(activeRes.data.data || [])
+      setPolicyHistory(historyRes.data.data || [])
       setDiscountLoaded(true)
     } catch {
       toast.error('Failed to load discount policies.')
@@ -133,14 +141,31 @@ export default function AdminDashboard() {
   const handleSavePolicy = async (e) => {
     e.preventDefault()
     setPolicySaving(true)
+    // Detect if we're restoring a previously-deleted policy (same role + planType exists in history)
+    const isRestore = policyHistory.some(
+      (h) => h.role === policyForm.role && h.planType === policyForm.planType
+    )
     try {
       await adminDiscountApi.upsertPolicy(policyForm)
-      toast.success('Discount policy saved.')
+      toast.success(isRestore ? 'Policy restored from deleted history.' : 'Discount policy saved.')
       await loadDiscountPolicies()
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to save policy.')
     } finally {
       setPolicySaving(false)
+    }
+  }
+
+  const handleDeletePolicy = async (policy) => {
+    setDeletingPolicyId(policy.id)
+    try {
+      await adminDiscountApi.deletePolicy(policy.id)
+      toast.success('Discount policy deleted and moved to history.')
+      await loadDiscountPolicies()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to delete policy.')
+    } finally {
+      setDeletingPolicyId(null)
     }
   }
 
@@ -227,9 +252,9 @@ export default function AdminDashboard() {
   const tabs = ['overview', 'leads', 'users', 'payments', 'ai-usage', 'discounts', 'training']
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
       {/* Navbar */}
-      <div className="bg-brand-dark text-white px-6 py-3 flex items-center justify-between">
+      <div className="bg-brand-dark dark:bg-gray-900 border-b border-gray-800 text-white px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="font-extrabold text-lg">⚙️ CAD Gurukul Admin</span>
           <span className="text-xs bg-brand-red px-2 py-0.5 rounded-full">{admin.role || 'ADMIN'}</span>
@@ -239,6 +264,7 @@ export default function AdminDashboard() {
           <Link to="/admin/partners" className="text-sm text-gray-300 hover:text-white transition-colors">🤝 Partners</Link>
           <Link to="/admin/payouts" className="text-sm text-gray-300 hover:text-white transition-colors">💰 Payouts</Link>
           <span className="text-sm text-gray-300">{admin.name}</span>
+          <ThemeToggle />
           <button onClick={logout} className="text-sm hover:text-brand-red transition-colors">Logout</button>
         </div>
       </div>
@@ -251,7 +277,7 @@ export default function AdminDashboard() {
               key={t}
               onClick={() => setActiveTab(t)}
               className={`px-5 py-2 rounded-full text-sm font-semibold capitalize whitespace-nowrap transition-all ${
-                activeTab === t ? 'bg-brand-red text-white' : 'bg-white text-gray-600 hover:bg-gray-100 border'
+                activeTab === t ? 'bg-brand-red text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border dark:border-gray-700'
               }`}
             >
               {t.replace('-', ' ')}
@@ -271,8 +297,8 @@ export default function AdminDashboard() {
                 {funnel && (
                   <div className="mb-8">
                     <div className="flex items-center justify-between mb-3">
-                      <h2 className="font-bold text-gray-900">Conversion Funnel (Last 30 days)</h2>
-                      <span className="text-sm font-semibold text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                      <h2 className="font-bold text-gray-900 dark:text-gray-100">Conversion Funnel (Last 30 days)</h2>
+                      <span className="text-sm font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 px-3 py-1 rounded-full">
                         {funnel.conversionRate} conversion rate
                       </span>
                     </div>
@@ -291,12 +317,12 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Revenue */}
-                    <div className="mt-4 bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center justify-between">
+                    <div className="mt-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl px-5 py-4 flex items-center justify-between">
                       <div>
-                        <div className="font-bold text-green-900">Total Revenue (30 days)</div>
-                        <div className="text-sm text-green-700">From verified Razorpay payments</div>
+                        <div className="font-bold text-green-900 dark:text-green-300">Total Revenue (30 days)</div>
+                        <div className="text-sm text-green-700 dark:text-green-400">From verified Razorpay payments</div>
                       </div>
-                      <div className="text-3xl font-extrabold text-green-700">₹{Number(funnel.totalRevenueRupees).toLocaleString('en-IN')}</div>
+                      <div className="text-3xl font-extrabold text-green-700 dark:text-green-400">₹{Number(funnel.totalRevenueRupees).toLocaleString('en-IN')}</div>
                     </div>
                   </div>
                 )}
@@ -314,7 +340,7 @@ export default function AdminDashboard() {
                 {/* Quick links */}
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="card">
-                    <h3 className="font-bold text-brand-dark mb-4">Quick Actions</h3>
+                    <h3 className="font-bold text-brand-dark dark:text-gray-100 mb-4">Quick Actions</h3>
                     <div className="flex flex-wrap gap-3">
                       <Link to="/admin/leads" className="btn-outline text-sm">👥 Manage Leads</Link>
                       <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export Leads CSV</button>
@@ -323,8 +349,8 @@ export default function AdminDashboard() {
                   </div>
                   {aiStats && (
                     <div className="card">
-                      <h3 className="font-bold text-brand-dark mb-4">AI Usage</h3>
-                      <div className="space-y-2 text-sm text-gray-700">
+                      <h3 className="font-bold text-brand-dark dark:text-gray-100 mb-4">AI Usage</h3>
+                      <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
                         <div className="flex justify-between"><span>Total AI calls</span><strong>{aiStats.totals?._count?.id || 0}</strong></div>
                         <div className="flex justify-between"><span>Total tokens</span><strong>{(aiStats.totals?._sum?.totalTokens || 0).toLocaleString()}</strong></div>
                         <div className="flex justify-between"><span>Avg latency</span><strong>{Math.round(aiStats.totals?._avg?.latencyMs || 0)}ms</strong></div>
@@ -338,44 +364,44 @@ export default function AdminDashboard() {
             {activeTab === 'leads' && (
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-brand-dark text-lg">Lead Management</h3>
+                  <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Lead Management</h3>
                   <Link to="/admin/leads" className="btn-primary text-sm">Open Full Lead Manager →</Link>
                 </div>
-                <p className="text-sm text-gray-500">Use the full lead manager for filters, search, status updates, and manual actions.</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Use the full lead manager for filters, search, status updates, and manual actions.</p>
               </div>
             )}
 
             {activeTab === 'users' && (
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-brand-dark text-lg">Users ({users.length})</h3>
+                  <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Users ({users.length})</h3>
                   <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export CSV</button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 border-b">
+                      <tr className="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
                         {['Name', 'Email', 'Role', 'Class', 'City', 'Joined', 'Action'].map((h) => (
-                          <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">{h}</th>
+                          <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {users.length === 0 ? (
-                        <tr><td colSpan={7} className="text-center py-8 text-gray-400">No users found.</td></tr>
+                        <tr><td colSpan={7} className="text-center py-8 text-gray-400 dark:text-gray-500">No users found.</td></tr>
                       ) : users.map((u) => (
-                        <tr key={u.id} className="border-b hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 text-gray-700">{u.studentProfile?.fullName || u.email.split('@')[0]}</td>
-                          <td className="px-4 py-3 text-gray-700">{u.email}</td>
-                          <td className="px-4 py-3 text-gray-700">{u.role}</td>
-                          <td className="px-4 py-3 text-gray-700">{u.studentProfile?.classStandard?.replace('CLASS_', 'Class ') || '—'}</td>
-                          <td className="px-4 py-3 text-gray-700">{u.studentProfile?.city || '—'}</td>
-                          <td className="px-4 py-3 text-gray-700">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
+                        <tr key={u.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.studentProfile?.fullName || u.email.split('@')[0]}</td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.email}</td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.role}</td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.studentProfile?.classStandard?.replace('CLASS_', 'Class ') || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.studentProfile?.city || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
                           <td className="px-4 py-3">
                             <button
                               onClick={() => handleDeleteUser(u.id, u.studentProfile?.fullName || u.email)}
                               disabled={deletingUserId === u.id || u.role === 'ADMIN'}
-                              className="text-xs px-2 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 font-semibold transition disabled:opacity-40"
+                              className="text-xs px-2 py-1 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-semibold transition disabled:opacity-40"
                             >
                               {deletingUserId === u.id ? '…' : 'Delete'}
                             </button>
@@ -391,7 +417,7 @@ export default function AdminDashboard() {
             {activeTab === 'payments' && (
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-brand-dark text-lg">Payments ({payments.length})</h3>
+                  <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Payments ({payments.length})</h3>
                   <button onClick={() => handleExport('payments')} className="btn-outline text-sm">⬇ Export CSV</button>
                 </div>
                 <Table
@@ -410,7 +436,7 @@ export default function AdminDashboard() {
 
             {activeTab === 'ai-usage' && aiStats && (
               <div className="card">
-                <h3 className="font-bold text-brand-dark text-lg mb-6">AI Usage Breakdown</h3>
+                <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg mb-6">AI Usage Breakdown</h3>
                 <div className="grid md:grid-cols-3 gap-4 mb-6">
                   <StatCard icon="🤖" label="Total AI Sessions" value={aiStats.totals?._count?.id || 0} />
                   <StatCard
@@ -444,17 +470,17 @@ export default function AdminDashboard() {
             {activeTab === 'discounts' && (
               <div className="space-y-6">
                 <div className="card">
-                  <h3 className="font-bold text-brand-dark text-lg mb-4">Discount Policy Editor</h3>
+                  <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg mb-4">Discount Policy Editor</h3>
                   <form onSubmit={handleSavePolicy} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Role</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Role</label>
                       <select value={policyForm.role} onChange={(e) => setPolicyForm((f) => ({ ...f, role: e.target.value }))} className="input-field text-sm w-full">
                         <option value="CAREER_COUNSELLOR_LEAD">Career Counsellor Lead (CCL)</option>
                         <option value="CAREER_COUNSELLOR">Career Counsellor (CC)</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Plan Type</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Plan Type</label>
                       <select value={policyForm.planType} onChange={(e) => setPolicyForm((f) => ({ ...f, planType: e.target.value }))} className="input-field text-sm w-full">
                         <option value="joining">joining (CCL joining fee)</option>
                         <option value="standard">standard (₹12,000 plan)</option>
@@ -464,16 +490,16 @@ export default function AdminDashboard() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Min Discount %</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Min Discount %</label>
                       <input type="number" min="0" max="100" step="0.5" value={policyForm.minPct} onChange={(e) => setPolicyForm((f) => ({ ...f, minPct: Number(e.target.value) }))} className="input-field text-sm w-full" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Max Discount %</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Max Discount %</label>
                       <input type="number" min="0" max="100" step="0.5" value={policyForm.maxPct} onChange={(e) => setPolicyForm((f) => ({ ...f, maxPct: Number(e.target.value) }))} className="input-field text-sm w-full" />
                     </div>
                     <div className="flex items-center gap-2 pt-5">
                       <input type="checkbox" id="policyActive" checked={policyForm.isActive} onChange={(e) => setPolicyForm((f) => ({ ...f, isActive: e.target.checked }))} className="w-4 h-4" />
-                      <label htmlFor="policyActive" className="text-sm text-gray-700">Policy active</label>
+                      <label htmlFor="policyActive" className="text-sm text-gray-700 dark:text-gray-300">Policy active</label>
                     </div>
                     <div className="flex items-end">
                       <button type="submit" disabled={policySaving} className="btn-primary text-sm w-full">
@@ -485,22 +511,62 @@ export default function AdminDashboard() {
 
                 <div className="card">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-brand-dark text-lg">Current Policies ({policies.length})</h3>
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">
+                        {discountSubTab === 'current' ? `Current Policies (${policies.length})` : `Deleted History (${policyHistory.length})`}
+                      </h3>
+                      <div className="flex gap-1">
+                        {[
+                          { key: 'current', label: 'Current' },
+                          { key: 'history', label: '🗑 Deleted History' },
+                        ].map(({ key, label }) => (
+                          <button
+                            key={key}
+                            onClick={() => setDiscountSubTab(key)}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold transition ${discountSubTab === key ? 'bg-brand-red text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <button onClick={loadDiscountPolicies} className="btn-secondary text-sm">↻ Refresh</button>
                   </div>
-                  <Table
-                    headers={['Role', 'Plan Type', 'Min %', 'Max %', 'Active']}
-                    rows={policies.map((p) => [
-                      p.role === 'CAREER_COUNSELLOR_LEAD' ? 'CCL' : 'CC',
-                      p.planType,
-                      `${p.minPct}%`,
-                      `${p.maxPct}%`,
-                      p.isActive
-                        ? <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Active</span>
-                        : <span key="i" className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">Inactive</span>,
-                    ])}
-                    emptyText="No discount policies set. Add one above."
-                  />
+                  {discountSubTab === 'current' ? (
+                    <Table
+                      headers={['Role', 'Plan Type', 'Min %', 'Max %', 'Active', 'Action']}
+                      rows={policies.map((p) => [
+                        p.role === 'CAREER_COUNSELLOR_LEAD' ? 'CCL' : 'CC',
+                        p.planType,
+                        `${p.minPct}%`,
+                        `${p.maxPct}%`,
+                        p.isActive
+                          ? <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">Active</span>
+                          : <span key="i" className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">Inactive</span>,
+                        <button
+                          key="del"
+                          onClick={() => handleDeletePolicy(p)}
+                          disabled={deletingPolicyId === p.id}
+                          className="text-xs px-2 py-1 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-semibold transition disabled:opacity-50"
+                        >
+                          {deletingPolicyId === p.id ? '…' : '🗑 Delete'}
+                        </button>,
+                      ])}
+                      emptyText="No active discount policies. Add one above."
+                    />
+                  ) : (
+                    <Table
+                      headers={['Role', 'Plan Type', 'Min %', 'Max %', 'Deleted On']}
+                      rows={policyHistory.map((p) => [
+                        p.role === 'CAREER_COUNSELLOR_LEAD' ? 'CCL' : 'CC',
+                        p.planType,
+                        `${p.minPct}%`,
+                        `${p.maxPct}%`,
+                        p.deletedAt ? new Date(p.deletedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+                      ])}
+                      emptyText="No deleted policies."
+                    />
+                  )}
                 </div>
               </div>
             )}
@@ -509,14 +575,14 @@ export default function AdminDashboard() {
             {activeTab === 'training' && (
               <div className="space-y-6">
                 <div className="card">
-                  <h3 className="font-bold text-brand-dark text-lg mb-4">Add Training Content</h3>
+                  <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg mb-4">Add Training Content</h3>
                   <form onSubmit={handleCreateTraining} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Title *</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Title *</label>
                       <input type="text" required value={trainingForm.title} onChange={(e) => setTrainingForm((f) => ({ ...f, title: e.target.value }))} placeholder="e.g. Career Counselling Guide" className="input-field text-sm w-full" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Type</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Type</label>
                       <select value={trainingForm.type} onChange={(e) => setTrainingForm((f) => ({ ...f, type: e.target.value }))} className="input-field text-sm w-full">
                         <option value="document">Document</option>
                         <option value="video">Video</option>
@@ -524,7 +590,7 @@ export default function AdminDashboard() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Target Role</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Target Role</label>
                       <select value={trainingForm.targetRole} onChange={(e) => setTrainingForm((f) => ({ ...f, targetRole: e.target.value }))} className="input-field text-sm w-full">
                         <option value="ALL">All Staff (CCL + CC)</option>
                         <option value="CCL">CCL Only</option>
@@ -532,17 +598,17 @@ export default function AdminDashboard() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">URL (if no file upload)</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">URL (if no file upload)</label>
                       <input type="url" value={trainingForm.url} onChange={(e) => setTrainingForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." className="input-field text-sm w-full" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">File Upload (pdf, docx, mp4, etc.)</label>
+                      <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">File Upload (pdf, docx, mp4, etc.)</label>
                       <input type="file" accept=".pdf,.txt,.epub,.mp4,.mkv,.doc,.docx" onChange={(e) => setTrainingFile(e.target.files[0] || null)} className="text-sm w-full" />
                       <p className="text-xs text-gray-400 mt-0.5">Max 200MB (video), 50MB (document)</p>
                     </div>
                     <div className="flex items-center gap-2 pt-5">
                       <input type="checkbox" id="isDownloadable" checked={trainingForm.isDownloadable} onChange={(e) => setTrainingForm((f) => ({ ...f, isDownloadable: e.target.checked }))} className="w-4 h-4" />
-                      <label htmlFor="isDownloadable" className="text-sm text-gray-700">Downloadable by staff</label>
+                      <label htmlFor="isDownloadable" className="text-sm text-gray-700 dark:text-gray-300">Downloadable by staff</label>
                     </div>
                     <div className="flex items-end">
                       <button type="submit" disabled={trainingUploading} className="btn-primary text-sm w-full">
@@ -555,7 +621,7 @@ export default function AdminDashboard() {
                 <div className="card">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-brand-dark text-lg">Training Library ({trainingItems.length})</h3>
+                      <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Training Library ({trainingItems.length})</h3>
                       <div className="flex gap-1">
                         {['active', 'history'].map((st) => (
                           <button

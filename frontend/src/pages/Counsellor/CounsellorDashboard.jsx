@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { counsellorApi, counsellorBizApi } from '../../services/api'
+import ThemeToggle from '../../components/ThemeToggle'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -12,8 +13,8 @@ const formatPaise = (p) => '₹' + (p / 100).toLocaleString('en-IN', { minimumFr
 const StatCard = ({ icon, label, value }) => (
   <div className="card text-center hover:shadow-lg transition-shadow">
     <div className="text-3xl mb-2">{icon}</div>
-    <div className="text-3xl font-extrabold text-brand-dark">{value ?? '—'}</div>
-    <div className="text-sm font-semibold text-gray-600 mt-1">{label}</div>
+    <div className="text-3xl font-extrabold text-brand-dark dark:text-gray-100">{value ?? '—'}</div>
+    <div className="text-sm font-semibold text-gray-600 dark:text-gray-300 mt-1">{label}</div>
   </div>
 )
 
@@ -21,19 +22,19 @@ const Table = ({ headers, rows, emptyText = 'No data.' }) => (
   <div className="overflow-x-auto">
     <table className="w-full text-sm">
       <thead>
-        <tr className="bg-gray-50 border-b">
+        <tr className="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
           {headers.map((h) => (
-            <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">{h}</th>
+            <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{h}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {rows.length === 0 ? (
-          <tr><td colSpan={headers.length} className="text-center py-8 text-gray-400">{emptyText}</td></tr>
+          <tr><td colSpan={headers.length} className="text-center py-8 text-gray-400 dark:text-gray-500">{emptyText}</td></tr>
         ) : rows.map((row, i) => (
-          <tr key={i} className="border-b hover:bg-gray-50 transition-colors">
+          <tr key={i} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
             {row.map((cell, j) => (
-              <td key={j} className="px-4 py-3 text-gray-700">{cell}</td>
+              <td key={j} className="px-4 py-3 text-gray-700 dark:text-gray-300">{cell}</td>
             ))}
           </tr>
         ))}
@@ -86,6 +87,7 @@ export default function CounsellorDashboard() {
   // Assigned Prospects
   const [prospects, setProspects]     = useState([])
   const [prospectsLoading, setProspectsLoading] = useState(false)
+  const prospectsLastFetched = useRef(null) // 30-second cache TTL
 
   // Test link creation form
   const [linkForm, setLinkForm] = useState({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '', discountPct: 0, applyDiscount: false })
@@ -175,19 +177,25 @@ export default function CounsellorDashboard() {
     }
   }
 
+  const fetchProspects = useCallback((force = false) => {
+    const now = Date.now()
+    if (!force && prospectsLastFetched.current && now - prospectsLastFetched.current < 30_000) return
+    setProspectsLoading(true)
+    counsellorApi.getAssignedProspects()
+      .then((r) => { setProspects(r.data.data?.prospects || []); prospectsLastFetched.current = Date.now() })
+      .catch(() => toast.error('Failed to load assigned prospects'))
+      .finally(() => setProspectsLoading(false))
+  }, [])
+
   // Load biz data when switching to biz tabs
   useEffect(() => {
     if (['account', 'test-links', 'training', 'payouts'].includes(activeTab)) {
       loadBizData()
       if (activeTab === 'test-links') loadDiscountPolicy(linkForm.planType)
     }
-    if (activeTab === 'assigned-prospects' && prospects.length === 0) {
-      setProspectsLoading(true)
-      counsellorApi.getAssignedProspects()
-        .then((r) => setProspects(r.data.data?.prospects || []))
-        .catch(() => toast.error('Failed to load assigned prospects'))
-        .finally(() => setProspectsLoading(false))
-    }
+    // Re-fetch assigned prospects on tab switch, with 30-second cache to avoid
+    // unnecessary API calls when quickly switching between tabs
+    if (activeTab === 'assigned-prospects') fetchProspects()
   }, [activeTab])
 
   const handleLeadSearch = async () => {
@@ -255,15 +263,16 @@ export default function CounsellorDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
       {/* Navbar */}
-      <div className="bg-brand-dark text-white px-6 py-3 flex items-center justify-between">
+      <div className="bg-brand-dark dark:bg-gray-900 border-b border-gray-800 text-white px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="font-extrabold text-lg">🎓 CAD Gurukul — Counsellor Portal</span>
           <span className="text-xs bg-emerald-600 px-2 py-0.5 rounded-full">CAREER_COUNSELLOR</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-300">{counsellor.name}</span>
+          <ThemeToggle />
           <button onClick={logout} className="text-sm hover:text-brand-red transition-colors">Logout</button>
         </div>
       </div>
@@ -278,7 +287,7 @@ export default function CounsellorDashboard() {
 
         {/* Scope notice — shown on counsellor-scoped tabs */}
         {['leads', 'students', 'reports'].includes(activeTab) && (
-          <div className="mb-6 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
+          <div className="mb-6 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-sm">
             <strong>Counsellor view:</strong> You are viewing data scoped to your assigned leads. Student and report data are read-only.
           </div>
         )}
@@ -290,7 +299,7 @@ export default function CounsellorDashboard() {
               key={t}
               onClick={() => setActiveTab(t)}
               className={`px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
-                activeTab === t ? 'bg-brand-red text-white' : 'bg-white text-gray-600 hover:bg-gray-100 border'
+                activeTab === t ? 'bg-brand-red text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border dark:border-gray-700'
               }`}
             >
               {TAB_LABELS[t]}
@@ -614,9 +623,12 @@ export default function CounsellorDashboard() {
 
             {activeTab === 'assigned-prospects' && (
               <div className="space-y-4">
-                <div>
-                  <h3 className="font-bold text-brand-dark text-lg">Assigned Prospects</h3>
-                  <p className="text-sm text-gray-500 mt-1">Leads assigned to you by the admin team for counselling follow-up.</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Assigned Prospects</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Leads assigned to you by the admin team for counselling follow-up.</p>
+                  </div>
+                  <button onClick={() => fetchProspects(true)} disabled={prospectsLoading} className="btn-secondary text-sm px-4 py-2 disabled:opacity-50">↻ Refresh</button>
                 </div>
                 {prospectsLoading ? (
                   <div className="flex justify-center py-12">

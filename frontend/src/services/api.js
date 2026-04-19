@@ -135,10 +135,12 @@ export const adminLeadApi = {
   listStaffForAssign: ()         => adminApiClient.get('/admin/staff'),
 }
 
-// ─── Admin Discount Policy API (Phase 6) ──────────────────────────────────────
+// ─── Admin Discount Policy API (Phase 6 + Phase 9) ───────────────────────────
 export const adminDiscountApi = {
-  listPolicies: ()       => adminApiClient.get('/admin/discount-policies'),
-  upsertPolicy: (data)   => adminApiClient.put('/admin/discount-policies', data),
+  listPolicies:   ()       => adminApiClient.get('/admin/discount-policies'),
+  listHistory:    ()       => adminApiClient.get('/admin/discount-policies/history'),
+  upsertPolicy:   (data)   => adminApiClient.put('/admin/discount-policies', data),
+  deletePolicy:   (id)     => adminApiClient.delete(`/admin/discount-policies/${id}`),
 }
 
 // ─── Admin Training API (Phase 6) ────────────────────────────────────────────
