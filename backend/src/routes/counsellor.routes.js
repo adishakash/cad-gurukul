@@ -65,4 +65,8 @@ router.put('/bank-account', saveBankAccount);
 // Bulk send
 router.post('/test-links/bulk', bulkSendTestLinks);
 
+// Assigned Prospects — leads assigned to this CC by admin
+// Uses the same handler as /staff/assigned-prospects (role-neutral, filters by req.user.id)
+router.get('/assigned-prospects', staffController.getAssignedProspects);
+
 module.exports = router;

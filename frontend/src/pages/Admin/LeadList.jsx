@@ -36,12 +36,94 @@ const STATUS_COLORS = {
 const STATUSES = Object.keys(STATUS_COLORS)
 const SOURCES  = ['meta_ads','instagram','facebook','google_ads','direct','referral','organic','whatsapp','other']
 
+// ── Assign Staff Modal ────────────────────────────────────────────────────────
+function AssignStaffModal({ lead, onClose, onAssigned }) {
+  const [staffList, setStaffList] = useState([])
+  const [selectedId, setSelectedId] = useState(lead.assignedStaffId || '')
+  const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(true)
+
+  useEffect(() => {
+    adminLeadApi.listStaffForAssign()
+      .then((r) => setStaffList(r.data.data.staff || []))
+      .catch(() => toast.error('Failed to load staff list'))
+      .finally(() => setFetching(false))
+  }, [])
+
+  const handleAssign = async () => {
+    setLoading(true)
+    try {
+      await adminLeadApi.assign(lead.id, selectedId || null)
+      toast.success(selectedId ? 'Lead assigned successfully' : 'Lead assignment removed')
+      onAssigned(lead.id, selectedId || null, staffList.find((s) => s.id === selectedId) || null)
+      onClose()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Assignment failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Assign Staff</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{lead.fullName} · {lead.email}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        {fetching ? (
+          <div className="py-8 text-center text-gray-400">Loading staff…</div>
+        ) : (
+          <>
+            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+              Select Staff Member
+            </label>
+            <select
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-5"
+            >
+              <option value="">— Unassign (no staff) —</option>
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name || s.email} · {s.role === 'CAREER_COUNSELLOR_LEAD' ? 'CCL' : 'CC'}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                disabled={loading}
+                className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold py-2 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssign}
+                disabled={loading}
+                className="flex-1 bg-blue-600 text-white font-bold py-2 rounded-xl text-sm hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {loading ? 'Saving…' : 'Save Assignment'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function LeadList() {
   const [leads,    setLeads]    = useState([])
   const [total,    setTotal]    = useState(0)
   const [page,     setPage]     = useState(1)
   const [loading,  setLoading]  = useState(true)
   const [funnel,   setFunnel]   = useState(null)
+  const [assigningLead, setAssigningLead] = useState(null)
 
   const [filters, setFilters] = useState({
     status: '', leadSource: '', classStandard: '',
@@ -84,6 +166,14 @@ export default function LeadList() {
     setPage(1)
   }
 
+  const handleAssigned = (leadId, staffId, staffObj) => {
+    setLeads((prev) => prev.map((l) =>
+      l.id === leadId
+        ? { ...l, assignedStaffId: staffId, assignedStaff: staffObj, assignedAt: staffId ? new Date().toISOString() : null }
+        : l
+    ))
+  }
+
   const totalPages = Math.ceil(total / LIMIT)
 
   return (
@@ -91,13 +181,10 @@ export default function LeadList() {
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Lead Management</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{total.toLocaleString()} total leads</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Lead Management</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{total.toLocaleString()} total leads</p>
         </div>
-        <button
-          onClick={handleExportCsv}
-          className="btn-primary text-sm px-4 py-2"
-        >
+        <button onClick={handleExportCsv} className="btn-primary text-sm px-4 py-2">
           ⬇ Export CSV
         </button>
       </div>
@@ -106,24 +193,24 @@ export default function LeadList() {
       {funnel && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
           {[
-            { label: 'Total Leads',          value: funnel.funnel.totalLeads,          color: 'bg-gray-50' },
-            { label: 'Assessment Started',   value: funnel.funnel.assessmentStarted,   color: 'bg-blue-50' },
-            { label: 'Assessment Done',      value: funnel.funnel.assessmentCompleted, color: 'bg-indigo-50' },
-            { label: 'Free Report',          value: funnel.funnel.freeReportReady,     color: 'bg-purple-50' },
-            { label: 'Paid',                 value: funnel.funnel.paid,                color: 'bg-green-50' },
-            { label: 'Premium Report',       value: funnel.funnel.premiumReportReady,  color: 'bg-emerald-50' },
-            { label: 'Conversion Rate',      value: funnel.conversionRate,             color: 'bg-yellow-50' },
+            { label: 'Total Leads',        value: funnel.funnel.totalLeads,          color: 'bg-gray-50 dark:bg-gray-800' },
+            { label: 'Assessment Started', value: funnel.funnel.assessmentStarted,   color: 'bg-blue-50 dark:bg-blue-900/20' },
+            { label: 'Assessment Done',    value: funnel.funnel.assessmentCompleted, color: 'bg-indigo-50 dark:bg-indigo-900/20' },
+            { label: 'Free Report',        value: funnel.funnel.freeReportReady,     color: 'bg-purple-50 dark:bg-purple-900/20' },
+            { label: 'Paid',               value: funnel.funnel.paid,                color: 'bg-green-50 dark:bg-green-900/20' },
+            { label: 'Premium Report',     value: funnel.funnel.premiumReportReady,  color: 'bg-emerald-50 dark:bg-emerald-900/20' },
+            { label: 'Conversion Rate',    value: funnel.conversionRate,             color: 'bg-yellow-50 dark:bg-yellow-900/20' },
           ].map((m) => (
-            <div key={m.label} className={`${m.color} rounded-xl p-3 border border-gray-100`}>
-              <div className="text-2xl font-extrabold text-gray-900">{m.value}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{m.label}</div>
+            <div key={m.label} className={`${m.color} rounded-xl p-3 border border-gray-100 dark:border-gray-700`}>
+              <div className="text-2xl font-extrabold text-gray-900 dark:text-white">{m.value}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{m.label}</div>
             </div>
           ))}
         </div>
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           <input
             type="text" name="search" value={filters.search}
@@ -160,7 +247,7 @@ export default function LeadList() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-gray-400">Loading leads…</div>
         ) : leads.length === 0 ? (
@@ -168,35 +255,36 @@ export default function LeadList() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider">
+              <thead className="bg-gray-50 dark:bg-gray-800 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 <tr>
                   <th className="text-left p-4">Lead</th>
                   <th className="text-left p-4">Contact</th>
                   <th className="text-left p-4">Class / Stream</th>
                   <th className="text-left p-4">Plan</th>
                   <th className="text-left p-4">Status</th>
+                  <th className="text-left p-4">Assigned To</th>
                   <th className="text-left p-4">Source</th>
                   <th className="text-left p-4">Date</th>
                   <th className="text-left p-4">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {leads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="p-4">
-                      <div className="font-semibold text-gray-900">{lead.fullName}</div>
-                      <div className="text-xs text-gray-500">{lead.city || '—'}</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{lead.fullName}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{lead.city || '—'}</div>
                     </td>
                     <td className="p-4">
-                      <div className="text-gray-700">{lead.email}</div>
-                      <div className="text-xs text-gray-500">{lead.mobileNumber}</div>
+                      <div className="text-gray-700 dark:text-gray-300">{lead.email}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{lead.mobileNumber}</div>
                     </td>
                     <td className="p-4">
-                      <div className="text-gray-700">Class {lead.classStandard || '—'}</div>
-                      <div className="text-xs text-gray-500">{lead.stream || 'Not decided'}</div>
+                      <div className="text-gray-700 dark:text-gray-300">Class {lead.classStandard || '—'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{lead.stream || 'Not decided'}</div>
                     </td>
                     <td className="p-4">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${lead.selectedPlan === 'paid' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${lead.selectedPlan === 'paid' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
                         {lead.selectedPlan === 'paid' ? '💎 Paid' : '🆓 Free'}
                       </span>
                     </td>
@@ -205,20 +293,38 @@ export default function LeadList() {
                         {lead.status?.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="p-4 text-xs text-gray-500">
+                    <td className="p-4">
+                      {lead.assignedStaff ? (
+                        <div>
+                          <div className="text-xs font-semibold text-blue-700 dark:text-blue-400">{lead.assignedStaff.name || lead.assignedStaff.email}</div>
+                          <div className="text-xs text-gray-400">{lead.assignedStaff.role === 'CAREER_COUNSELLOR_LEAD' ? 'CCL' : 'CC'}</div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">Unassigned</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-xs text-gray-500 dark:text-gray-400">
                       {lead.leadSource?.replace(/_/g, ' ')}
                       {lead.utmCampaign && <div className="text-gray-400">{lead.utmCampaign}</div>}
                     </td>
-                    <td className="p-4 text-xs text-gray-500 whitespace-nowrap">
+                    <td className="p-4 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                       {new Date(lead.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
                     </td>
                     <td className="p-4">
-                      <Link
-                        to={`/admin/leads/${lead.id}`}
-                        className="text-xs text-brand-red font-semibold hover:underline"
-                      >
-                        View →
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/admin/leads/${lead.id}`}
+                          className="text-xs text-brand-red font-semibold hover:underline"
+                        >
+                          View →
+                        </Link>
+                        <button
+                          onClick={() => setAssigningLead(lead)}
+                          className="text-xs px-2 py-1 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20 font-semibold transition"
+                        >
+                          Assign
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -227,30 +333,37 @@ export default function LeadList() {
           </div>
         )}
       </div>
-
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Page {page} of {totalPages} · {total} leads
           </p>
           <div className="flex gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm disabled:opacity-40"
+              className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm disabled:opacity-40 dark:text-gray-300"
             >
               ← Prev
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm disabled:opacity-40"
+              className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm disabled:opacity-40 dark:text-gray-300"
             >
               Next →
             </button>
           </div>
         </div>
+      )}
+
+      {assigningLead && (
+        <AssignStaffModal
+          lead={assigningLead}
+          onClose={() => setAssigningLead(null)}
+          onAssigned={handleAssigned}
+        />
       )}
     </div>
   )

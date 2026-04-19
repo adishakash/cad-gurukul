@@ -490,6 +490,44 @@ const listCounsellorReports = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ASSIGNED PROSPECTS (leads assigned to this specific CC/CCL by admin)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/staff/assigned-prospects
+ * Returns leads where assignedStaffId === req.user.id (i.e., this CC/CCL).
+ * Access is strictly per-user — no cross-contamination across staff.
+ */
+const getAssignedProspects = async (req, res) => {
+  try {
+    const leads = await prisma.lead.findMany({
+      where: { assignedStaffId: req.user.id },
+      orderBy: { assignedAt: 'desc' },
+      include: {
+        user: {
+          select: {
+            id: true, email: true, role: true, isActive: true,
+            studentProfile: {
+              select: {
+                fullName: true, classStandard: true, board: true,
+                city: true, mobileNumber: true, isOnboardingComplete: true,
+                hobbies: true, interests: true, careerAspirations: true,
+              },
+            },
+          },
+        },
+        events: { orderBy: { createdAt: 'desc' }, take: 5 },
+      },
+    });
+
+    return successResponse(res, { prospects: leads, total: leads.length });
+  } catch (err) {
+    logger.error('[Staff] getAssignedProspects error', { error: err.message });
+    throw err;
+  }
+};
+
 module.exports = {
   loginStaff,
   logoutStaff,
@@ -501,4 +539,5 @@ module.exports = {
   listCounsellorLeads,
   listCounsellorStudents,
   listCounsellorReports,
+  getAssignedProspects,
 };

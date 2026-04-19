@@ -485,20 +485,42 @@ const updateTrainingContent = async (req, res) => {
 
 /**
  * DELETE /api/v1/admin/ccl/training/:id
- * Soft-delete: sets isActive=false. CCLs stop seeing it immediately.
+ * Soft-delete: sets deletedAt + deletedBy (audit trail), and isActive=false.
+ * The record is preserved in history — use GET /admin/ccl/training/history to view.
  */
 const deleteTrainingContent = async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await prisma.cclTrainingContent.findUnique({ where: { id } });
     if (!existing) return errorResponse(res, 'Training content not found', 404, 'NOT_FOUND');
+    if (existing.deletedAt) return errorResponse(res, 'Training content is already deleted', 409, 'ALREADY_DELETED');
 
-    await prisma.cclTrainingContent.update({ where: { id }, data: { isActive: false } });
-    logger.info('[Admin.CCL] Training content deactivated', { id });
-    return successResponse(res, null, 'Training content deactivated');
+    await prisma.cclTrainingContent.update({
+      where: { id },
+      data: { isActive: false, deletedAt: new Date(), deletedBy: req.user?.id || null },
+    });
+    logger.info('[Admin.CCL] Training content soft-deleted', { id, adminId: req.user?.id });
+    return successResponse(res, null, 'Training content deleted and preserved in history');
   } catch (err) {
     logger.error('[Admin.CCL] deleteTrainingContent error', { error: err.message });
-    return errorResponse(res, 'Failed to deactivate training content', 500);
+    return errorResponse(res, 'Failed to delete training content', 500);
+  }
+};
+
+/**
+ * GET /api/v1/admin/ccl/training/history
+ * List all soft-deleted training items for audit / history view.
+ */
+const listTrainingHistory = async (req, res) => {
+  try {
+    const content = await prisma.cclTrainingContent.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+    return successResponse(res, content);
+  } catch (err) {
+    logger.error('[Admin.CCL] listTrainingHistory error', { error: err.message });
+    return errorResponse(res, 'Failed to load training history', 500);
   }
 };
 
@@ -571,6 +593,7 @@ module.exports = {
   createTrainingContent,
   updateTrainingContent,
   deleteTrainingContent,
+  listTrainingHistory,
   // Discount policies (Phase 6)
   listPolicies,
   upsertPolicy,

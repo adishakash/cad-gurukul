@@ -34,6 +34,7 @@ router.post('/logout', adminController.logoutAdmin);
 // Users
 router.get('/users', adminController.listUsers);
 router.put('/users/:id/toggle-status', adminController.toggleUserStatus);
+router.delete('/users/:id', adminController.deleteUser);
 
 // Dashboard analytics
 router.get('/analytics', adminController.getAnalytics);
@@ -54,6 +55,7 @@ router.get('/leads', validate(leadListQuerySchema, 'query'), adminController.lis
 router.get('/funnel', adminController.getFunnelMetrics);
 router.get('/leads/:id', adminController.getLeadDetail);
 router.patch('/leads/:id', adminController.updateLeadAdmin);
+router.put('/leads/:id/assign', adminController.assignLead);
 router.post('/leads/:id/actions', validate(triggerActionSchema), adminController.triggerAdminAction);
 
 // ─── Discount Policies (Phase 6) ─────────────────────────────────────────────
@@ -80,6 +82,7 @@ router.patch('/ccl/payouts/:id',        cclAdminController.updatePayoutStatus);
 
 // Training content CRUD (with optional file upload)
 router.get('/ccl/training',          cclAdminController.listAllTraining);
+router.get('/ccl/training/history',  cclAdminController.listTrainingHistory);
 router.post('/ccl/training',         upload.single('file'), enforceSizeLimit, cclAdminController.createTrainingContent);
 router.patch('/ccl/training/:id',    cclAdminController.updateTrainingContent);
 router.delete('/ccl/training/:id',   cclAdminController.deleteTrainingContent);
@@ -127,15 +130,17 @@ router.patch('/cc/payouts/:id',       ccAdminController.updatePayoutStatus);
 
 // Training content CRUD (shared CclTrainingContent table with targetRole, with file upload)
 router.get('/cc/training',            ccAdminController.listAllTraining);
+router.get('/cc/training/history',    ccAdminController.listTrainingHistory);
 router.post('/cc/training',           upload.single('file'), enforceSizeLimit, ccAdminController.createTrainingContent);
 router.patch('/cc/training/:id',      ccAdminController.updateTrainingContent);
 router.delete('/cc/training/:id',     ccAdminController.deleteTrainingContent);
 
 // ─── Staff Management (Phase 8) ───────────────────────────────────────────────
-// Admin can create, list, promote/demote, and activate/deactivate CC/CCL staff.
+// Admin can create, list, promote/demote, activate/deactivate, and soft-delete CC/CCL staff.
 router.get('/staff',              adminController.listStaff);
 router.post('/staff',             adminController.createStaff);
 router.patch('/staff/:id/role',   adminController.updateStaffRole);
 router.patch('/staff/:id/status', adminController.toggleStaffStatus);
+router.delete('/staff/:id',       adminController.deleteStaff);
 
 module.exports = router;

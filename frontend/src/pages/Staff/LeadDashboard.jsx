@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { staffApiClient, staffLeadApi, staffApi } from '../../services/api'
+import { staffApiClient, staffLeadApi, staffApi, staffLeadBizApi } from '../../services/api'
 
 const StatCard = ({ icon, label, value }) => (
   <div className="card text-center hover:shadow-lg transition-shadow">
@@ -73,6 +73,9 @@ export default function LeadDashboard() {
   const [linkCreating, setLinkCreating] = useState(false)
   // Phase 6: discount policy (fetched on joining-links tab open)
   const [discountPolicy, setDiscountPolicy] = useState({ minPct: 0, maxPct: 20, isActive: true })
+  // Assigned Prospects
+  const [prospects, setProspects]     = useState([])
+  const [prospectsLoading, setProspectsLoading] = useState(false)
 
   const staff = JSON.parse(localStorage.getItem('cg_staff') || '{}')
 
@@ -173,6 +176,13 @@ export default function LeadDashboard() {
     setActiveTab(tab)
     const bizTabs = ['account', 'joining-links', 'payouts', 'training']
     if (bizTabs.includes(tab)) loadBizData(tab)
+    if (tab === 'assigned-prospects' && prospects.length === 0) {
+      setProspectsLoading(true)
+      staffLeadBizApi.getAssignedProspects()
+        .then((r) => setProspects(r.data.data?.prospects || []))
+        .catch(() => toast.error('Failed to load assigned prospects'))
+        .finally(() => setProspectsLoading(false))
+    }
   }
 
   const loadTxPage = async (page) => {
@@ -220,7 +230,7 @@ export default function LeadDashboard() {
 
   const formatPaise = (paise) => `₹${((paise || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
-  const tabs = ['leads', 'students', 'reports', 'account', 'joining-links', 'payouts', 'training']
+  const tabs = ['leads', 'students', 'reports', 'account', 'joining-links', 'payouts', 'training', 'assigned-prospects']
 
   const TAB_LABELS = {
     leads: '👥 Leads',
@@ -230,6 +240,7 @@ export default function LeadDashboard() {
     'joining-links': '🔗 Joining Links',
     payouts: '💳 Payouts',
     training: '📚 Training',
+    'assigned-prospects': '📌 Assigned Prospects',
   }
 
   return (
@@ -691,6 +702,64 @@ export default function LeadDashboard() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {activeTab === 'assigned-prospects' && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-bold text-brand-dark text-lg">Assigned Prospects</h3>
+                  <p className="text-sm text-gray-500 mt-1">Leads assigned to you by the admin team for follow-up.</p>
+                </div>
+                {prospectsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
+                  </div>
+                ) : prospects.length === 0 ? (
+                  <div className="card text-center py-12">
+                    <div className="text-4xl mb-3">📌</div>
+                    <p className="font-semibold text-gray-600">No prospects assigned yet.</p>
+                    <p className="text-sm text-gray-400 mt-1">Ask your admin to assign leads here for follow-up.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider border-b">
+                        <tr>
+                          <th className="text-left px-4 py-3">Name</th>
+                          <th className="text-left px-4 py-3">Contact</th>
+                          <th className="text-left px-4 py-3">Class / City</th>
+                          <th className="text-left px-4 py-3">Status</th>
+                          <th className="text-left px-4 py-3">Assigned On</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {prospects.map((p) => (
+                          <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-gray-800">{p.fullName || '—'}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-gray-700">{p.email}</div>
+                              <div className="text-xs text-gray-500">{p.mobileNumber}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-gray-700">Class {p.classStandard || '—'}</div>
+                              <div className="text-xs text-gray-500">{p.city || '—'}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                {(p.status || 'new_lead').replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-500">
+                              {p.assignedAt ? new Date(p.assignedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>

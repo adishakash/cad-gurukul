@@ -131,6 +131,8 @@ export const adminLeadApi = {
   getFunnel:     (days = 30)     => adminApiClient.get('/admin/funnel', { params: { days } }),
   getAnalytics:  (days)          => adminApiClient.get('/admin/analytics', { params: days ? { days } : {} }),
   exportCsv:     ()              => adminApiClient.get('/admin/export/leads', { responseType: 'blob' }),
+  assign:        (id, staffId)   => adminApiClient.put(`/admin/leads/${id}/assign`, { staffId }),
+  listStaffForAssign: ()         => adminApiClient.get('/admin/staff'),
 }
 
 // ─── Admin Discount Policy API (Phase 6) ──────────────────────────────────────
@@ -142,6 +144,7 @@ export const adminDiscountApi = {
 // ─── Admin Training API (Phase 6) ────────────────────────────────────────────
 export const adminTrainingApi = {
   list:    ()           => adminApiClient.get('/admin/ccl/training'),
+  history: ()           => adminApiClient.get('/admin/ccl/training/history'),
   create:  (formData)   => adminApiClient.post('/admin/ccl/training', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   update:  (id, data)   => adminApiClient.patch(`/admin/ccl/training/${id}`, data),
   remove:  (id)         => adminApiClient.delete(`/admin/ccl/training/${id}`),
@@ -225,6 +228,9 @@ export const counsellorApi = {
   leads:      (params) => staffApiClient.get('/counsellor/leads',    { params }),
   students:   (params) => staffApiClient.get('/counsellor/students', { params }),
   reports:    (params) => staffApiClient.get('/counsellor/reports',  { params }),
+  // Assigned prospects (leads assigned by admin to this counsellor)
+  // Uses /counsellor/* prefix — CC users (level 2) are blocked from /staff/* routes
+  getAssignedProspects: () => staffApiClient.get('/counsellor/assigned-prospects'),
 }
 
 // ─── Counsellor Business API (CC Phase 5 — income, test links, payouts) ──────
@@ -269,6 +275,8 @@ export const staffLeadBizApi = {
   saveBankAccount:  (data)              => staffApiClient.put('/staff/bank-account', data),
   // Bulk send
   bulkSendJoiningLinks: (data)          => staffApiClient.post('/staff/joining-links/bulk', data),
+  // Assigned prospects (leads assigned by admin to this staff member)
+  getAssignedProspects: ()              => staffApiClient.get('/staff/assigned-prospects'),
 }
 
 // ─── Partner Auth API (public) ────────────────────────────────────────────────
@@ -341,9 +349,18 @@ export const authApi = {
 // ─── Admin Staff API (Phase 8) ────────────────────────────────────────────────
 export const adminStaffApi = {
   list:         ()              => adminApiClient.get('/admin/staff'),
+  listDeleted:  ()              => adminApiClient.get('/admin/staff?showDeleted=true'),
   create:       (data)          => adminApiClient.post('/admin/staff', data),
   updateRole:   (id, role)      => adminApiClient.patch(`/admin/staff/${id}/role`, { role }),
   toggleStatus: (id)            => adminApiClient.patch(`/admin/staff/${id}/status`),
+  delete:       (id)            => adminApiClient.delete(`/admin/staff/${id}`),
+}
+
+// ─── Admin User API ───────────────────────────────────────────────────────────
+export const adminUserApi = {
+  list:         (params)        => adminApiClient.get('/admin/users', { params }),
+  toggleStatus: (id)            => adminApiClient.put(`/admin/users/${id}/toggle-status`),
+  delete:       (id)            => adminApiClient.delete(`/admin/users/${id}`),
 }
 
 export default api

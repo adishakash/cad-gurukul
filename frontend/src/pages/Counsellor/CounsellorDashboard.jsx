@@ -83,6 +83,9 @@ export default function CounsellorDashboard() {
   const [payouts, setPayouts]         = useState([])
   const [training, setTraining]       = useState([])
   const [bizLoading, setBizLoading]   = useState(false)
+  // Assigned Prospects
+  const [prospects, setProspects]     = useState([])
+  const [prospectsLoading, setProspectsLoading] = useState(false)
 
   // Test link creation form
   const [linkForm, setLinkForm] = useState({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '', discountPct: 0, applyDiscount: false })
@@ -178,6 +181,13 @@ export default function CounsellorDashboard() {
       loadBizData()
       if (activeTab === 'test-links') loadDiscountPolicy(linkForm.planType)
     }
+    if (activeTab === 'assigned-prospects' && prospects.length === 0) {
+      setProspectsLoading(true)
+      counsellorApi.getAssignedProspects()
+        .then((r) => setProspects(r.data.data?.prospects || []))
+        .catch(() => toast.error('Failed to load assigned prospects'))
+        .finally(() => setProspectsLoading(false))
+    }
   }, [activeTab])
 
   const handleLeadSearch = async () => {
@@ -231,7 +241,7 @@ export default function CounsellorDashboard() {
     navigate('/staff/login')
   }
 
-  const tabs = ['leads', 'students', 'reports', 'account', 'test-links', 'training', 'payouts']
+  const tabs = ['leads', 'students', 'reports', 'account', 'test-links', 'training', 'payouts', 'assigned-prospects']
 
   const TAB_LABELS = {
     leads: 'Leads',
@@ -241,6 +251,7 @@ export default function CounsellorDashboard() {
     'test-links': 'Test Links',
     training: 'Training',
     payouts: 'Payouts',
+    'assigned-prospects': '📌 Assigned Prospects',
   }
 
   return (
@@ -598,6 +609,63 @@ export default function CounsellorDashboard() {
                   ])}
                   emptyText="No payouts yet."
                 />
+              </div>
+            )}
+
+            {activeTab === 'assigned-prospects' && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-bold text-brand-dark text-lg">Assigned Prospects</h3>
+                  <p className="text-sm text-gray-500 mt-1">Leads assigned to you by the admin team for counselling follow-up.</p>
+                </div>
+                {prospectsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
+                  </div>
+                ) : prospects.length === 0 ? (
+                  <div className="card text-center py-12">
+                    <div className="text-4xl mb-3">📌</div>
+                    <p className="font-semibold text-gray-600">No prospects assigned yet.</p>
+                    <p className="text-sm text-gray-400 mt-1">Your admin will assign leads here for counselling follow-up.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-xs font-bold text-gray-500 uppercase tracking-wider border-b">
+                        <tr>
+                          <th className="text-left px-4 py-3">Name</th>
+                          <th className="text-left px-4 py-3">Contact</th>
+                          <th className="text-left px-4 py-3">Class / City</th>
+                          <th className="text-left px-4 py-3">Status</th>
+                          <th className="text-left px-4 py-3">Assigned On</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {prospects.map((p) => (
+                          <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 font-semibold text-gray-800">{p.fullName || '—'}</td>
+                            <td className="px-4 py-3">
+                              <div className="text-gray-700">{p.email}</div>
+                              <div className="text-xs text-gray-500">{p.mobileNumber}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-gray-700">Class {p.classStandard || '—'}</div>
+                              <div className="text-xs text-gray-500">{p.city || '—'}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                {(p.status || 'new_lead').replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-500">
+                              {p.assignedAt ? new Date(p.assignedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </>

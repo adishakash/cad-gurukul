@@ -52,6 +52,13 @@ router.get('/students', staffController.listStudents);
 // Reports — read-only
 router.get('/reports', staffController.listReports);
 
+// Assigned Prospects — leads assigned to this specific CC/CCL by admin
+// NOTE: authorizeRoles('CAREER_COUNSELLOR') would allow CC-level access, but
+// since we gate the whole router at CCL+ already, we use a dedicated check
+// by overriding just this route before the router-level middleware applies.
+// The getAssignedProspects handler itself is role-neutral (uses req.user.id only).
+router.get('/assigned-prospects', staffController.getAssignedProspects);
+
 // ─── CCL Business Layer ────────────────────────────────────────────────────────
 // All routes below require CAREER_COUNSELLOR_LEAD (already enforced by the
 // router.use() middleware above). ADMIN (level 4) also passes through.

@@ -343,6 +343,41 @@ const exportPayments = async (req, res) => {
 };
 
 /**
+ * DELETE /api/v1/admin/users/:id
+ * Soft-delete a user account:
+ *   - Sets deletedAt + isActive=false → login blocked immediately.
+ *   - Revokes all refresh tokens.
+ *   - Preserves payments, reports, leads (relational integrity maintained).
+ *   - Does NOT delete ADMIN accounts via this endpoint.
+ */
+const deleteUser = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return errorResponse(res, 'User not found', 404, 'NOT_FOUND');
+    if (user.role === 'ADMIN') {
+      return errorResponse(res, 'Admin accounts cannot be deleted via this endpoint', 403, 'FORBIDDEN');
+    }
+    if (user.deletedAt) {
+      return errorResponse(res, 'User is already deleted', 409, 'ALREADY_DELETED');
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.params.id },
+        data: { deletedAt: new Date(), isActive: false },
+      }),
+      prisma.refreshToken.deleteMany({ where: { userId: req.params.id } }),
+    ]);
+
+    logger.info('[Admin] User soft-deleted', { targetId: req.params.id, adminId: req.user.id });
+    return successResponse(res, null, 'User account deleted. Login access revoked.');
+  } catch (err) {
+    logger.error('[Admin] deleteUser error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
  * PUT /admin/users/:id/toggle-status
  */
 const toggleUserStatus = async (req, res) => {
@@ -419,6 +454,8 @@ const listLeads = async (req, res) => {
           utmSource: true, utmCampaign: true,
           counsellingInterested: true, assessmentId: true,
           reportId: true, paymentId: true, createdAt: true, updatedAt: true,
+          assignedStaffId: true, assignedAt: true,
+          assignedStaff: { select: { id: true, name: true, email: true, role: true } },
         },
       }),
       prisma.lead.count({ where }),
@@ -535,6 +572,64 @@ const getFunnelMetrics = async (req, res) => {
     });
   } catch (err) {
     logger.error('[Admin] getFunnelMetrics error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * PUT /api/v1/admin/leads/:id/assign
+ * Assign (or unassign) a lead to a specific CC or CCL staff member.
+ * Body: { staffId: string|null }  — null unassigns.
+ * Only one staff member can be assigned at a time (previous assignment replaced).
+ */
+const assignLead = async (req, res) => {
+  try {
+    const { staffId } = req.body;
+
+    // Unassign: staffId = null
+    if (staffId === null || staffId === undefined) {
+      const updated = await prisma.lead.update({
+        where: { id: req.params.id },
+        data: { assignedStaffId: null, assignedAt: null, assignedBy: null },
+        select: { id: true, fullName: true, assignedStaffId: true, assignedAt: true },
+      });
+      logger.info('[Admin] Lead unassigned', { leadId: req.params.id, adminId: req.user.id });
+      return successResponse(res, updated, 'Lead assignment removed.');
+    }
+
+    // Validate staff member exists and has an allowed role
+    const staff = await prisma.user.findUnique({
+      where: { id: staffId },
+      select: { id: true, name: true, email: true, role: true, isActive: true, deletedAt: true },
+    });
+    if (!staff) return errorResponse(res, 'Staff member not found', 404, 'NOT_FOUND');
+    if (!STAFF_ROLES.has(staff.role)) {
+      return errorResponse(res, 'Assignee must be a CC or CCL staff member', 422, 'INVALID_ASSIGNEE');
+    }
+    if (!staff.isActive || staff.deletedAt) {
+      return errorResponse(res, 'Cannot assign to an inactive or deleted staff member', 422, 'STAFF_INACTIVE');
+    }
+
+    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    if (!lead) return errorResponse(res, 'Lead not found', 404, 'NOT_FOUND');
+
+    const updated = await prisma.lead.update({
+      where: { id: req.params.id },
+      data: {
+        assignedStaffId: staffId,
+        assignedAt: new Date(),
+        assignedBy: req.user.id,
+      },
+      select: {
+        id: true, fullName: true, assignedStaffId: true, assignedAt: true,
+        assignedStaff: { select: { id: true, name: true, email: true, role: true } },
+      },
+    });
+
+    logger.info('[Admin] Lead assigned to staff', { leadId: req.params.id, staffId, adminId: req.user.id });
+    return successResponse(res, updated, `Lead assigned to ${staff.name || staff.email}`);
+  } catch (err) {
+    logger.error('[Admin] assignLead error', { error: err.message });
     throw err;
   }
 };
@@ -736,6 +831,7 @@ module.exports = {
   listUsers,
   getAllUsers: listUsers,   // spec alias
   toggleUserStatus,
+  deleteUser,
 
   // ── Analytics ──────────────────────────────────────────────────────────────
   getAnalytics,
@@ -761,12 +857,14 @@ module.exports = {
   getFunnelMetrics,
   updateLeadAdmin,
   triggerAdminAction,
+  assignLead,
 
   // ── Staff Management ───────────────────────────────────────────────────────
   listStaff,
   createStaff,
   updateStaffRole,
   toggleStaffStatus,
+  deleteStaff,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -777,12 +875,18 @@ const STAFF_ROLES = new Set(['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR']);
 
 /**
  * GET /api/v1/admin/staff
- * Lists all CC and CCL users.
+ * Lists active CC and CCL users (deletedAt = null).
+ * ?showDeleted=true — list only soft-deleted staff (history view).
  */
 async function listStaff(req, res) {
   try {
+    const showDeleted = req.query.showDeleted === 'true';
+    const where = {
+      role: { in: ['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR'] },
+      deletedAt: showDeleted ? { not: null } : null,
+    };
     const staff = await prisma.user.findMany({
-      where: { role: { in: ['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR'] } },
+      where,
       select: {
         id: true, name: true, email: true, role: true, isActive: true,
         deletedAt: true, createdAt: true, approvedAt: true, isApproved: true,
@@ -792,6 +896,42 @@ async function listStaff(req, res) {
     return successResponse(res, { staff, total: staff.length });
   } catch (err) {
     logger.error('[Admin] listStaff error', { error: err.message });
+    throw err;
+  }
+}
+
+/**
+ * DELETE /api/v1/admin/staff/:id
+ * Soft-delete a CC or CCL staff member:
+ *   - Sets deletedAt + isActive=false so they cannot log in.
+ *   - Revokes all refresh tokens (immediate session termination).
+ *   - Preserves the record for audit history.
+ * Prevents deletion of ADMIN accounts or non-staff users.
+ */
+async function deleteStaff(req, res) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return errorResponse(res, 'Staff user not found', 404, 'NOT_FOUND');
+    if (!STAFF_ROLES.has(user.role)) {
+      return errorResponse(res, 'Target user is not a CC/CCL staff member', 422, 'INVALID_TARGET');
+    }
+    if (user.deletedAt) {
+      return errorResponse(res, 'Staff user is already deleted', 409, 'ALREADY_DELETED');
+    }
+
+    // Soft delete + revoke all sessions atomically
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.params.id },
+        data: { deletedAt: new Date(), isActive: false },
+      }),
+      prisma.refreshToken.deleteMany({ where: { userId: req.params.id } }),
+    ]);
+
+    logger.info('[Admin] Staff user soft-deleted', { targetId: req.params.id, adminId: req.user.id });
+    return successResponse(res, null, 'Staff user deleted. Session revoked and access removed.');
+  } catch (err) {
+    logger.error('[Admin] deleteStaff error', { error: err.message });
     throw err;
   }
 }

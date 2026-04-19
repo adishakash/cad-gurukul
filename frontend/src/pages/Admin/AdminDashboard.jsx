@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi } from '../../services/api'
+import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi, adminUserApi } from '../../services/api'
 
 const StatCard = ({ icon, label, value, sub, highlight }) => (
   <div className={`card text-center hover:shadow-lg transition-shadow ${highlight ? 'border-2 border-brand-red bg-red-50' : ''}`}>
@@ -55,10 +55,14 @@ export default function AdminDashboard() {
 
   // Phase 6: Training state
   const [trainingItems, setTrainingItems]   = useState([])
+  const [trainingHistory, setTrainingHistory] = useState([])
   const [trainingLoaded, setTrainingLoaded] = useState(false)
+  const [trainingSubTab, setTrainingSubTab] = useState('active')  // 'active' | 'history'
   const [trainingUploading, setTrainingUploading] = useState(false)
   const [trainingForm, setTrainingForm]     = useState({ title: '', type: 'document', targetRole: 'ALL', isDownloadable: false, url: '' })
   const [trainingFile, setTrainingFile]     = useState(null)
+  // User management
+  const [deletingUserId, setDeletingUserId] = useState(null)
 
   const admin = JSON.parse(localStorage.getItem('cg_admin') || '{}')
 
@@ -143,8 +147,12 @@ export default function AdminDashboard() {
   // Phase 6: load training items on tab switch
   const loadTraining = async () => {
     try {
-      const res = await adminTrainingApi.list()
-      setTrainingItems(res.data.data || [])
+      const [activeRes, historyRes] = await Promise.all([
+        adminTrainingApi.list(),
+        adminTrainingApi.history(),
+      ])
+      setTrainingItems(activeRes.data.data || [])
+      setTrainingHistory(historyRes.data.data || [])
       setTrainingLoaded(true)
     } catch {
       toast.error('Failed to load training content.')
@@ -194,6 +202,20 @@ export default function AdminDashboard() {
       await loadTraining()
     } catch {
       toast.error('Failed to deactivate training item.')
+    }
+  }
+
+  const handleDeleteUser = async (userId, userName) => {
+    if (!window.confirm(`Delete user "${userName}"? This will revoke their login access.`)) return
+    setDeletingUserId(userId)
+    try {
+      await adminUserApi.delete(userId)
+      toast.success(`User "${userName}" deleted.`)
+      setUsers((prev) => prev.filter((u) => u.id !== userId))
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to delete user')
+    } finally {
+      setDeletingUserId(null)
     }
   }
 
@@ -329,18 +351,40 @@ export default function AdminDashboard() {
                   <h3 className="font-bold text-brand-dark text-lg">Users ({users.length})</h3>
                   <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export CSV</button>
                 </div>
-                <Table
-                  headers={['Name', 'Email', 'Role', 'Class', 'City', 'Joined']}
-                  rows={users.map((u) => [
-                    u.studentProfile?.fullName || u.email.split('@')[0],
-                    u.email,
-                    u.role,
-                    u.studentProfile?.classStandard?.replace('CLASS_', 'Class ') || '—',
-                    u.studentProfile?.city || '—',
-                    new Date(u.createdAt).toLocaleDateString('en-IN'),
-                  ])}
-                  emptyText="No users found."
-                />
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b">
+                        {['Name', 'Email', 'Role', 'Class', 'City', 'Joined', 'Action'].map((h) => (
+                          <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.length === 0 ? (
+                        <tr><td colSpan={7} className="text-center py-8 text-gray-400">No users found.</td></tr>
+                      ) : users.map((u) => (
+                        <tr key={u.id} className="border-b hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-gray-700">{u.studentProfile?.fullName || u.email.split('@')[0]}</td>
+                          <td className="px-4 py-3 text-gray-700">{u.email}</td>
+                          <td className="px-4 py-3 text-gray-700">{u.role}</td>
+                          <td className="px-4 py-3 text-gray-700">{u.studentProfile?.classStandard?.replace('CLASS_', 'Class ') || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{u.studentProfile?.city || '—'}</td>
+                          <td className="px-4 py-3 text-gray-700">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleDeleteUser(u.id, u.studentProfile?.fullName || u.email)}
+                              disabled={deletingUserId === u.id || u.role === 'ADMIN'}
+                              className="text-xs px-2 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 font-semibold transition disabled:opacity-40"
+                            >
+                              {deletingUserId === u.id ? '…' : 'Delete'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -510,30 +554,56 @@ export default function AdminDashboard() {
 
                 <div className="card">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-brand-dark text-lg">Training Library ({trainingItems.length})</h3>
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-brand-dark text-lg">Training Library ({trainingItems.length})</h3>
+                      <div className="flex gap-1">
+                        {['active', 'history'].map((st) => (
+                          <button
+                            key={st}
+                            onClick={() => setTrainingSubTab(st)}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition ${trainingSubTab === st ? 'bg-brand-red text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                          >
+                            {st === 'history' ? '🗑 Deleted History' : 'Active'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <button onClick={loadTraining} className="btn-secondary text-sm">↻ Refresh</button>
                   </div>
-                  <Table
-                    headers={['Title', 'Type', 'Target', 'Downloadable', 'Active', 'Actions']}
-                    rows={trainingItems.map((item) => [
-                      item.title,
-                      item.type,
-                      item.targetRole,
-                      item.isDownloadable ? '✅' : '—',
-                      item.isActive
-                        ? <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Active</span>
-                        : <span key="i" className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">Hidden</span>,
-                      <div key="actions" className="flex gap-2">
-                        <button onClick={() => handleToggleTraining(item)} className="text-xs text-blue-600 hover:underline">
-                          {item.isActive ? 'Hide' : 'Show'}
-                        </button>
-                        <button onClick={() => handleDeleteTraining(item)} className="text-xs text-red-600 hover:underline">
-                          Delete
-                        </button>
-                      </div>,
-                    ])}
-                    emptyText="No training content yet. Add some above."
-                  />
+                  {trainingSubTab === 'active' ? (
+                    <Table
+                      headers={['Title', 'Type', 'Target', 'Downloadable', 'Active', 'Actions']}
+                      rows={trainingItems.map((item) => [
+                        item.title,
+                        item.type,
+                        item.targetRole,
+                        item.isDownloadable ? '✅' : '—',
+                        item.isActive
+                          ? <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Active</span>
+                          : <span key="i" className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">Hidden</span>,
+                        <div key="actions" className="flex gap-2">
+                          <button onClick={() => handleToggleTraining(item)} className="text-xs text-blue-600 hover:underline">
+                            {item.isActive ? 'Hide' : 'Show'}
+                          </button>
+                          <button onClick={() => handleDeleteTraining(item)} className="text-xs text-red-600 hover:underline">
+                            Delete
+                          </button>
+                        </div>,
+                      ])}
+                      emptyText="No training content yet. Add some above."
+                    />
+                  ) : (
+                    <Table
+                      headers={['Title', 'Type', 'Target', 'Deleted On']}
+                      rows={trainingHistory.map((item) => [
+                        item.title,
+                        item.type,
+                        item.targetRole,
+                        item.deletedAt ? new Date(item.deletedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+                      ])}
+                      emptyText="No deleted training items."
+                    />
+                  )}
                 </div>
               </div>
             )}
