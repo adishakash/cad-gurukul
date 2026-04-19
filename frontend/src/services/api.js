@@ -29,7 +29,16 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Auth credential endpoints (login, register) return 401 for invalid credentials —
+    // that is NOT a session-expiry event. Skip the refresh/redirect logic for those
+    // endpoints so the error propagates naturally to the calling thunk and the UI can
+    // display a stable inline error message instead of triggering a full page reload.
+    const isAuthCredentialEndpoint =
+      originalRequest?.url?.includes('/auth/login') ||
+      originalRequest?.url?.includes('/auth/register') ||
+      originalRequest?.url?.includes('/admin/login')
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthCredentialEndpoint) {
       originalRequest._retry = true
       const refreshToken = localStorage.getItem('cg_refresh_token')
 
@@ -152,7 +161,10 @@ staffApiClient.interceptors.request.use((config) => {
 staffApiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Don't redirect on 401 from the staff login endpoint itself — that is a
+    // credential error, not a session-expiry event. Only redirect for protected routes.
+    const isStaffLoginEndpoint = error.config?.url?.includes('/staff/login')
+    if (error.response?.status === 401 && !isStaffLoginEndpoint) {
       localStorage.removeItem('cg_staff_token')
       localStorage.removeItem('cg_staff_refresh_token')
       localStorage.removeItem('cg_staff')

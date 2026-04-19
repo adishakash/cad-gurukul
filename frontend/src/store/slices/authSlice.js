@@ -20,7 +20,9 @@ export const loginUser = createAsyncThunk('auth/login', async (data, { rejectWit
     const res = await api.post('/auth/login', data)
     return res.data.data
   } catch (err) {
-    return rejectWithValue(err.response?.data?.error?.message || 'Login failed')
+    return rejectWithValue(
+      err.response?.data?.error?.message || 'Incorrect email or password. Please try again.'
+    )
   }
 })
 

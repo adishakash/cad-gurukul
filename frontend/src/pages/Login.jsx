@@ -14,8 +14,10 @@ export default function Login() {
 
   const { register, handleSubmit, formState: { errors } } = useForm()
 
-  // Clear any stale error from a previous action (e.g. a failed registration) when this page mounts.
-  useEffect(() => { dispatch(clearError()) }, [dispatch])
+  // Clear any stale error carried over from a previous page (e.g. a failed registration)
+  // when this page first mounts. The error will persist after a failed login attempt
+  // until the user retries or modifies their input.
+  useEffect(() => { dispatch(clearError()) }, [dispatch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const registerHref = searchParams.toString() ? `/register?${searchParams.toString()}` : '/register'
 
@@ -63,13 +65,13 @@ export default function Login() {
         )}
 
         {authError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
+          <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
             {authError}
           </div>
         )}
 
         <div className="card shadow-xl">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} onChange={() => { if (authError) dispatch(clearError()) }} className="space-y-4">
             <div>
               <label className="input-label">Email Address</label>
               <input
