@@ -50,6 +50,7 @@ router.post('/contact', validate(contactSchema), async (req, res) => {
 
 const testlinkRoutes = require('./testlink.routes');
 const consultationRoutes = require('./consultation.routes');
+const schedulingRoutes = require('./scheduling.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -65,5 +66,6 @@ router.use('/join', joiningRoutes);
 router.use('/testlink', testlinkRoutes);
 router.use('/auth/partner', partnerAuthRoutes);
 router.use('/consultation', consultationRoutes);
+router.use('/scheduling', schedulingRoutes);
 
 module.exports = router;

@@ -1258,7 +1258,7 @@ model QuestionTemplate {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONSULTATION BOOKINGS — Phase 7
+// CONSULTATION BOOKINGS — Phase 7 + Phase 10 (Scheduling & Google Meet)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Created immediately after a ₹9,999 consultation payment is captured.
@@ -1279,7 +1279,8 @@ model ConsultationBooking {
   counsellorContact   String @default("adish@cadgurukul.com")
 
   /// Slot selected by the student via email link.
-  /// Values: 'morning_9_12' | 'afternoon_2_5' | 'evening_6_9'
+  /// Values: 'morning_9_12' | 'afternoon_2_5' | 'evening_6_9' (legacy)
+  /// OR: resolved from AvailabilitySlot (Phase 10 — specific date+time)
   selectedSlot   String?
   slotSelectedAt DateTime?
 
@@ -1297,13 +1298,72 @@ model ConsultationBooking {
   lastResendAt DateTime?       // null = email never manually resent
   resendCount  Int @default(0) // total manual resend count (not counting initial send)
 
+  // ── Phase 10: Date-specific slot + Google Meet ─────────────────────────────
+
+  /// Denormalised date/time fields populated when a date-specific AvailabilitySlot is booked.
+  scheduledDate      DateTime?  // specific calendar date of the session
+  scheduledStartTime String?    // "09:00" (IST)
+  scheduledEndTime   String?    // "12:00" (IST)
+
+  /// Google Calendar/Meet integration — set after Google Calendar event is created.
+  googleMeetLink String?  // e.g. https://meet.google.com/xxx-yyyy-zzz
+  googleEventId  String?  // Google Calendar event ID for updates/deletions
+  meetLinkSentAt DateTime? // timestamp when the meet-link email was dispatched
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Back-reference to the AvailabilitySlot that was claimed (if using Phase 10 flow).
+  availabilitySlot AvailabilitySlot? @relation("SlotBooking")
 
   @@index([userId])
   @@index([slotToken])
   @@index([status])
   @@map("consultation_bookings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AVAILABILITY SLOTS — Phase 10 (Admin-managed date-specific slots)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Admin-managed date-specific availability slots.
+/// Each row represents a bookable session window on a particular date.
+/// Double-booking is prevented by the unique constraint on (date, startTime)
+/// combined with atomic isBooked flag updates inside a DB transaction.
+model AvailabilitySlot {
+  id        String   @id @default(cuid())
+
+  /// The calendar date of the slot (stored as DATE; time component is always 00:00 UTC).
+  date      DateTime @db.Date
+
+  /// 24-hour time strings in IST (e.g. "09:00", "14:00").
+  startTime String
+  endTime   String
+
+  /// Human-readable label shown to students (e.g. "Morning — 9:00 AM to 12:00 PM").
+  label     String
+
+  /// Booking state flags. isBlocked = admin has explicitly closed this slot.
+  isBooked  Boolean @default(false)
+  isBlocked Boolean @default(false)
+
+  /// FK to the ConsultationBooking that claimed this slot (null if free).
+  bookingId String? @unique
+
+  /// Optional internal admin notes.
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Relation to the booking that claimed this slot.
+  booking ConsultationBooking? @relation("SlotBooking", fields: [bookingId], references: [id], onDelete: SetNull)
+
+  /// No two open slots may share the same date + startTime.
+  @@unique([date, startTime])
+  @@index([date])
+  @@index([isBooked])
+  @@index([isBlocked])
+  @@map("availability_slots")
 }

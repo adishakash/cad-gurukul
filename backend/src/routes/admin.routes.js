@@ -1,3 +1,9 @@
+// Google OAuth admin connect endpoints
+const { googleConnectInitiate, googleConnectCallback } = require('../controllers/admin.controller');
+
+// Public: Google OAuth admin connect (for refresh token generation)
+router.get('/google/connect/initiate', googleConnectInitiate);
+router.get('/google/connect/callback', googleConnectCallback);
 'use strict';
 const express = require('express');
 const router = express.Router();

@@ -1,3 +1,73 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// GOOGLE OAUTH ADMIN CONNECT (refresh token generation)
+// ─────────────────────────────────────────────────────────────────────────────
+const fs = require('fs');
+const path = require('path');
+const { google } = require('googleapis');
+
+/**
+ * GET /api/v1/admin/google/connect/initiate
+ * Step 1: Redirect admin to Google OAuth consent screen.
+ */
+const googleConnectInitiate = (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/v1/admin/google/connect/callback`;
+  if (!clientId || !clientSecret) {
+    return errorResponse(res, 'Google client ID/secret missing in env', 500);
+  }
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  const scopes = [
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'openid',
+  ];
+  const url = oauth2.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: scopes,
+  });
+  return res.redirect(url);
+};
+
+/**
+ * GET /api/v1/admin/google/connect/callback
+ * Step 2: Handle Google OAuth callback, extract refresh token, and store securely.
+ */
+const googleConnectCallback = async (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/v1/admin/google/connect/callback`;
+  const code = req.query.code;
+  if (!clientId || !clientSecret) {
+    return errorResponse(res, 'Google client ID/secret missing in env', 500);
+  }
+  if (!code) {
+    return errorResponse(res, 'Missing code in callback', 400);
+  }
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  try {
+    const { tokens } = await oauth2.getToken(code);
+    if (!tokens.refresh_token) {
+      return errorResponse(res, 'No refresh token received. Try removing previous consent in your Google account.', 400);
+    }
+    // Store refresh token securely (write to .env.local, never commit to git)
+    const envPath = path.join(__dirname, '../../.env.local');
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+      envContent = envContent.replace(/^GOOGLE_REFRESH_TOKEN=.*$/m, '');
+    }
+    envContent += `\nGOOGLE_REFRESH_TOKEN=${tokens.refresh_token}\n`;
+    fs.writeFileSync(envPath, envContent, 'utf8');
+    logger.info('[GoogleOAuth] Refresh token stored in .env.local');
+    return res.send('Google OAuth successful! Refresh token saved to backend/.env.local. Copy it to your main .env for production.');
+  } catch (err) {
+    logger.error('[GoogleOAuth] Error exchanging code', { error: err.message });
+    return errorResponse(res, 'Failed to exchange code for tokens', 500);
+  }
+};
 'use strict';
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');

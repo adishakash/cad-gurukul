@@ -123,6 +123,19 @@ const config = {
     aiMax: parseInt(process.env.AI_RATE_LIMIT_MAX, 10) || 20,
   },
 
+  google: {
+    // Google Calendar / Meet integration (Phase 10)
+    // Set GOOGLE_CALENDAR_ENABLED=true to activate real Meet link generation.
+    // When disabled, a placeholder link is stored and admin can update manually.
+    enabled: process.env.GOOGLE_CALENDAR_ENABLED === 'true',
+    clientId:     process.env.GOOGLE_CLIENT_ID     || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    refreshToken: process.env.GOOGLE_REFRESH_TOKEN || '',
+    calendarId:   process.env.GOOGLE_CALENDAR_ID   || 'primary',
+    // Timezone used when creating calendar events
+    timezone: process.env.GOOGLE_CALENDAR_TIMEZONE || 'Asia/Kolkata',
+  },
+
   log: {
     level: process.env.LOG_LEVEL || 'info',
     file: process.env.LOG_FILE || 'logs/app.log',

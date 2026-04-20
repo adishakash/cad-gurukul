@@ -1,5 +1,6 @@
 # CAD Gurukul — Deployment Guide
 
+
 ## Prerequisites
 - Node.js 20+
 - PostgreSQL 15+
@@ -7,7 +8,8 @@
 - A Razorpay account (live/test key pair)
 - OpenAI API key
 - Google Gemini API key
-- SMTP credentials (SendGrid / Mailtrap for dev)
+- **Brevo SMTP credentials** (recommended for production email)
+- **Google OAuth credentials** (download OAuth client JSON from Google Cloud Console)
 
 ---
 
@@ -20,6 +22,42 @@ git clone <repo>
 cd webapp
 cp backend/.env.example backend/.env
 # Edit backend/.env — fill in all secrets
+
+---
+
+## Email (Brevo SMTP) Setup
+
+1. Sign up at https://www.brevo.com/ (formerly Sendinblue).
+2. Go to SMTP & API > SMTP, generate credentials.
+3. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` in your `.env` (see `.env.example`).
+4. Set `EMAIL_FROM` to your verified sender (e.g. "CAD Gurukul <noreply@cadgurukul.com>").
+5. Never use personal Gmail for production email.
+
+---
+
+## Google OAuth / Calendar / Meet Setup
+
+1. Go to Google Cloud Console > APIs & Services > Credentials.
+2. Create OAuth 2.0 Client ID (type: Web application).
+3. Download the JSON file. **Do NOT expose this to frontend.**
+4. Copy `client_id` and `client_secret` to `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+5. Set `GOOGLE_CALENDAR_ID` (usually your Google email or 'primary').
+6. Set `GOOGLE_CALENDAR_TIMEZONE` (e.g. Asia/Kolkata).
+7. Set `GOOGLE_CALENDAR_ENABLED=true` to enable Meet link generation.
+
+### Admin Consent & Refresh Token
+
+To generate a `GOOGLE_REFRESH_TOKEN` (required for backend Meet/Calendar integration):
+
+1. Run the backend locally with all Google env vars except `GOOGLE_REFRESH_TOKEN`.
+2. Visit `/api/v1/admin/google/connect` (or use the provided admin connect UI if present).
+3. Complete the OAuth consent flow as the admin Google account.
+4. The backend will securely store the refresh token (never expose to frontend or commit to git).
+5. Copy the generated refresh token to `.env` as `GOOGLE_REFRESH_TOKEN`.
+
+**Never expose Google secrets or refresh tokens to the frontend or version control.**
+
+---
 ```
 
 ### 2. Set root-level env vars for compose

@@ -411,5 +411,164 @@ const sendAdminSlotNotification = async ({
   });
 };
 
-module.exports = { sendEmail, sendWelcomeEmail, sendReportReadyEmail, sendCounsellingReportEmail, sendConsultationSlotEmail, sendSlotConfirmationEmail, sendAdminSlotNotification };
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 10: MEET DETAILS & SCHEDULING EMAILS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Send Google Meet / meeting details to student (and optionally parent)
+ * after admin schedules the session.
+ *
+ * @param {object} opts
+ * @param {string} opts.to               - Recipient email
+ * @param {string} opts.name             - Recipient name
+ * @param {string} opts.studentName      - Student's full name (if isParent)
+ * @param {boolean} [opts.isParent]
+ * @param {string} opts.counsellorName
+ * @param {string} opts.counsellorContact
+ * @param {string} opts.meetLink         - Google Meet / video call URL
+ * @param {string} opts.scheduledDateStr - Human-readable date e.g. "Wednesday, 25 June 2026"
+ * @param {string} opts.scheduledTimeStr - Human-readable time e.g. "9:00 AM – 12:00 PM IST"
+ * @param {string} opts.bookingId        - ConsultationBooking.id for reference
+ */
+const sendMeetDetailsEmail = async ({
+  to,
+  name,
+  studentName,
+  isParent = false,
+  counsellorName,
+  counsellorContact,
+  meetLink,
+  scheduledDateStr,
+  scheduledTimeStr,
+  bookingId,
+}) => {
+  const greeting  = isParent ? `Hi ${name},` : `You're all set, ${name}! 🎉`;
+  const intro     = isParent
+    ? `Your ward <strong>${studentName}</strong>'s Career Blueprint Session has been officially scheduled. Here are the details:`
+    : `Your 1:1 Career Blueprint Session with <strong>${counsellorName}</strong> is officially scheduled. Here are your meeting details:`;
+
+  return sendEmail({
+    to,
+    subject: `📹 Meeting Confirmed — Your Career Session Link is Ready${isParent ? ` (${studentName})` : ''}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+        ${emailHeader}
+        <div style="padding:30px;">
+          <p style="font-size:16px;color:#1a1a2e;margin:0 0 8px;">${greeting}</p>
+          <p style="color:#444;font-size:14px;line-height:1.6;">${intro}</p>
+
+          <!-- Meeting card -->
+          <div style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:10px;padding:22px;margin:22px 0;">
+            <div style="font-size:12px;font-weight:bold;color:#4338ca;letter-spacing:0.8px;margin-bottom:10px;">YOUR MEETING DETAILS</div>
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              <tr>
+                <td style="padding:6px 0;color:#555;width:130px;vertical-align:top;">📅 Date</td>
+                <td style="padding:6px 0;font-weight:bold;color:#1a1a2e;">${scheduledDateStr}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#555;vertical-align:top;">⏰ Time</td>
+                <td style="padding:6px 0;font-weight:bold;color:#1a1a2e;">${scheduledTimeStr}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#555;vertical-align:top;">👨‍💼 Counsellor</td>
+                <td style="padding:6px 0;font-weight:bold;color:#1a1a2e;">${counsellorName}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;color:#555;vertical-align:top;">📹 Platform</td>
+                <td style="padding:6px 0;color:#1a1a2e;">Google Meet</td>
+              </tr>
+            </table>
+
+            <!-- Big Meet Join button -->
+            <div style="margin-top:18px;text-align:center;">
+              <a href="${meetLink}"
+                 style="display:inline-block;background:#4338ca;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;letter-spacing:0.2px;">
+                📹 Join Google Meet →
+              </a>
+              <p style="font-size:11px;color:#999;margin:10px 0 0;">
+                Or paste this link: <span style="color:#4338ca;word-break:break-all;">${meetLink}</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Tips -->
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px;margin-bottom:20px;">
+            <div style="font-size:12px;font-weight:bold;color:#14532d;margin-bottom:8px;">📋 BEFORE YOUR SESSION</div>
+            <ul style="font-size:13px;color:#166534;margin:0;padding-left:18px;line-height:1.8;">
+              <li>Join 2–3 minutes early to test your audio/video</li>
+              <li>Keep a notepad handy for career path ideas</li>
+              <li>List your top 3 career questions in advance</li>
+              <li>Parents are welcome — it greatly helps the session</li>
+            </ul>
+          </div>
+
+          <div style="background:#fffbea;border:1px solid #fde68a;border-radius:6px;padding:12px 16px;font-size:12px;color:#92400e;">
+            Need to reschedule or have questions?
+            Contact us at <a href="mailto:${counsellorContact}" style="color:#e94560;">${counsellorContact}</a>
+          </div>
+        </div>
+        ${emailFooter}
+      </div>
+    `,
+  });
+};
+
+/**
+ * Notify admin when a customer books a date-specific availability slot.
+ */
+const sendAdminNewBookingNotification = async ({
+  studentName,
+  studentEmail,
+  scheduledDateStr,
+  scheduledTimeStr,
+  bookingId,
+  slotId,
+}) => {
+  const adminEmail = config.email.from?.match(/<(.+?)>/)?.[1] || config.email.user || 'noreply@cadgurukul.com';
+
+  return sendEmail({
+    to: adminEmail,
+    subject: `[New Booking] ${studentName} — ${scheduledDateStr} ${scheduledTimeStr}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;">
+        ${emailHeader}
+        <div style="padding:24px;">
+          <h2 style="color:#1a1a2e;margin:0 0 16px;">📆 New Consultation Booked</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:8px 0;color:#555;width:140px;">Student</td>
+                <td style="padding:8px 0;font-weight:bold;color:#1a1a2e;">${studentName}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Email</td>
+                <td style="padding:8px 0;color:#0f3460;">${studentEmail || 'N/A'}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Date</td>
+                <td style="padding:8px 0;font-weight:bold;color:#e94560;">${scheduledDateStr}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Time</td>
+                <td style="padding:8px 0;font-weight:bold;color:#e94560;">${scheduledTimeStr}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Booking ID</td>
+                <td style="padding:8px 0;font-family:monospace;font-size:12px;color:#666;">${bookingId}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Slot ID</td>
+                <td style="padding:8px 0;font-family:monospace;font-size:12px;color:#666;">${slotId}</td></tr>
+          </table>
+          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 16px;margin-top:20px;font-size:13px;color:#991b1b;">
+            ⚡ A Google Meet link has been generated automatically. Please verify the Admin Scheduling dashboard for details.
+          </div>
+        </div>
+        ${emailFooter}
+      </div>
+    `,
+  });
+};
+
+module.exports = {
+  sendEmail,
+  sendWelcomeEmail,
+  sendReportReadyEmail,
+  sendCounsellingReportEmail,
+  sendConsultationSlotEmail,
+  sendSlotConfirmationEmail,
+  sendAdminSlotNotification,
+  // Phase 10 — scheduling & Google Meet
+  sendMeetDetailsEmail,
+  sendAdminNewBookingNotification,
+};
 
