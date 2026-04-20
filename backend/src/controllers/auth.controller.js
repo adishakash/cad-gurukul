@@ -7,6 +7,18 @@ const { successResponse, errorResponse } = require('../utils/helpers');
 const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../utils/token');
 const logger = require('../utils/logger');
 
+/**
+ * Roles that belong to the user portal.
+ * Only these roles may log in via POST /auth/login.
+ */
+const USER_PORTAL_ROLES = new Set(['STUDENT', 'PARENT']);
+
+/**
+ * Structurally valid bcrypt hash used as a timing-safe dummy target
+ * when no real user is found (prevents timing-based user enumeration).
+ */
+const DUMMY_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const buildInitialStudentProfile = (fullName) => ({
@@ -67,17 +79,27 @@ const login = async (req, res) => {
       select: { id: true, email: true, passwordHash: true, role: true, isActive: true },
     });
 
-    if (!user) {
+    // Determine the hash to compare against.
+    // We always run bcrypt — prevents timing-based user enumeration.
+    const hashToCompare = (user && user.isActive) ? user.passwordHash : DUMMY_HASH;
+    const isPasswordValid = await bcrypt.compare(password, hashToCompare);
+
+    // Generic check for: not found | inactive | wrong password.
+    if (!user || !user.isActive || !isPasswordValid) {
       return errorResponse(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
-    if (!user.isActive) {
-      return errorResponse(res, 'Account has been deactivated', 401, 'ACCOUNT_DISABLED');
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isPasswordValid) {
-      return errorResponse(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
+    // Portal membership check — only STUDENT / PARENT may use this endpoint.
+    // Staff (CCL, CC) must use /staff/login. Admins must use /admin/login.
+    if (!USER_PORTAL_ROLES.has(user.role)) {
+      return errorResponse(
+        res,
+        'This account does not have access to the student portal. ' +
+          'If you are a staff member, please use the Staff Portal. ' +
+          'If you are an administrator, please use the Admin Panel.',
+        403,
+        'WRONG_PORTAL'
+      );
     }
 
     const accessToken = signAccessToken(user.id, user.role);

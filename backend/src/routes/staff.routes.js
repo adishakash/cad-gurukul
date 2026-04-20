@@ -2,7 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 
-const { authenticate, authorizeRoles } = require('../middleware/auth');
+const { authenticate, requirePortalRole } = require('../middleware/auth');
 const { validate }                     = require('../middleware/validate');
 const { authLimiter }                  = require('../middleware/rateLimiter');
 const staffController                  = require('../controllers/staff.controller');
@@ -28,15 +28,13 @@ const { bulkSendJoiningLinks }           = require('../controllers/bulkSend.cont
  */
 router.post('/login', authLimiter, validate(staffLoginSchema), staffController.loginStaff);
 
-// ─── Protected routes (CAREER_COUNSELLOR_LEAD minimum required) ───────────────
+// ─── Protected routes (CAREER_COUNSELLOR_LEAD only — strict portal membership) ──
 //
-// authorizeRoles('CAREER_COUNSELLOR_LEAD') means:
-//   CAREER_COUNSELLOR_LEAD (level 3) ✅
-//   ADMIN (level 4)                  ✅  (higher roles always pass lower-level checks)
-//   CAREER_COUNSELLOR (level 2)      ❌  (Phase 3: move guard to authorizeRoles('CAREER_COUNSELLOR'))
-//   STUDENT / PARENT (level 1)       ❌
+// requirePortalRole uses exact role-set membership, NOT numeric hierarchy.
+// This prevents ADMIN (higher level) from leaking into the staff portal.
+// CAREER_COUNSELLOR accesses the counsellor portal (/counsellor/*) instead.
 
-router.use(authenticate, authorizeRoles('CAREER_COUNSELLOR_LEAD'));
+router.use(authenticate, requirePortalRole('CAREER_COUNSELLOR_LEAD'));
 
 // Auth
 router.get('/profile', staffController.getStaffProfile);
@@ -53,15 +51,13 @@ router.get('/students', staffController.listStudents);
 router.get('/reports', staffController.listReports);
 
 // Assigned Prospects — leads assigned to this specific CC/CCL by admin
-// NOTE: authorizeRoles('CAREER_COUNSELLOR') would allow CC-level access, but
-// since we gate the whole router at CCL+ already, we use a dedicated check
-// by overriding just this route before the router-level middleware applies.
-// The getAssignedProspects handler itself is role-neutral (uses req.user.id only).
+// The getAssignedProspects handler is role-neutral (filters by req.user.id only).
+// Access is already restricted to CAREER_COUNSELLOR_LEAD by the router.use() above.
 router.get('/assigned-prospects', staffController.getAssignedProspects);
 
 // ─── CCL Business Layer ────────────────────────────────────────────────────────
-// All routes below require CAREER_COUNSELLOR_LEAD (already enforced by the
-// router.use() middleware above). ADMIN (level 4) also passes through.
+// All routes below require CAREER_COUNSELLOR_LEAD (enforced by the
+// router.use(authenticate, requirePortalRole('CAREER_COUNSELLOR_LEAD')) above).
 
 // Account & income summary
 router.get('/account',              cclController.getAccountSummary);

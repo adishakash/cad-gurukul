@@ -2,10 +2,11 @@
 const express = require('express');
 const router = express.Router();
 
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requirePortalRole } = require('../middleware/auth');
 const reportController = require('../controllers/report.controller');
 
-router.use(authenticate);
+// User portal: only STUDENT and PARENT may access these routes.
+router.use(authenticate, requirePortalRole('STUDENT', 'PARENT'));
 
 router.get('/my', reportController.getMyReports);
 router.get('/:id/status', reportController.getReportStatus);

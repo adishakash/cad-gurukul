@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
-import { selectIsAuthenticated } from './store/slices/authSlice'
+import { selectIsAuthenticated, selectUser } from './store/slices/authSlice'
+
+// Roles that belong to the student portal (mirrored from backend USER_PORTAL_ROLES)
+const USER_PORTAL_ROLES = ['STUDENT', 'PARENT']
 
 // Layout
 import Header from './components/Layout/Header'
@@ -55,33 +58,47 @@ import TestLinkPage from './pages/Public/TestLinkPage'
 // Guards
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated)
-  return isAuthenticated ? children : <Navigate to="/login" replace />
+  const user = useSelector(selectUser)
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  // Reject staff/admin accounts that somehow ended up in the user portal store.
+  if (!USER_PORTAL_ROLES.includes(user?.role)) return <Navigate to="/login" replace />
+  return children
 }
 
 const GuestRoute = ({ children }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated)
-  return isAuthenticated ? <Navigate to="/dashboard" replace /> : children
+  const user = useSelector(selectUser)
+  // Only redirect to dashboard if the token belongs to a user-portal account.
+  // Staff/admin tokens must NOT be treated as "logged in" for this portal.
+  if (isAuthenticated && USER_PORTAL_ROLES.includes(user?.role)) return <Navigate to="/dashboard" replace />
+  return children
 }
 
 // Admin guard — checks localStorage directly (admin auth is independent of Redux store)
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('cg_admin_token')
-  return token ? children : <Navigate to="/admin/login" replace />
-}
-
-// Staff guard — checks localStorage directly (staff auth is independent of Redux store)
-const StaffRoute = ({ children }) => {
-  const token = localStorage.getItem('cg_staff_token')
-  const staff = JSON.parse(localStorage.getItem('cg_staff') || '{}')
-  // Only CCL (and ADMIN via staff token, though rare) can access the staff portal
-  if (!token || staff.role === 'CAREER_COUNSELLOR') return <Navigate to="/staff/login" replace />
+  const admin = (() => { try { return JSON.parse(localStorage.getItem('cg_admin') || '{}') } catch { return {} } })()
+  // Verify both token presence AND that the stored role is ADMIN.
+  if (!token || admin.role !== 'ADMIN') return <Navigate to="/admin/login" replace />
   return children
 }
 
-// Counsellor guard — CC and CCL can both access counsellor routes
+// Staff guard — CCL-only portal. Strict role check; ADMIN must NOT pass through.
+const StaffRoute = ({ children }) => {
+  const token = localStorage.getItem('cg_staff_token')
+  const staff = (() => { try { return JSON.parse(localStorage.getItem('cg_staff') || '{}') } catch { return {} } })()
+  // Only CAREER_COUNSELLOR_LEAD may access the staff portal.
+  if (!token || staff.role !== 'CAREER_COUNSELLOR_LEAD') return <Navigate to="/staff/login" replace />
+  return children
+}
+
+// Counsellor guard — CC and CCL can both access counsellor routes. ADMIN must NOT pass through.
 const CounsellorRoute = ({ children }) => {
   const token = localStorage.getItem('cg_staff_token')
-  return token ? children : <Navigate to="/staff/login" replace />
+  const staff = (() => { try { return JSON.parse(localStorage.getItem('cg_staff') || '{}') } catch { return {} } })()
+  const COUNSELLOR_ROLES = ['CAREER_COUNSELLOR', 'CAREER_COUNSELLOR_LEAD']
+  if (!token || !COUNSELLOR_ROLES.includes(staff.role)) return <Navigate to="/staff/login" replace />
+  return children
 }
 
 const PublicLayout = ({ children }) => (

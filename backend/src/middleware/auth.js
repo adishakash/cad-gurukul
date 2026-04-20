@@ -181,4 +181,45 @@ const authorizeRoles = (...allowedRoles) => {
   };
 };
 
-module.exports = { authenticate, authenticateAdmin, optionalAuthenticate, requireRole, requireSuperAdmin, authorizeRoles };
+/**
+ * Portal-boundary role middleware.
+ *
+ * Unlike `authorizeRoles` (which uses numeric hierarchy so higher roles
+ * auto-pass lower-level checks), this middleware uses EXACT set membership.
+ * A user must have one of the listed roles — no hierarchy promotion.
+ *
+ * Use this at the TOP of every portal router to prevent cross-portal access:
+ *   router.use(authenticate, requirePortalRole('STUDENT', 'PARENT'))   // user portal
+ *   router.use(authenticate, requirePortalRole('CAREER_COUNSELLOR_LEAD')) // staff portal
+ *   router.use(authenticate, requirePortalRole('ADMIN'))                // admin portal
+ *
+ * Must be used AFTER `authenticate` (requires req.user to be set).
+ */
+const requirePortalRole = (...roles) => {
+  if (!roles.length) {
+    throw new Error('requirePortalRole() requires at least one role argument');
+  }
+
+  const { ROLE_HIERARCHY } = require('../config/roles');
+  for (const role of roles) {
+    if (!(role in ROLE_HIERARCHY)) {
+      throw new Error(`requirePortalRole(): unknown role "${role}". Valid roles: ${Object.keys(ROLE_HIERARCHY).join(', ')}`);
+    }
+  }
+
+  const allowed = new Set(roles);
+
+  return (req, res, next) => {
+    if (!req.user) {
+      return errorResponse(res, 'Authentication required', 401, 'UNAUTHORIZED');
+    }
+
+    if (!allowed.has(req.user.role)) {
+      return errorResponse(res, 'You do not have access to this portal', 403, 'FORBIDDEN');
+    }
+
+    next();
+  };
+};
+
+module.exports = { authenticate, authenticateAdmin, optionalAuthenticate, requireRole, requireSuperAdmin, authorizeRoles, requirePortalRole };

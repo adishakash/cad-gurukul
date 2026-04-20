@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requirePortalRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const paymentController = require('../controllers/payment.controller');
 const { createOrderSchema, verifyPaymentSchema } = require('../validators/payment.validator');
@@ -10,7 +10,8 @@ const { createOrderSchema, verifyPaymentSchema } = require('../validators/paymen
 // Razorpay server-to-server webhook (no user JWT)
 router.post('/webhook', paymentController.handleWebhook);
 
-router.use(authenticate);
+// User portal: only STUDENT and PARENT may access these routes.
+router.use(authenticate, requirePortalRole('STUDENT', 'PARENT'));
 
 router.post('/create-order', validate(createOrderSchema), paymentController.createOrder);
 router.post('/verify', validate(verifyPaymentSchema), paymentController.verifyPayment);

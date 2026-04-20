@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { authenticate, authorizeRoles } = require('../middleware/auth');
+const { authenticate, requirePortalRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { authLimiter } = require('../middleware/rateLimiter');
 const { upload, enforceSizeLimit } = require('../middleware/upload');
@@ -23,9 +23,9 @@ router.post(
   adminController.loginAdmin
 );
 
-// ─── Protected routes (ADMIN role required) ───────────────────────────────────
+// ─── Protected routes (ADMIN only — strict portal membership) ────────────────
 
-router.use(authenticate, authorizeRoles('ADMIN'));
+router.use(authenticate, requirePortalRole('ADMIN'));
 
 // Profile
 router.get('/profile', adminController.getAdminProfile);

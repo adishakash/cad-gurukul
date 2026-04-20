@@ -18,7 +18,19 @@ export const registerUser = createAsyncThunk('auth/register', async (data, { rej
 export const loginUser = createAsyncThunk('auth/login', async (data, { rejectWithValue }) => {
   try {
     const res = await api.post('/auth/login', data)
-    return res.data.data
+    const payload = res.data.data
+
+    // Defence-in-depth: even if the backend somehow returns success for a
+    // non-user-portal role, reject on the frontend as well.
+    const USER_PORTAL_ROLES = ['STUDENT', 'PARENT']
+    if (!USER_PORTAL_ROLES.includes(payload?.user?.role)) {
+      return rejectWithValue(
+        'This account does not have access to the student portal. ' +
+        'Please use the Staff Portal or Admin Panel.'
+      )
+    }
+
+    return payload
   } catch (err) {
     return rejectWithValue(
       err.response?.data?.error?.message || 'Incorrect email or password. Please try again.'

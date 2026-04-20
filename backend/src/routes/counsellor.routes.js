@@ -2,7 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 
-const { authenticate, authorizeRoles } = require('../middleware/auth');
+const { authenticate, requirePortalRole } = require('../middleware/auth');
 const { validate }                     = require('../middleware/validate');
 const { staffLoginSchema, staffLeadListQuerySchema } = require('../validators/staff.validator');
 const { createTestLinkSchema, updateDiscountSchema } = require('../validators/cc.validator');
@@ -16,9 +16,13 @@ const { bulkSendTestLinks }              = require('../controllers/bulkSend.cont
 const { authLimiter } = require('../middleware/rateLimiter');
 router.post('/login', authLimiter, validate(staffLoginSchema), staffController.loginStaff);
 
-// ─── Protected routes (CAREER_COUNSELLOR minimum — CC, CCL, ADMIN all pass) ──
+// ─── Protected routes (CC and CCL — strict portal membership, no ADMIN) ─────
+//
+// requirePortalRole uses exact role-set membership, NOT numeric hierarchy.
+// This prevents ADMIN from leaking into the counsellor portal.
+// CCL is included because CCLs can also perform CC-level work.
 
-router.use(authenticate, authorizeRoles('CAREER_COUNSELLOR'));
+router.use(authenticate, requirePortalRole('CAREER_COUNSELLOR', 'CAREER_COUNSELLOR_LEAD'));
 
 // Auth
 router.get('/profile', staffController.getStaffProfile);

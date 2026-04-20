@@ -2,12 +2,13 @@
 const express = require('express');
 const router = express.Router();
 
-const { authenticate } = require('../middleware/auth');
-const { validate } = require('../middleware/validate');
-const studentController = require('../controllers/student.controller');
-const studentValidator = require('../validators/student.validator');
+const { authenticate, requirePortalRole } = require('../middleware/auth')
+const { validate } = require('../middleware/validate')
+const studentController = require('../controllers/student.controller')
+const studentValidator = require('../validators/student.validator')
 
-router.use(authenticate);
+// User portal: only STUDENT and PARENT may access these routes.
+router.use(authenticate, requirePortalRole('STUDENT', 'PARENT'))
 
 router.get('/me', studentController.getMyProfile);
 router.put('/me', validate(studentValidator.updateProfile), studentController.updateProfile);
