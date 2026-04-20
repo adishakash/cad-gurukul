@@ -42,6 +42,9 @@ import CounsellorDashboard from './pages/Counsellor/CounsellorDashboard'
 
 // Public joining page (no auth required)
 import JoinPage from './pages/Public/JoinPage'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TermsOfService from './pages/TermsOfService'
+import RefundPolicy from './pages/RefundPolicy'
 
 // Public consultation slot-selection page (no auth required — link from email)
 import ConsultationSlotPage from './pages/Public/ConsultationSlotPage'
@@ -143,6 +146,11 @@ export default function App() {
         {/* Counsellor (Career Counsellor) routes */}
         <Route path="/counsellor"           element={<CounsellorRoute><CounsellorDashboard /></CounsellorRoute>} />
         <Route path="/counsellor/dashboard" element={<CounsellorRoute><CounsellorDashboard /></CounsellorRoute>} />
+
+        {/* Policy pages */}
+        <Route path="/privacy" element={<PublicLayout><PrivacyPolicy /></PublicLayout>} />
+        <Route path="/terms" element={<PublicLayout><TermsOfService /></PublicLayout>} />
+        <Route path="/refund" element={<PublicLayout><RefundPolicy /></PublicLayout>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
