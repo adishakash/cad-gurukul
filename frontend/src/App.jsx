@@ -28,6 +28,7 @@ import Report from './pages/Report'
 // Admin pages
 import AdminLogin       from './pages/Admin/AdminLogin'
 import AdminDashboard   from './pages/Admin/AdminDashboard'
+import AdminScheduling  from './pages/Admin/AdminScheduling'
 import LeadList         from './pages/Admin/LeadList'
 import LeadDetail       from './pages/Admin/LeadDetail'
 import AdminPartners    from './pages/Admin/AdminPartners'
@@ -145,6 +146,7 @@ export default function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/scheduling" element={<AdminRoute><AdminScheduling /></AdminRoute>} />
         <Route path="/admin/leads" element={<AdminRoute><LeadList /></AdminRoute>} />
         <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
         <Route path="/admin/partners" element={<AdminRoute><AdminPartners /></AdminRoute>} />

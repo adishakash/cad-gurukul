@@ -338,6 +338,31 @@ export const consultationApi = {
   recover: () => api.post('/consultation/recover'),
 }
 
+// ─── Scheduling API — Phase 10 ────────────────────────────────────────────────
+
+/** Public: customer slot selection (no auth) */
+export const schedulingPublicApi = {
+  getAvailableSlots: () => api.get('/scheduling/available-slots'),
+  bookSlot: (data)   => api.post('/scheduling/book', data),
+}
+
+/** Admin: slot + booking management (uses adminApiClient → cg_admin_token) */
+export const adminSchedulingApi = {
+  // Slots
+  createSlots:   (data)   => adminApiClient.post('/scheduling/slots', data),
+  listSlots:     (params) => adminApiClient.get('/scheduling/slots', { params }),
+  getSlot:       (id)     => adminApiClient.get(`/scheduling/slots/${id}`),
+  blockSlot:     (id)     => adminApiClient.patch(`/scheduling/slots/${id}/block`),
+  unblockSlot:   (id)     => adminApiClient.patch(`/scheduling/slots/${id}/unblock`),
+  deleteSlot:    (id)     => adminApiClient.delete(`/scheduling/slots/${id}`),
+  // Bookings
+  listBookings:        (params)       => adminApiClient.get('/scheduling/bookings', { params }),
+  getBooking:          (id)           => adminApiClient.get(`/scheduling/bookings/${id}`),
+  updateBookingStatus: (id, data)     => adminApiClient.patch(`/scheduling/bookings/${id}/status`, data),
+  setMeetLink:         (id, meetLink) => adminApiClient.patch(`/scheduling/bookings/${id}/meet-link`, { meetLink }),
+  sendMeetEmail:       (id)           => adminApiClient.post(`/scheduling/bookings/${id}/send-meet`),
+}
+
 // ─── Auth API (student account management) ────────────────────────────────────
 export const authApi = {
   /**

@@ -293,6 +293,16 @@ export default function AdminDashboard() {
           <>
             {activeTab === 'overview' && (
               <div>
+                {/* Scheduling quick-link card */}
+                <div className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <Link to="/admin/scheduling" className="block rounded-2xl border-2 border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 p-6 hover:shadow-lg transition-all">
+                    <div className="flex items-center gap-4 mb-2">
+                      <span className="text-3xl">📅</span>
+                      <span className="font-bold text-lg text-indigo-900 dark:text-indigo-200">Scheduling & Bookings</span>
+                    </div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300">Manage availability slots, bookings, and Google Meet links for all consultations.</div>
+                  </Link>
+                </div>
                 {/* Funnel metrics */}
                 {funnel && (
                   <div className="mb-8">
