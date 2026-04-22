@@ -6,6 +6,7 @@ const config = require('../config');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../utils/token');
 const logger = require('../utils/logger');
+const { sendWelcomeEmail } = require('../services/email/emailService');
 
 /**
  * Roles that belong to the user portal.
@@ -57,6 +58,10 @@ const register = async (req, res) => {
     await saveRefreshToken(user.id, refreshToken);
 
     logger.info('[Auth] User registered', { userId: user.id, email: user.email });
+
+    sendWelcomeEmail({ to: user.email, name: fullName })
+      .then(() => logger.info('[Auth] Welcome email sent', { userId: user.id, email: user.email }))
+      .catch((emailErr) => logger.warn('[Auth] Welcome email failed', { userId: user.id, error: emailErr.message }));
 
     return successResponse(
       res,

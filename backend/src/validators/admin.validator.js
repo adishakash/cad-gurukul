@@ -42,10 +42,33 @@ const adminActionSchema = Joi.object({
 
 const triggerActionSchema = Joi.object({
   action: Joi.string()
-    .valid('regenerate_report', 'resend_report_link', 'mark_counselling')
+    .valid('regenerate_report', 'resend_report_link', 'mark_counselling', 'send_counselling_report')
     .required(),
   interested: Joi.boolean().optional(),
   notes:      Joi.string().trim().max(500).optional().allow('', null),
+});
+
+const emailTestSchema = Joi.object({
+  to: Joi.string().email().lowercase().trim().optional(),
+  subject: Joi.string().trim().max(150).optional(),
+});
+
+const consultationBlockSchema = Joi.object({
+  date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  startAt: Joi.date().iso().optional(),
+  endAt: Joi.date().iso().optional(),
+  reason: Joi.string().trim().max(250).optional().allow('', null),
+  isFullDay: Joi.boolean().optional(),
+}).or('date', 'startAt');
+
+const consultationBookingUpdateSchema = Joi.object({
+  status: Joi.string().valid('slot_mail_sent', 'meeting_scheduled', 'meeting_completed', 'counselling_report_ready').optional(),
+  meetingNotes: Joi.string().trim().max(1000).optional().allow('', null),
+  scheduledStartAt: Joi.date().iso().optional(),
+  counsellorName: Joi.string().trim().max(120).optional(),
+  counsellorContact: Joi.string().trim().max(120).optional().allow('', null),
+  counsellorExpertise: Joi.string().trim().max(180).optional().allow('', null),
+  action: Joi.string().valid('send_24h_reminder', 'send_2h_reminder', 'send_follow_up', 'send_report_email').optional(),
 });
 
 const markCounsellingSchema = Joi.object({
@@ -64,4 +87,7 @@ module.exports = {
   markCounsellingSchema,
   retriggerSchema,
   triggerActionSchema,
+  emailTestSchema,
+  consultationBlockSchema,
+  consultationBookingUpdateSchema,
 };

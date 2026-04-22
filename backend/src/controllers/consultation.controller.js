@@ -1,66 +1,125 @@
 'use strict';
-/**
- * Consultation Controller — Phase 7
- * ──────────────────────────────────────────────────────────────────────────
- * Manages the post-payment slot-selection workflow for ₹9,999 consultations.
- *
- * Public endpoint (token-based, no JWT required):
- *   POST /consultation/select-slot  { token, slot }
- *
- * Auth-protected endpoints:
- *   GET  /consultation/my
- *   POST /consultation/resend
- */
 
 const crypto = require('crypto');
-const prisma  = require('../config/database');
+const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
-const logger  = require('../utils/logger');
+const logger = require('../utils/logger');
 const {
   sendSlotConfirmationEmail,
   sendAdminSlotNotification,
   sendConsultationSlotEmail,
 } = require('../services/email/emailService');
+const {
+  AVAILABILITY_WINDOW_DAYS,
+  listAvailableSlots,
+  assertSlotAvailability,
+  buildMeetingRoomName,
+  buildMeetingLink,
+  formatSlotDateTime,
+  formatSlotTimeRange,
+  inferLegacySlotCode,
+} = require('../services/consultation/consultationSchedulingService');
 
-const VALID_SLOTS = ['morning_9_12', 'afternoon_2_5', 'evening_6_9'];
-
-const SLOT_LABELS = {
-  morning_9_12:  'Morning — 9:00 AM to 12:00 PM',
-  afternoon_2_5: 'Afternoon — 2:00 PM to 5:00 PM',
-  evening_6_9:   'Evening — 6:00 PM to 9:00 PM',
-};
-
-/** 30-minute minimum between manual resend requests */
 const RESEND_COOLDOWN_MS = 30 * 60 * 1000;
 
-// ─────────────────────────────────────────────────────────────────────────────
+function isValidToken(token) {
+  return typeof token === 'string' && token.length >= 32;
+}
 
-/**
- * POST /consultation/select-slot
- * Public endpoint — authenticated via secure slot token (no JWT required).
- * Body: { token: string, slot: 'morning_9_12' | 'afternoon_2_5' | 'evening_6_9' }
- *
- * Idempotent: re-selecting the same slot returns 200 with alreadySelected: true.
- * Selecting a different slot when one already exists returns 409.
- */
-const selectSlot = async (req, res) => {
+async function loadBookingContacts(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      studentProfile: {
+        select: {
+          fullName: true,
+          parentDetail: { select: { parentName: true, email: true } },
+        },
+      },
+    },
+  });
+
+  const studentName = user?.studentProfile?.fullName || user?.email?.split('@')[0] || 'Student';
+
+  return {
+    user,
+    studentName,
+    parentEmail: user?.studentProfile?.parentDetail?.email || null,
+    parentName: user?.studentProfile?.parentDetail?.parentName || null,
+  };
+}
+
+async function appendLeadEvent(leadId, event, metadata) {
+  if (!leadId) return;
+
+  await prisma.leadEvent.create({
+    data: {
+      id: crypto.randomUUID(),
+      leadId,
+      event,
+      metadata,
+    },
+  }).catch((err) => {
+    logger.warn('[Consultation] LeadEvent append failed', { error: err.message, event, leadId });
+  });
+}
+
+async function getAvailability(req, res) {
   try {
-    const { token, slot } = req.body;
+    const token = req.query.token;
 
-    // ── Input validation ─────────────────────────────────────────────────────
-    if (!token || typeof token !== 'string' || token.length < 32) {
+    if (!isValidToken(token)) {
       return errorResponse(res, 'Invalid slot selection token', 400, 'INVALID_TOKEN');
     }
-    if (!slot || !VALID_SLOTS.includes(slot)) {
-      return errorResponse(
-        res,
-        `Invalid slot. Valid values: ${VALID_SLOTS.join(', ')}`,
-        400,
-        'INVALID_SLOT',
-      );
+
+    const booking = await prisma.consultationBooking.findUnique({
+      where: { slotToken: token },
+      select: {
+        id: true,
+        status: true,
+        counsellorName: true,
+        counsellorExpertise: true,
+        counsellorContact: true,
+        scheduledStartAt: true,
+        scheduledEndAt: true,
+        meetingLink: true,
+      },
+    });
+
+    if (!booking) {
+      return errorResponse(res, 'Invalid or expired slot selection link', 404, 'NOT_FOUND');
     }
 
-    // ── Look up booking ──────────────────────────────────────────────────────
+    const availability = await listAvailableSlots({
+      from: new Date(),
+      days: AVAILABILITY_WINDOW_DAYS,
+      excludeBookingId: booking.id,
+    });
+
+    return successResponse(res, {
+      booking,
+      availability,
+      availabilityWindowDays: AVAILABILITY_WINDOW_DAYS,
+    });
+  } catch (err) {
+    logger.error('[Consultation] getAvailability error', { error: err.message });
+    throw err;
+  }
+}
+
+async function selectSlot(req, res) {
+  try {
+    const { token, slotStartAt } = req.body;
+
+    if (!isValidToken(token)) {
+      return errorResponse(res, 'Invalid slot selection token', 400, 'INVALID_TOKEN');
+    }
+
+    if (!slotStartAt || typeof slotStartAt !== 'string') {
+      return errorResponse(res, 'Please choose an exact date and time slot.', 400, 'INVALID_SLOT');
+    }
+
     const booking = await prisma.consultationBooking.findUnique({
       where: { slotToken: token },
     });
@@ -69,168 +128,190 @@ const selectSlot = async (req, res) => {
       return errorResponse(res, 'Invalid or expired slot selection link', 404, 'NOT_FOUND');
     }
 
-    // ── Idempotency check ────────────────────────────────────────────────────
-    if (booking.selectedSlot) {
-      if (booking.selectedSlot === slot) {
-        // Same slot re-submitted — safe to return success
+    const slot = await assertSlotAvailability(slotStartAt, { excludeBookingId: booking.id }).catch((err) => {
+      if (err.code === 'INVALID_SLOT') {
+        return null;
+      }
+      throw err;
+    });
+
+    if (!slot) {
+      return errorResponse(
+        res,
+        'Selected slot is outside the available consultation schedule.',
+        400,
+        'INVALID_SLOT',
+      );
+    }
+
+    if (booking.scheduledStartAt) {
+      const alreadySelected = new Date(booking.scheduledStartAt).toISOString() === slot.scheduledStartAt.toISOString();
+      if (alreadySelected) {
         return successResponse(
           res,
           {
-            slot,
-            slotLabel: SLOT_LABELS[slot],
-            status: booking.status,
             alreadySelected: true,
-            counsellorName:    booking.counsellorName,
-            counsellorContact: booking.counsellorContact,
+            booking: {
+              id: booking.id,
+              status: booking.status,
+              scheduledStartAt: booking.scheduledStartAt,
+              scheduledEndAt: booking.scheduledEndAt,
+              meetingLink: booking.meetingLink,
+              counsellorName: booking.counsellorName,
+              counsellorContact: booking.counsellorContact,
+            },
           },
-          'Slot already confirmed. Our team will be in touch with the meeting details.',
+          'Your consultation slot is already confirmed.',
         );
       }
-      // Different slot — inform user to contact support
+
       return errorResponse(
         res,
-        `You already selected "${SLOT_LABELS[booking.selectedSlot]}". Please contact support to change your slot.`,
+        'You have already selected your consultation slot. Please contact support to reschedule.',
         409,
         'SLOT_ALREADY_SELECTED',
-        { selectedSlot: booking.selectedSlot },
+        { scheduledStartAt: booking.scheduledStartAt },
       );
     }
 
-    // ── Record selection ─────────────────────────────────────────────────────
-    await prisma.consultationBooking.update({
+    const roomName = buildMeetingRoomName(booking.id, booking.userId);
+    const meetingLink = buildMeetingLink(roomName);
+
+    const updatedBooking = await prisma.consultationBooking.update({
       where: { id: booking.id },
       data: {
-        selectedSlot:   slot,
+        selectedSlot: inferLegacySlotCode(slot.scheduledStartAt),
         slotSelectedAt: new Date(),
-        status:         'slot_selected',
+        scheduledStartAt: slot.scheduledStartAt,
+        scheduledEndAt: slot.scheduledEndAt,
+        scheduledTimezone: 'Asia/Kolkata',
+        meetingProvider: 'JITSI',
+        meetingRoomName: roomName,
+        meetingConfirmedAt: new Date(),
+        status: 'meeting_scheduled',
+        meetingDate: slot.scheduledStartAt,
+        meetingLink,
       },
     });
 
-    // ── Append timeline event ────────────────────────────────────────────────
-    if (booking.leadId) {
-      await prisma.leadEvent.create({
-        data: {
-          id:       crypto.randomUUID(),
-          leadId:   booking.leadId,
-          event:    'consultation_slot_selected',
-          metadata: { slot, slotLabel: SLOT_LABELS[slot], bookingId: booking.id },
-        },
-      }).catch((err) =>
-        logger.warn('[Consultation] LeadEvent append failed', { error: err.message }),
-      );
-    }
-
-    // ── Fetch user + parent for confirmation emails ──────────────────────────
-    const user = await prisma.user.findUnique({
-      where: { id: booking.userId },
-      select: {
-        email: true,
-        studentProfile: {
-          select: {
-            fullName: true,
-            parentDetail: { select: { parentName: true, email: true } },
-          },
-        },
-      },
+    await appendLeadEvent(booking.leadId, 'consultation_slot_selected', {
+      bookingId: booking.id,
+      scheduledStartAt: slot.scheduledStartAt.toISOString(),
+      scheduledEndAt: slot.scheduledEndAt.toISOString(),
+      meetingLink,
+    });
+    await appendLeadEvent(booking.leadId, 'consultation_meeting_scheduled', {
+      bookingId: booking.id,
+      scheduledStartAt: slot.scheduledStartAt.toISOString(),
+      scheduledEndAt: slot.scheduledEndAt.toISOString(),
+      meetingLink,
     });
 
-    const studentName = user?.studentProfile?.fullName
-      || user?.email?.split('@')[0]
-      || 'Student';
-    const parentEmail = user?.studentProfile?.parentDetail?.email;
-    const parentName  = user?.studentProfile?.parentDetail?.parentName;
+    const { user, studentName, parentEmail, parentName } = await loadBookingContacts(booking.userId);
 
-    // ── Confirmation email → student (fire-and-forget) ───────────────────────
     if (user?.email) {
       sendSlotConfirmationEmail({
-        to:               user.email,
-        name:             studentName,
-        slot,
-        slotLabel:        SLOT_LABELS[slot],
-        counsellorName:   booking.counsellorName,
-        counsellorContact: booking.counsellorContact,
+        to: user.email,
+        name: studentName,
+        scheduledStartAt: slot.scheduledStartAt,
+        scheduledEndAt: slot.scheduledEndAt,
+        counsellorName: updatedBooking.counsellorName,
+        counsellorContact: updatedBooking.counsellorContact,
+        meetingLink,
+        meetingProvider: updatedBooking.meetingProvider,
       }).catch((err) =>
         logger.warn('[Consultation] Student confirmation email failed', { error: err.message }),
       );
     }
 
-    // ── Confirmation email → parent (fire-and-forget) ────────────────────────
     if (parentEmail) {
       sendSlotConfirmationEmail({
-        to:               parentEmail,
-        name:             parentName || `Parent of ${studentName}`,
-        slot,
-        slotLabel:        SLOT_LABELS[slot],
-        counsellorName:   booking.counsellorName,
-        counsellorContact: booking.counsellorContact,
-        isParent:         true,
+        to: parentEmail,
+        name: parentName || `Parent of ${studentName}`,
+        scheduledStartAt: slot.scheduledStartAt,
+        scheduledEndAt: slot.scheduledEndAt,
+        counsellorName: updatedBooking.counsellorName,
+        counsellorContact: updatedBooking.counsellorContact,
+        meetingLink,
+        meetingProvider: updatedBooking.meetingProvider,
+        isParent: true,
         studentName,
       }).catch((err) =>
         logger.warn('[Consultation] Parent confirmation email failed', { error: err.message }),
       );
     }
 
-    // ── Admin notification (fire-and-forget) ─────────────────────────────────
     sendAdminSlotNotification({
       studentName,
       studentEmail: user?.email,
-      slot,
-      slotLabel:    SLOT_LABELS[slot],
-      bookingId:    booking.id,
+      bookingId: booking.id,
+      scheduledStartAt: slot.scheduledStartAt,
+      scheduledEndAt: slot.scheduledEndAt,
+      meetingLink,
+      meetingProvider: updatedBooking.meetingProvider,
     }).catch((err) =>
       logger.warn('[Consultation] Admin notification email failed', { error: err.message }),
     );
 
-    logger.info('[Consultation] Slot selected', {
+    logger.info('[Consultation] Exact slot selected', {
       bookingId: booking.id,
-      slot,
-      userId:    booking.userId,
+      userId: booking.userId,
+      scheduledStartAt: slot.scheduledStartAt.toISOString(),
     });
 
     return successResponse(
       res,
       {
-        slot,
-        slotLabel:        SLOT_LABELS[slot],
-        status:           'slot_selected',
-        counsellorName:   booking.counsellorName,
-        counsellorContact: booking.counsellorContact,
+        booking: {
+          id: updatedBooking.id,
+          status: updatedBooking.status,
+          scheduledStartAt: updatedBooking.scheduledStartAt,
+          scheduledEndAt: updatedBooking.scheduledEndAt,
+          meetingLink: updatedBooking.meetingLink,
+          counsellorName: updatedBooking.counsellorName,
+          counsellorContact: updatedBooking.counsellorContact,
+          meetingProvider: updatedBooking.meetingProvider,
+          scheduledLabel: formatSlotDateTime(slot.scheduledStartAt),
+          scheduledTimeRange: formatSlotTimeRange(slot.scheduledStartAt, slot.scheduledEndAt),
+        },
       },
-      'Slot confirmed! Our team will send you the meeting details within 24 hours.',
+      'Consultation slot confirmed. Your meeting link is now ready.',
     );
   } catch (err) {
+    if (err.code === 'SLOT_UNAVAILABLE') {
+      return errorResponse(res, err.message, 409, 'SLOT_UNAVAILABLE');
+    }
+
     logger.error('[Consultation] selectSlot error', { error: err.message });
     throw err;
   }
-};
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * GET /consultation/my
- * Auth-protected. Returns the current user's latest consultation booking (or null).
- * Used by Dashboard to render the ConsultationTimeline.
- */
-const getMyBooking = async (req, res) => {
+async function getMyBooking(req, res) {
   try {
     const booking = await prisma.consultationBooking.findFirst({
-      where:   { userId: req.user.id },
+      where: { userId: req.user.id },
       orderBy: { createdAt: 'desc' },
       select: {
-        id:                 true,
-        status:             true,
-        selectedSlot:       true,
-        slotSelectedAt:     true,
-        counsellorName:     true,
+        id: true,
+        status: true,
+        selectedSlot: true,
+        slotSelectedAt: true,
+        scheduledStartAt: true,
+        scheduledEndAt: true,
+        scheduledTimezone: true,
+        meetingProvider: true,
+        meetingConfirmedAt: true,
+        counsellorName: true,
         counsellorExpertise: true,
-        counsellorContact:  true,
-        meetingDate:        true,
-        meetingLink:        true,
-        meetingNotes:       true,
-        lastResendAt:       true,
-        resendCount:        true,
-        createdAt:          true,
-        updatedAt:          true,
+        counsellorContact: true,
+        meetingDate: true,
+        meetingLink: true,
+        meetingNotes: true,
+        lastResendAt: true,
+        resendCount: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -239,20 +320,12 @@ const getMyBooking = async (req, res) => {
     logger.error('[Consultation] getMyBooking error', { error: err.message });
     throw err;
   }
-};
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * POST /consultation/resend
- * Auth-protected. Re-sends the slot-selection email to the user (and parent if
- * registered). Rate-limited: 30-minute cooldown between resend requests.
- * Only works while status is 'slot_mail_sent' (slot not yet chosen).
- */
-const resendSlotEmail = async (req, res) => {
+async function resendSlotEmail(req, res) {
   try {
     const booking = await prisma.consultationBooking.findFirst({
-      where:   { userId: req.user.id },
+      where: { userId: req.user.id },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -260,19 +333,17 @@ const resendSlotEmail = async (req, res) => {
       return errorResponse(res, 'No consultation booking found for your account.', 404, 'NOT_FOUND');
     }
 
-    // Only resend while waiting for slot selection
-    if (booking.status !== 'slot_mail_sent') {
+    if (booking.scheduledStartAt || booking.status === 'meeting_scheduled') {
       return errorResponse(
         res,
-        'Your slot has already been selected — no resend needed.',
+        'Your meeting is already scheduled. Please check your confirmation email for the link.',
         400,
-        'SLOT_ALREADY_SELECTED',
+        'MEETING_ALREADY_SCHEDULED',
       );
     }
 
-    // Cooldown: 30 minutes since last send (createdAt for initial, lastResendAt thereafter)
     const lastSentAt = booking.lastResendAt || booking.createdAt;
-    const elapsed    = Date.now() - new Date(lastSentAt).getTime();
+    const elapsed = Date.now() - new Date(lastSentAt).getTime();
     if (elapsed < RESEND_COOLDOWN_MS) {
       const minutesLeft = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 60000);
       return errorResponse(
@@ -284,31 +355,12 @@ const resendSlotEmail = async (req, res) => {
       );
     }
 
-    // Fetch user + parent email addresses
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        email: true,
-        studentProfile: {
-          select: {
-            fullName: true,
-            parentDetail: { select: { parentName: true, email: true } },
-          },
-        },
-      },
-    });
-
-    const studentName = user?.studentProfile?.fullName
-      || user?.email?.split('@')[0]
-      || 'Student';
-    const parentEmail = user?.studentProfile?.parentDetail?.email;
-    const parentName  = user?.studentProfile?.parentDetail?.parentName;
-
+    const { user, studentName, parentEmail, parentName } = await loadBookingContacts(req.user.id);
     const emailArgs = {
-      slotToken:           booking.slotToken,
-      counsellorName:      booking.counsellorName,
+      slotToken: booking.slotToken,
+      counsellorName: booking.counsellorName,
       counsellorExpertise: booking.counsellorExpertise,
-      counsellorContact:   booking.counsellorContact,
+      counsellorContact: booking.counsellorContact,
     };
 
     const emailResults = { student: false, parent: false };
@@ -325,9 +377,9 @@ const resendSlotEmail = async (req, res) => {
     if (parentEmail) {
       try {
         await sendConsultationSlotEmail({
-          to:          parentEmail,
-          name:        parentName || `Parent of ${studentName}`,
-          isParent:    true,
+          to: parentEmail,
+          name: parentName || `Parent of ${studentName}`,
+          isParent: true,
           studentName,
           ...emailArgs,
         });
@@ -337,34 +389,17 @@ const resendSlotEmail = async (req, res) => {
       }
     }
 
-    // Persist resend record
     const updatedBooking = await prisma.consultationBooking.update({
       where: { id: booking.id },
       data: {
         lastResendAt: new Date(),
-        resendCount:  { increment: 1 },
+        resendCount: { increment: 1 },
       },
       select: { lastResendAt: true, resendCount: true },
     });
 
-    // Append timeline event (non-fatal)
-    if (booking.leadId) {
-      prisma.leadEvent.create({
-        data: {
-          id:       crypto.randomUUID(),
-          leadId:   booking.leadId,
-          event:    'consultation_slot_email_resent',
-          metadata: { resendCount: updatedBooking.resendCount, emailResults },
-        },
-      }).catch((err) =>
-        logger.warn('[Consultation] Resend LeadEvent failed', { error: err.message }),
-      );
-    }
-
-    logger.info('[Consultation] Slot email resent', {
-      bookingId:    booking.id,
-      userId:       req.user.id,
-      resendCount:  updatedBooking.resendCount,
+    await appendLeadEvent(booking.leadId, 'consultation_slot_email_resent', {
+      resendCount: updatedBooking.resendCount,
       emailResults,
     });
 
@@ -374,31 +409,17 @@ const resendSlotEmail = async (req, res) => {
       res,
       { resentAt: updatedBooking.lastResendAt, emailResults, nextResendAt },
       emailResults.student || emailResults.parent
-        ? 'Slot-selection email resent successfully. Check your inbox.'
+        ? 'Scheduling email resent successfully. Check your inbox.'
         : 'Resend attempted but email delivery failed. Please contact support.',
     );
   } catch (err) {
     logger.error('[Consultation] resendSlotEmail error', { error: err.message });
     throw err;
   }
-};
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * POST /consultation/recover
- * Auth-protected. Recovery endpoint for legacy users who paid ₹9,999 before the
- * webhook fix — they have a captured payment but no ConsultationBooking row and
- * never received the slot-selection email.
- *
- * Behaviour:
- *  • Finds the user's most recent consultation payment (status=CAPTURED, metadata.planType='consultation')
- *  • If booking already exists for that payment → delegates to resend (with normal cooldown)
- *  • If no booking → creates one and sends the slot-selection email
- */
-const recoverConsultationBooking = async (req, res) => {
+async function recoverConsultationBooking(req, res) {
   try {
-    // ── 1. Find the user's consultation payment ──────────────────────────────
     const payment = await prisma.payment.findFirst({
       where: {
         userId: req.user.id,
@@ -417,23 +438,20 @@ const recoverConsultationBooking = async (req, res) => {
       );
     }
 
-    // ── 2. Check if booking already exists for this payment ──────────────────
     const existingBooking = await prisma.consultationBooking.findUnique({
       where: { paymentId: payment.id },
     });
 
     if (existingBooking) {
-      // Booking exists — run the normal resend flow (respect cooldown)
-      logger.info('[Consultation] Recover: booking already exists, delegating to resend', {
-        userId:    req.user.id,
+      logger.info('[Consultation] Recover delegated to resend', {
+        userId: req.user.id,
         bookingId: existingBooking.id,
       });
       return resendSlotEmail(req, res);
     }
 
-    // ── 3. No booking — create one ───────────────────────────────────────────
     const lead = await prisma.lead.findFirst({
-      where:   { userId: req.user.id },
+      where: { userId: req.user.id },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -441,43 +459,22 @@ const recoverConsultationBooking = async (req, res) => {
 
     const booking = await prisma.consultationBooking.create({
       data: {
-        id:        crypto.randomUUID(),
-        userId:    req.user.id,
+        id: crypto.randomUUID(),
+        userId: req.user.id,
         paymentId: payment.id,
-        leadId:    lead?.id || null,
+        leadId: lead?.id || null,
         slotToken,
-        status:    'slot_mail_sent',
-        // counsellorName, counsellorExpertise, counsellorContact all have @default in schema
+        status: 'slot_mail_sent',
       },
     });
 
-    // ── 4. Fetch user + parent for email ─────────────────────────────────────
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        email: true,
-        studentProfile: {
-          select: {
-            fullName: true,
-            parentDetail: { select: { parentName: true, email: true } },
-          },
-        },
-      },
-    });
-
-    const studentName = user?.studentProfile?.fullName
-      || user?.email?.split('@')[0]
-      || 'Student';
-    const parentEmail = user?.studentProfile?.parentDetail?.email;
-    const parentName  = user?.studentProfile?.parentDetail?.parentName;
-
+    const { user, studentName, parentEmail, parentName } = await loadBookingContacts(req.user.id);
     const emailArgs = {
       slotToken,
-      counsellorName:      booking.counsellorName,
+      counsellorName: booking.counsellorName,
       counsellorExpertise: booking.counsellorExpertise,
-      counsellorContact:   booking.counsellorContact,
+      counsellorContact: booking.counsellorContact,
     };
-
     const emailResults = { student: false, parent: false };
 
     if (user?.email) {
@@ -492,9 +489,9 @@ const recoverConsultationBooking = async (req, res) => {
     if (parentEmail) {
       try {
         await sendConsultationSlotEmail({
-          to:          parentEmail,
-          name:        parentName || `Parent of ${studentName}`,
-          isParent:    true,
+          to: parentEmail,
+          name: parentName || `Parent of ${studentName}`,
+          isParent: true,
           studentName,
           ...emailArgs,
         });
@@ -504,105 +501,63 @@ const recoverConsultationBooking = async (req, res) => {
       }
     }
 
-    // ── 5. Append LeadEvent ──────────────────────────────────────────────────
-    if (lead?.id) {
-      prisma.leadEvent.create({
-        data: {
-          id:       crypto.randomUUID(),
-          leadId:   lead.id,
-          event:    'consultation_booking_recovered',
-          metadata: { bookingId: booking.id, emailResults },
-        },
-      }).catch((err) =>
-        logger.warn('[Consultation] Recover LeadEvent failed', { error: err.message }),
-      );
-    }
-
-    logger.info('[Consultation] Legacy booking recovered', {
-      userId:    req.user.id,
+    await appendLeadEvent(lead?.id, 'consultation_booking_recovered', {
       bookingId: booking.id,
-      paymentId: payment.id,
       emailResults,
     });
 
     return successResponse(
       res,
       {
-        recovered:    true,
-        bookingId:    booking.id,
+        recovered: true,
+        bookingId: booking.id,
         emailResults,
       },
       emailResults.student || emailResults.parent
-        ? 'Booking created and slot-selection email sent! Please check your inbox.'
-        : 'Booking created, but email delivery failed. Please contact support at support@cadgurukul.com',
+        ? 'Booking created and scheduling email sent. Please check your inbox.'
+        : 'Booking created, but email delivery failed. Please contact support.',
       201,
     );
   } catch (err) {
     logger.error('[Consultation] recoverConsultationBooking error', { error: err.message });
     throw err;
   }
-};
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * POST /consultation/test-email  (Admin only)
- * Sends a real slot-selection email using a synthetic token so the team can verify
- * SMTP delivery on staging/production before running a live payment test.
- *
- * Body (optional): { to: "override@email.com" }
- * Defaults to the authenticated admin's own email.
- */
-const testSlotEmail = async (req, res) => {
+async function testSlotEmail(req, res) {
   try {
-    const targetEmail = (req.body && req.body.to) ? req.body.to : req.admin?.email;
+    const targetEmail = req.body?.to || req.admin?.email || req.user?.email;
 
     if (!targetEmail) {
       return errorResponse(res, 'No target email address. Pass { to: "email@example.com" } in request body.', 400, 'NO_EMAIL');
     }
 
     const syntheticToken = crypto.randomBytes(32).toString('hex');
-    const testArgs = {
-      to:                  targetEmail,
-      name:                'Test Admin',
-      slotToken:           syntheticToken,
-      counsellorName:      'Adish Gupta',
+    await sendConsultationSlotEmail({
+      to: targetEmail,
+      name: 'Test Admin',
+      slotToken: syntheticToken,
+      counsellorName: 'Adish Gupta',
       counsellorExpertise: 'Career Guidance Specialist | 10+ years | IIT Alumni',
-      counsellorContact:   'adish@cadgurukul.com',
-    };
+      counsellorContact: 'contact@cadgurukul.com',
+    });
 
-    let delivered = false;
-    let errorMsg   = null;
-    try {
-      await sendConsultationSlotEmail(testArgs);
-      delivered = true;
-    } catch (err) {
-      errorMsg = err.message;
-      logger.error('[Consultation] testSlotEmail: delivery failed', { error: err.message });
-    }
-
-    logger.info('[Consultation] testSlotEmail called', { to: targetEmail, delivered });
-
-    if (delivered) {
-      return successResponse(
-        res,
-        { to: targetEmail, delivered: true, syntheticToken },
-        `Test slot-selection email sent to ${targetEmail}. Check the inbox — the slot link will be non-functional (synthetic token).`,
-      );
-    } else {
-      return errorResponse(
-        res,
-        `Email delivery FAILED: ${errorMsg}. Check SMTP config (host, port, user, pass) in .env`,
-        502,
-        'SMTP_FAILURE',
-        { smtpError: errorMsg },
-      );
-    }
+    return successResponse(
+      res,
+      { to: targetEmail, delivered: true, syntheticToken },
+      `Test scheduling email sent to ${targetEmail}.`,
+    );
   } catch (err) {
     logger.error('[Consultation] testSlotEmail error', { error: err.message });
-    throw err;
+    return errorResponse(res, `Email delivery failed: ${err.message}`, 502, 'SMTP_FAILURE');
   }
+}
+
+module.exports = {
+  getAvailability,
+  selectSlot,
+  getMyBooking,
+  resendSlotEmail,
+  recoverConsultationBooking,
+  testSlotEmail,
 };
-
-module.exports = { selectSlot, getMyBooking, resendSlotEmail, recoverConsultationBooking, testSlotEmail };
-

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi, adminUserApi } from '../../services/api'
+import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi, adminUserApi, adminEmailApi } from '../../services/api'
 import ThemeToggle from '../../components/ThemeToggle'
 
 const StatCard = ({ icon, label, value, sub, highlight }) => (
@@ -45,8 +45,11 @@ export default function AdminDashboard() {
   const [payments, setPayments]   = useState([])
   const [aiStats, setAiStats]     = useState(null)
   const [funnel, setFunnel]       = useState(null)
+  const [emailStatus, setEmailStatus] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading]     = useState(true)
+  const [emailRefreshing, setEmailRefreshing] = useState(false)
+  const [testEmailSending, setTestEmailSending] = useState(false)
 
   // Phase 6: Discount policy state
   const [policies, setPolicies]               = useState([])
@@ -84,18 +87,20 @@ export default function AdminDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [analyticsRes, usersRes, paymentsRes, aiStatsRes, funnelRes] = await Promise.all([
+      const [analyticsRes, usersRes, paymentsRes, aiStatsRes, funnelRes, emailStatusRes] = await Promise.all([
         adminLeadApi.getAnalytics(30),
         adminApi.get('/admin/users?limit=50'),
         adminApi.get('/admin/payments?limit=50'),
         adminApi.get('/admin/ai-usage').catch(() => ({ data: { data: null } })),
         adminLeadApi.getFunnel(30).catch(() => ({ data: { data: null } })),
+        adminEmailApi.status().catch(() => ({ data: { data: null } })),
       ])
       setAnalytics(analyticsRes.data.data)
       setUsers(usersRes.data.data?.users || [])
       setPayments(paymentsRes.data.data?.payments || [])
       setAiStats(aiStatsRes.data.data)
       setFunnel(funnelRes.data.data)
+      setEmailStatus(emailStatusRes.data.data)
     } catch (err) {
       if (err?.response?.status === 401) {
         toast.error('Session expired.')
@@ -126,6 +131,36 @@ export default function AdminDashboard() {
     localStorage.removeItem('cg_admin_token')
     localStorage.removeItem('cg_admin')
     navigate('/admin/login')
+  }
+
+  const refreshEmailStatus = async () => {
+    setEmailRefreshing(true)
+    try {
+      const res = await adminEmailApi.status(true)
+      setEmailStatus(res.data.data)
+      if (res.data.data?.verified) {
+        toast.success('SMTP transport verified.')
+      } else {
+        toast.error(res.data.data?.lastError || 'SMTP verification failed.')
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.error?.message || 'Failed to verify SMTP.')
+    } finally {
+      setEmailRefreshing(false)
+    }
+  }
+
+  const sendTestEmail = async () => {
+    setTestEmailSending(true)
+    try {
+      const res = await adminEmailApi.sendTest()
+      toast.success(res.data.message || 'Test email sent.')
+      setEmailStatus(res.data.data?.transport || emailStatus)
+    } catch (err) {
+      toast.error(err?.response?.data?.error?.message || 'Failed to send test email.')
+    } finally {
+      setTestEmailSending(false)
+    }
   }
 
   // Phase 6 + Phase 9: load discount policies + history
@@ -299,6 +334,7 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-4">
           <Link to="/admin/staff" className="text-sm text-gray-300 hover:text-white transition-colors">👥 Staff</Link>
+          <Link to="/admin/consultations" className="text-sm text-gray-300 hover:text-white transition-colors">📅 Consultations</Link>
           <Link to="/admin/partners" className="text-sm text-gray-300 hover:text-white transition-colors">🤝 Partners</Link>
           <Link to="/admin/payouts" className="text-sm text-gray-300 hover:text-white transition-colors">💰 Payouts</Link>
           <span className="text-sm text-gray-300">{admin.name}</span>
@@ -381,8 +417,32 @@ export default function AdminDashboard() {
                     <h3 className="font-bold text-brand-dark dark:text-gray-100 mb-4">Quick Actions</h3>
                     <div className="flex flex-wrap gap-3">
                       <Link to="/admin/leads" className="btn-outline text-sm">👥 Manage Leads</Link>
+                      <Link to="/admin/consultations" className="btn-outline text-sm">📅 Consultations</Link>
                       <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export Leads CSV</button>
                       <button onClick={loadData} className="btn-secondary text-sm">↻ Refresh</button>
+                    </div>
+                  </div>
+                  <div className="card">
+                    <h3 className="font-bold text-brand-dark dark:text-gray-100 mb-4">Email Health</h3>
+                    <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                      <div className="flex justify-between"><span>Configured</span><strong>{emailStatus?.configured ? 'Yes' : 'No'}</strong></div>
+                      <div className="flex justify-between"><span>Verified</span><strong className={emailStatus?.verified ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{emailStatus?.verified ? 'Yes' : 'No'}</strong></div>
+                      <div className="flex justify-between"><span>SMTP Host</span><strong>{emailStatus?.host || '—'}</strong></div>
+                      <div className="flex justify-between"><span>SMTP User</span><strong>{emailStatus?.user || '—'}</strong></div>
+                      <div className="flex justify-between"><span>Last Check</span><strong>{emailStatus?.lastVerifiedAt ? new Date(emailStatus.lastVerifiedAt).toLocaleString('en-IN') : '—'}</strong></div>
+                    </div>
+                    {emailStatus?.lastError && (
+                      <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {emailStatus.lastError}
+                      </div>
+                    )}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button onClick={refreshEmailStatus} disabled={emailRefreshing} className="btn-outline text-sm">
+                        {emailRefreshing ? 'Verifying…' : 'Verify SMTP'}
+                      </button>
+                      <button onClick={sendTestEmail} disabled={testEmailSending} className="btn-secondary text-sm">
+                        {testEmailSending ? 'Sending…' : 'Send Test Email'}
+                      </button>
                     </div>
                   </div>
                   {aiStats && (

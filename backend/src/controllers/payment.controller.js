@@ -626,8 +626,8 @@ const getPaymentStatus = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Creates a ConsultationBooking record and sends slot-selection emails to the
- * student and (if present) their parent.  Called immediately after a ₹9,999
+ * Creates a ConsultationBooking record and sends the scheduling email to the
+ * registered student email. Called immediately after a ₹9,999
  * consultation payment is captured in verifyPayment / handleWebhook.
  *
  * Idempotent — if a booking already exists for this paymentId it returns early.
@@ -668,16 +668,13 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
     );
   }
 
-  // Fetch user + parent for email sending
+  // Fetch the registered user email for scheduling
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       email: true,
       studentProfile: {
-        select: {
-          fullName: true,
-          parentDetail: { select: { parentName: true, email: true } },
-        },
+        select: { fullName: true },
       },
     },
   });
@@ -685,8 +682,6 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
   const studentName = user?.studentProfile?.fullName
     || user?.email?.split('@')[0]
     || 'Student';
-  const parentEmail = user?.studentProfile?.parentDetail?.email;
-  const parentName  = user?.studentProfile?.parentDetail?.parentName;
 
   const emailArgs = {
     slotToken,
@@ -706,24 +701,10 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
     );
   }
 
-  // Send to parent
-  if (parentEmail) {
-    await sendConsultationSlotEmail({
-      to:          parentEmail,
-      name:        parentName || `Parent of ${studentName}`,
-      isParent:    true,
-      studentName,
-      ...emailArgs,
-    }).catch((err) =>
-      logger.warn('[Payment] Slot-selection email to parent failed', { error: err.message }),
-    );
-  }
-
   logger.info('[Payment] ConsultationBooking created + slot email sent', {
     bookingId: booking.id,
     userId,
     studentEmail: user?.email,
-    hasParentEmail: Boolean(parentEmail),
   });
 
   return booking;
