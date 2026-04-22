@@ -67,6 +67,7 @@ export default function AdminDashboard() {
   const [trainingFile, setTrainingFile]     = useState(null)
   // User management
   const [deletingUserId, setDeletingUserId] = useState(null)
+  const [usersLoading, setUsersLoading]     = useState(false)
 
   const admin = JSON.parse(localStorage.getItem('cg_admin') || '{}')
 
@@ -230,15 +231,29 @@ export default function AdminDashboard() {
     }
   }
 
+  const loadUsers = async () => {
+    setUsersLoading(true)
+    try {
+      const res = await adminUserApi.list({ limit: 50 })
+      setUsers(res.data.data?.users || [])
+    } catch (err) {
+      toast.error(err?.response?.data?.error?.message || 'Failed to refresh users.')
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
   const handleDeleteUser = async (userId, userName) => {
-    if (!window.confirm(`Delete user "${userName}"? This will revoke their login access.`)) return
+    if (!window.confirm(`Delete "${userName}"? This will revoke their login access immediately.`)) return
     setDeletingUserId(userId)
     try {
       await adminUserApi.delete(userId)
-      toast.success(`User "${userName}" deleted.`)
-      setUsers((prev) => prev.filter((u) => u.id !== userId))
+      toast.success(`"${userName}" deleted. Login access revoked.`)
+      // Re-fetch from backend to ensure list is accurate (not optimistic)
+      await loadUsers()
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Failed to delete user')
+      const msg = err?.response?.data?.error?.message || err?.response?.data?.message || 'Failed to delete user.'
+      toast.error(msg)
     } finally {
       setDeletingUserId(null)
     }
@@ -375,36 +390,64 @@ export default function AdminDashboard() {
               <div className="card">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Users ({users.length})</h3>
-                  <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export CSV</button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={loadUsers}
+                      disabled={usersLoading}
+                      className="btn-outline text-sm flex items-center gap-1.5 disabled:opacity-50"
+                      title="Refresh user list from server"
+                    >
+                      <span className={usersLoading ? 'animate-spin inline-block' : ''}>↻</span>
+                      {usersLoading ? 'Refreshing…' : 'Refresh'}
+                    </button>
+                    <button onClick={() => handleExport('leads')} className="btn-outline text-sm">⬇ Export CSV</button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
-                        {['Name', 'Email', 'Role', 'Class', 'City', 'Joined', 'Action'].map((h) => (
+                        {['Name', 'Email', 'Role', 'Class', 'City', 'Joined', 'Status', 'Action'].map((h) => (
                           <th key={h} className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {users.length === 0 ? (
-                        <tr><td colSpan={7} className="text-center py-8 text-gray-400 dark:text-gray-500">No users found.</td></tr>
+                      {usersLoading ? (
+                        <tr><td colSpan={8} className="text-center py-8 text-gray-400 dark:text-gray-500">Loading users…</td></tr>
+                      ) : users.length === 0 ? (
+                        <tr><td colSpan={8} className="text-center py-8 text-gray-400 dark:text-gray-500">No active users found.</td></tr>
                       ) : users.map((u) => (
                         <tr key={u.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                           <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.studentProfile?.fullName || u.email.split('@')[0]}</td>
                           <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.email}</td>
-                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.role}</td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{u.role}</span>
+                          </td>
                           <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.studentProfile?.classStandard?.replace('CLASS_', 'Class ') || '—'}</td>
                           <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.studentProfile?.city || '—'}</td>
                           <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
                           <td className="px-4 py-3">
-                            <button
-                              onClick={() => handleDeleteUser(u.id, u.studentProfile?.fullName || u.email)}
-                              disabled={deletingUserId === u.id || u.role === 'ADMIN'}
-                              className="text-xs px-2 py-1 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-semibold transition disabled:opacity-40"
-                            >
-                              {deletingUserId === u.id ? '…' : 'Delete'}
-                            </button>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                              u.isActive
+                                ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400'
+                                : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400'
+                            }`}>
+                              {u.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {u.role === 'ADMIN' ? (
+                              <span className="text-xs text-gray-400 dark:text-gray-600 italic">Protected</span>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteUser(u.id, u.studentProfile?.fullName || u.email)}
+                                disabled={deletingUserId === u.id || usersLoading}
+                                className="text-xs px-3 py-1 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-semibold transition disabled:opacity-40"
+                              >
+                                {deletingUserId === u.id ? '…' : 'Delete'}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}

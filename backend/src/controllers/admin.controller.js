@@ -127,9 +127,16 @@ const listUsers = async (req, res) => {
     const { page = 1, limit = 20, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = search
-      ? { OR: [{ email: { contains: search, mode: 'insensitive' } }] }
-      : {};
+    // Always exclude soft-deleted users from the active list.
+    const where = {
+      deletedAt: null,
+      ...(search && {
+        OR: [
+          { email: { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+    };
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -138,7 +145,7 @@ const listUsers = async (req, res) => {
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, email: true, role: true, isActive: true, createdAt: true,
+          id: true, email: true, role: true, isActive: true, deletedAt: true, createdAt: true,
           studentProfile: { select: { fullName: true, classStandard: true, city: true } },
         },
       }),
