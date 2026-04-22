@@ -8,18 +8,6 @@ const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../util
 const logger = require('../utils/logger');
 const { sendWelcomeEmail } = require('../services/email/emailService');
 
-/**
- * Roles that belong to the user portal.
- * Only these roles may log in via POST /auth/login.
- */
-const USER_PORTAL_ROLES = new Set(['STUDENT', 'PARENT']);
-
-/**
- * Structurally valid bcrypt hash used as a timing-safe dummy target
- * when no real user is found (prevents timing-based user enumeration).
- */
-const DUMMY_HASH = '$2a$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const buildInitialStudentProfile = (fullName) => ({
@@ -84,27 +72,17 @@ const login = async (req, res) => {
       select: { id: true, email: true, passwordHash: true, role: true, isActive: true },
     });
 
-    // Determine the hash to compare against.
-    // We always run bcrypt — prevents timing-based user enumeration.
-    const hashToCompare = (user && user.isActive) ? user.passwordHash : DUMMY_HASH;
-    const isPasswordValid = await bcrypt.compare(password, hashToCompare);
-
-    // Generic check for: not found | inactive | wrong password.
-    if (!user || !user.isActive || !isPasswordValid) {
+    if (!user) {
       return errorResponse(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
-    // Portal membership check — only STUDENT / PARENT may use this endpoint.
-    // Staff (CCL, CC) must use /staff/login. Admins must use /admin/login.
-    if (!USER_PORTAL_ROLES.has(user.role)) {
-      return errorResponse(
-        res,
-        'This account does not have access to the student portal. ' +
-          'If you are a staff member, please use the Staff Portal. ' +
-          'If you are an administrator, please use the Admin Panel.',
-        403,
-        'WRONG_PORTAL'
-      );
+    if (!user.isActive) {
+      return errorResponse(res, 'Account has been deactivated', 401, 'ACCOUNT_DISABLED');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      return errorResponse(res, 'Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
     const accessToken = signAccessToken(user.id, user.role);
@@ -168,16 +146,6 @@ const logout = async (req, res) => {
   }
 };
 
-/**
- * DELETE /api/v1/auth/account
- * Soft-deletes the authenticated user's account.
- * Requires the current password as confirmation.
- * Steps:
- *  1. Validate password
- *  2. Set isActive=false, deletedAt=now(), anonymise email
- *  3. Revoke all refresh tokens
- *  4. Return 200
- */
 const deleteAccount = async (req, res) => {
   try {
     const { password } = req.body;
@@ -186,7 +154,6 @@ const deleteAccount = async (req, res) => {
       return errorResponse(res, 'Password confirmation is required', 400, 'VALIDATION_ERROR');
     }
 
-    // Load full user record including passwordHash
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { id: true, email: true, passwordHash: true, isActive: true, deletedAt: true },
@@ -200,26 +167,22 @@ const deleteAccount = async (req, res) => {
       return errorResponse(res, 'Account is already deactivated', 400, 'ALREADY_INACTIVE');
     }
 
-    // Verify password before deletion — never skip this check
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       return errorResponse(res, 'Incorrect password. Account was not deleted.', 401, 'INVALID_CREDENTIALS');
     }
 
-    // Anonymise email so the address can be reused on a new account
     const anonymisedEmail = `deleted_${user.id}@deleted.cadgurukul.internal`;
 
-    // Soft delete: set isActive=false, deletedAt=now(), anonymise email
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        isActive:  false,
+        isActive: false,
         deletedAt: new Date(),
-        email:     anonymisedEmail,
+        email: anonymisedEmail,
       },
     });
 
-    // Revoke all refresh tokens — forces immediate session termination
     await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
 
     logger.info('[Auth] Account deleted (soft)', { userId: user.id, originalEmail: user.email });

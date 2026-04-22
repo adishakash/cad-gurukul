@@ -246,7 +246,7 @@ async function listConsultationCalendar({ from = new Date(), days = 14 } = {}) {
     prisma.consultationBooking.findMany({
       where: {
         OR: [
-          { status: { in: ['slot_mail_sent', 'slot_selected'] } },
+          { status: { in: ['booking_confirmed', 'slot_mail_sent', 'slot_selected'] } },
           {
             scheduledStartAt: {
               gte: startOfIstDay(from),

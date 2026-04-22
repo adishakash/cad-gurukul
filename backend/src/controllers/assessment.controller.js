@@ -384,25 +384,49 @@ const generateReportAsync = async (assessment, profile, reportId, reportType) =>
         reportType:  resolvedType,
       };
 
+      let reportEmailSentAt = null;
+      let parentEmailSentAt = null;
+      let emailDeliveryError = null;
+
       // Email to student
       if (reportUser?.email) {
-        sendReportReadyEmail({ to: reportUser.email, name: studentName, ...emailArgs })
-          .then(() => logger.info('[Assessment] Report email sent to student', { reportId, to: reportUser.email }))
-          .catch((err) => logger.warn('[Assessment] Report email to student failed', { reportId, error: err.message }));
+        try {
+          await sendReportReadyEmail({ to: reportUser.email, name: studentName, ...emailArgs });
+          reportEmailSentAt = new Date();
+          logger.info('[Assessment] Report email sent to student', { reportId, to: reportUser.email });
+        } catch (err) {
+          emailDeliveryError = err.message;
+          logger.warn('[Assessment] Report email to student failed', { reportId, error: err.message });
+        }
+      } else {
+        emailDeliveryError = 'Student email unavailable';
       }
 
       // CC parent (only for paid reports — free report parent notification is noisy)
       if (parentEmail && completedReport?.accessLevel === 'PAID') {
-        sendReportReadyEmail({
-          to:          parentEmail,
-          name:        parentName || `Parent of ${studentName}`,
-          isParent:    true,
-          studentName,
-          ...emailArgs,
-        })
-          .then(() => logger.info('[Assessment] Report email sent to parent', { reportId, to: parentEmail }))
-          .catch((err) => logger.warn('[Assessment] Report email to parent failed', { reportId, error: err.message }));
+        try {
+          await sendReportReadyEmail({
+            to:          parentEmail,
+            name:        parentName || `Parent of ${studentName}`,
+            isParent:    true,
+            studentName,
+            ...emailArgs,
+          });
+          parentEmailSentAt = new Date();
+          logger.info('[Assessment] Report email sent to parent', { reportId, to: parentEmail });
+        } catch (err) {
+          logger.warn('[Assessment] Report email to parent failed', { reportId, error: err.message });
+        }
       }
+
+      await prisma.careerReport.update({
+        where: { id: reportId },
+        data: {
+          reportEmailSentAt,
+          parentEmailSentAt,
+          emailDeliveryError,
+        },
+      });
     } catch (emailLookupErr) {
       logger.warn('[Assessment] Could not look up user for report email', { reportId, error: emailLookupErr.message });
     }

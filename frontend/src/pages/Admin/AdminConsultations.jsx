@@ -5,6 +5,7 @@ import { adminConsultationApi } from '../../services/api'
 import ThemeToggle from '../../components/ThemeToggle'
 
 const STATUS_OPTIONS = [
+  'booking_confirmed',
   'slot_mail_sent',
   'meeting_scheduled',
   'meeting_completed',
@@ -298,7 +299,7 @@ export default function AdminConsultations() {
   const stats = useMemo(() => {
     const bookings = data?.bookings || []
     return {
-      pending: bookings.filter((booking) => booking.status === 'slot_mail_sent').length,
+      pending: bookings.filter((booking) => ['booking_confirmed', 'slot_mail_sent'].includes(booking.status)).length,
       scheduled: bookings.filter((booking) => booking.status === 'meeting_scheduled').length,
       completed: bookings.filter((booking) => booking.status === 'meeting_completed').length,
       reportReady: bookings.filter((booking) => booking.status === 'counselling_report_ready').length,

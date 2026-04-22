@@ -496,8 +496,7 @@ const listCounsellorReports = async (req, res) => {
 
 /**
  * GET /api/v1/staff/assigned-prospects
- * Returns leads where assignedStaffId === req.user.id (i.e., this CC/CCL).
- * Access is strictly per-user — no cross-contamination across staff.
+ * Returns leads where assignedStaffId === req.user.id.
  */
 const getAssignedProspects = async (req, res) => {
   try {

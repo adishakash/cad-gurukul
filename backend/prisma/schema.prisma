@@ -372,6 +372,9 @@ model CareerReport {
   topCareers          String[]
   recommendedStream   String?
   recommendedSubjects String[]
+  reportEmailSentAt   DateTime?
+  parentEmailSentAt   DateTime?
+  emailDeliveryError  String?
 
   generatedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -1291,15 +1294,17 @@ model ConsultationBooking {
   meetingProvider         String    @default("JITSI")
   meetingRoomName         String?
   meetingConfirmedAt      DateTime?
+  schedulingEmailSentAt   DateTime?
+  schedulingEmailError    String?
   reminder24hSentAt       DateTime?
   reminder2hSentAt        DateTime?
   followUpSentAt          DateTime?
   counsellingReportSentAt DateTime?
 
   /// Booking lifecycle — driven by backend events.
-  /// Values: 'slot_mail_sent' | 'slot_selected' | 'meeting_scheduled'
+  /// Values: 'booking_confirmed' | 'slot_mail_sent' | 'slot_selected' | 'meeting_scheduled'
   ///        | 'meeting_completed' | 'counselling_report_ready'
-  status String @default("slot_mail_sent")
+  status String @default("booking_confirmed")
 
   /// Meeting details set externally by the team once a slot is confirmed.
   meetingDate  DateTime?

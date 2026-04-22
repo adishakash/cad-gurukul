@@ -146,7 +146,7 @@ const getEmailStatus = async (req, res) => {
 
 /**
  * POST /api/v1/admin/email/test
- * Sends a real SMTP test email so the team can verify Titan delivery quickly.
+ * Sends a real SMTP test email so the team can verify delivery quickly.
  */
 const sendTestEmail = async (req, res) => {
   try {
@@ -179,7 +179,7 @@ const sendTestEmail = async (req, res) => {
             <p style="color:#ccd6f6;margin:6px 0 0;font-size:13px;">SMTP delivery test</p>
           </div>
           <div style="padding:30px;">
-            <p style="font-size:16px;color:#1a1a2e;margin:0 0 12px;">Titan email is working.</p>
+            <p style="font-size:16px;color:#1a1a2e;margin:0 0 12px;">Email delivery is working.</p>
             <p style="font-size:14px;color:#444;line-height:1.6;">This is a live test email triggered from the admin backend.</p>
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:20px;">
               <div style="font-size:12px;color:#475569;margin-bottom:6px;">Sent At</div>
@@ -214,16 +214,9 @@ const listUsers = async (req, res) => {
     const { page = 1, limit = 20, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Always exclude soft-deleted users from the active list.
-    const where = {
-      deletedAt: null,
-      ...(search && {
-        OR: [
-          { email: { contains: search, mode: 'insensitive' } },
-          { name: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
-    };
+    const where = search
+      ? { OR: [{ email: { contains: search, mode: 'insensitive' } }] }
+      : {};
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -232,7 +225,7 @@ const listUsers = async (req, res) => {
         take: parseInt(limit),
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, email: true, role: true, isActive: true, deletedAt: true, createdAt: true,
+          id: true, email: true, role: true, isActive: true, createdAt: true,
           studentProfile: { select: { fullName: true, classStandard: true, city: true } },
         },
       }),
@@ -470,11 +463,7 @@ const exportPayments = async (req, res) => {
 
 /**
  * DELETE /api/v1/admin/users/:id
- * Soft-delete a user account:
- *   - Sets deletedAt + isActive=false → login blocked immediately.
- *   - Revokes all refresh tokens.
- *   - Preserves payments, reports, leads (relational integrity maintained).
- *   - Does NOT delete ADMIN accounts via this endpoint.
+ * Soft-delete a user account while preserving relational history.
  */
 const deleteUser = async (req, res) => {
   try {
@@ -487,8 +476,6 @@ const deleteUser = async (req, res) => {
       return errorResponse(res, 'User is already deleted', 409, 'ALREADY_DELETED');
     }
 
-    // Anonymise email so the address is freed for re-registration.
-    // This mirrors the user self-delete (deleteAccount) pattern in auth.controller.js.
     const anonymisedEmail = `deleted_${user.id}@deleted.cadgurukul.internal`;
 
     await prisma.$transaction([
@@ -584,8 +571,6 @@ const listLeads = async (req, res) => {
           utmSource: true, utmCampaign: true,
           counsellingInterested: true, assessmentId: true,
           reportId: true, paymentId: true, createdAt: true, updatedAt: true,
-          assignedStaffId: true, assignedAt: true,
-          assignedStaff: { select: { id: true, name: true, email: true, role: true } },
         },
       }),
       prisma.lead.count({ where }),
@@ -706,17 +691,16 @@ const getFunnelMetrics = async (req, res) => {
   }
 };
 
+const STAFF_ROLES = new Set(['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR']);
+
 /**
  * PUT /api/v1/admin/leads/:id/assign
- * Assign (or unassign) a lead to a specific CC or CCL staff member.
- * Body: { staffId: string|null }  — null unassigns.
- * Only one staff member can be assigned at a time (previous assignment replaced).
+ * Assign or unassign a lead to a CC/CCL staff member.
  */
 const assignLead = async (req, res) => {
   try {
     const { staffId } = req.body;
 
-    // Unassign: staffId = null
     if (staffId === null || staffId === undefined) {
       const updated = await prisma.lead.update({
         where: { id: req.params.id },
@@ -727,7 +711,6 @@ const assignLead = async (req, res) => {
       return successResponse(res, updated, 'Lead assignment removed.');
     }
 
-    // Validate staff member exists and has an allowed role
     const staff = await prisma.user.findUnique({
       where: { id: staffId },
       select: { id: true, name: true, email: true, role: true, isActive: true, deletedAt: true },
@@ -830,66 +813,72 @@ const triggerAdminAction = async (req, res) => {
         include: { parentDetail: true },
       });
 
-      // Determine target plan type: use lead.planType for paid leads, else keep existing
-      const PAID_LEAD_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
-      const leadIsPaid = PAID_LEAD_STATUSES.includes(lead.status);
-      const targetAccessLevel = leadIsPaid ? 'PAID' : report.accessLevel;
-      const targetReportType = (leadIsPaid && report.reportType === 'free') ? (lead.planType || 'standard') : (report.reportType || 'standard');
-
       await prisma.careerReport.update({
         where: { id: lead.reportId },
-        data: { status: 'GENERATING', accessLevel: targetAccessLevel, reportType: targetReportType },
+        data: { status: 'GENERATING' },
       });
       await prisma.leadEvent.create({
         data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_regenerate_report', metadata: { adminId: req.user.id } },
       });
 
       // Fire-and-forget — never throws
-      generateReportAsync(report.assessment, profile, lead.reportId, targetReportType);
+      generateReportAsync(report.assessment, profile, lead.reportId, report.reportType);
 
       return successResponse(res, null, 'Report regeneration queued');
     }
 
     if (action === 'resend_report_link') {
-      await triggerAutomation('premium_report_ready', { leadId: lead.id, reportId: lead.reportId });
+      if (!lead.reportId) return errorResponse(res, 'No report linked to this lead', 400, 'NO_REPORT');
 
-      // Also re-send email (fire-and-forget).
-      // NOTE: CareerReport has no 'user' Prisma relation — fetch user separately via report.userId.
-      if (lead.reportId) {
-        (async () => {
-          try {
-            const rpt = await prisma.careerReport.findUnique({ where: { id: lead.reportId } });
-            if (!rpt) return;
-            const rptUser = await prisma.user.findUnique({
-              where: { id: rpt.userId },
-              select: {
-                email: true,
-                studentProfile: {
-                  select: { fullName: true, parentDetail: { select: { email: true, parentName: true } } },
-                },
-              },
-            });
-            if (!rptUser?.email) return;
-            const sName = rptUser.studentProfile?.fullName || rptUser.email.split('@')[0];
-            const args  = { reportId: lead.reportId, accessLevel: rpt.accessLevel, reportType: rpt.reportType };
-            sendReportReadyEmail({ to: rptUser.email, name: sName, ...args })
-              .catch((e) => logger.warn('[Admin] resend email failed', { error: e.message }));
-            const pEmail = rptUser.studentProfile?.parentDetail?.email;
-            const pName  = rptUser.studentProfile?.parentDetail?.parentName;
-            if (pEmail && rpt.accessLevel === 'PAID') {
-              sendReportReadyEmail({ to: pEmail, name: pName || `Parent of ${sName}`, isParent: true, studentName: sName, ...args })
-                .catch((e) => logger.warn('[Admin] resend parent email failed', { error: e.message }));
-            }
-          } catch (err) {
-            logger.warn('[Admin] resend email block failed', { error: err.message });
-          }
-        })();
+      const report = await prisma.careerReport.findUnique({
+        where: { id: lead.reportId },
+        include: {
+          assessment: true,
+        },
+      });
+
+      if (!report) return errorResponse(res, 'Report not found', 404, 'NOT_FOUND');
+
+      const reportUser = await prisma.user.findUnique({
+        where: { id: report.userId },
+        select: {
+          email: true,
+          studentProfile: {
+            select: {
+              fullName: true,
+              parentDetail: { select: { parentName: true, email: true } },
+            },
+          },
+        },
+      });
+
+      const studentName = reportUser?.studentProfile?.fullName
+        || reportUser?.email?.split('@')[0]
+        || 'Student';
+
+      if (reportUser?.email) {
+        await sendReportReadyEmail({
+          to: reportUser.email,
+          name: studentName,
+          reportId: report.id,
+          accessLevel: report.accessLevel,
+          reportType: report.reportType,
+        });
+
+        await prisma.careerReport.update({
+          where: { id: report.id },
+          data: {
+            reportEmailSentAt: new Date(),
+            emailDeliveryError: null,
+          },
+        });
       }
 
+      await triggerAutomation('premium_report_ready', { leadId: lead.id, reportId: lead.reportId });
       await prisma.leadEvent.create({
         data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_resend_report_link', metadata: { adminId: req.user.id } },
       });
-      return successResponse(res, null, 'Report link resent via WhatsApp and email');
+      return successResponse(res, null, 'Report email resend triggered successfully');
     }
 
     if (action === 'mark_counselling') {
@@ -903,39 +892,6 @@ const triggerAdminAction = async (req, res) => {
       return successResponse(res, null, 'Lead marked as counselling interested');
     }
 
-    if (action === 'send_counselling_report') {
-      // Admin manually triggers final counselling-report-ready email after session completion
-      if (!lead.userId) return errorResponse(res, 'Lead has no linked user', 400, 'NO_USER');
-
-      const booking = await prisma.consultationBooking.findFirst({
-        where: { userId: lead.userId },
-        include: {
-          user: {
-            select: {
-              email: true,
-              studentProfile: {
-                select: { fullName: true, parentDetail: { select: { email: true, parentName: true } } },
-              },
-            },
-          },
-          lead: {
-            select: { reportId: true },
-          },
-        },
-      });
-
-      if (!booking?.user?.email) return errorResponse(res, 'User email not found', 400, 'NO_EMAIL');
-
-      await sendCounsellingReportForBooking(booking);
-
-      await prisma.leadEvent.create({
-        data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_send_counselling_report', metadata: { adminId: req.user.id } },
-      });
-
-      const pEmail = booking.user.studentProfile?.parentDetail?.email;
-      return successResponse(res, null, 'Counselling report email sent to student' + (pEmail ? ' and parent' : ''));
-    }
-
     return errorResponse(res, `Unknown action: ${action}`, 400, 'INVALID_ACTION');
   } catch (err) {
     logger.error('[Admin] triggerAdminAction error', { error: err.message });
@@ -943,65 +899,9 @@ const triggerAdminAction = async (req, res) => {
   }
 };
 
-module.exports = {
-  // ── Auth ───────────────────────────────────────────────────────────────────
-  loginAdmin,
-  logoutAdmin,
-  getAdminProfile,
-  getEmailStatus,
-  sendTestEmail,
-
-  // ── Users ──────────────────────────────────────────────────────────────────
-  listUsers,
-  getAllUsers: listUsers,   // spec alias
-  listDeletedUsers,
-  toggleUserStatus,
-  deleteUser,
-
-  // ── Analytics ──────────────────────────────────────────────────────────────
-  getAnalytics,
-
-  // ── Payments ───────────────────────────────────────────────────────────────
-  listPayments,
-
-  // ── Reports ────────────────────────────────────────────────────────────────
-  listReports,
-  getAllReports: listReports, // spec alias
-
-  // ── AI ─────────────────────────────────────────────────────────────────────
-  getAIUsage,
-
-  // ── Exports ────────────────────────────────────────────────────────────────
-  exportLeads,
-  exportPayments,
-
-  // ── Leads / CRM ────────────────────────────────────────────────────────────
-  listLeads,
-  getAllLeads: listLeads,   // spec alias
-  getLeadDetail,
-  getFunnelMetrics,
-  updateLeadAdmin,
-  triggerAdminAction,
-  assignLead,
-
-  // ── Staff Management ───────────────────────────────────────────────────────
-  listStaff,
-  createStaff,
-  updateStaffRole,
-  toggleStaffStatus,
-  deleteStaff,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STAFF MANAGEMENT
-// ─────────────────────────────────────────────────────────────────────────────
-
-const STAFF_ROLES = new Set(['CAREER_COUNSELLOR_LEAD', 'CAREER_COUNSELLOR']);
-
 /**
  * GET /api/v1/admin/staff
- * Lists active CC and CCL users (deletedAt = null).
- * ?showDeleted=true — list only soft-deleted staff (history view).
+ * Lists CC and CCL staff users.
  */
 async function listStaff(req, res) {
   try {
@@ -1026,45 +926,8 @@ async function listStaff(req, res) {
 }
 
 /**
- * DELETE /api/v1/admin/staff/:id
- * Soft-delete a CC or CCL staff member:
- *   - Sets deletedAt + isActive=false so they cannot log in.
- *   - Revokes all refresh tokens (immediate session termination).
- *   - Preserves the record for audit history.
- * Prevents deletion of ADMIN accounts or non-staff users.
- */
-async function deleteStaff(req, res) {
-  try {
-    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
-    if (!user) return errorResponse(res, 'Staff user not found', 404, 'NOT_FOUND');
-    if (!STAFF_ROLES.has(user.role)) {
-      return errorResponse(res, 'Target user is not a CC/CCL staff member', 422, 'INVALID_TARGET');
-    }
-    if (user.deletedAt) {
-      return errorResponse(res, 'Staff user is already deleted', 409, 'ALREADY_DELETED');
-    }
-
-    // Soft delete + revoke all sessions atomically
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: req.params.id },
-        data: { deletedAt: new Date(), isActive: false },
-      }),
-      prisma.refreshToken.deleteMany({ where: { userId: req.params.id } }),
-    ]);
-
-    logger.info('[Admin] Staff user soft-deleted', { targetId: req.params.id, adminId: req.user.id });
-    return successResponse(res, null, 'Staff user deleted. Session revoked and access removed.');
-  } catch (err) {
-    logger.error('[Admin] deleteStaff error', { error: err.message });
-    throw err;
-  }
-}
-
-/**
  * POST /api/v1/admin/staff
  * Creates a new CC or CCL user.
- * Body: { name, email, password, role }
  */
 async function createStaff(req, res) {
   try {
@@ -1103,7 +966,6 @@ async function createStaff(req, res) {
 /**
  * PATCH /api/v1/admin/staff/:id/role
  * Promotes or demotes a staff user between CC and CCL.
- * Body: { role }
  */
 async function updateStaffRole(req, res) {
   try {
@@ -1158,3 +1020,83 @@ async function toggleStaffStatus(req, res) {
     throw err;
   }
 }
+
+/**
+ * DELETE /api/v1/admin/staff/:id
+ * Soft-delete a CC or CCL staff member.
+ */
+async function deleteStaff(req, res) {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return errorResponse(res, 'Staff user not found', 404, 'NOT_FOUND');
+    if (!STAFF_ROLES.has(user.role)) {
+      return errorResponse(res, 'Target user is not a CC/CCL staff member', 422, 'INVALID_TARGET');
+    }
+    if (user.deletedAt) {
+      return errorResponse(res, 'Staff user is already deleted', 409, 'ALREADY_DELETED');
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.params.id },
+        data: { deletedAt: new Date(), isActive: false },
+      }),
+      prisma.refreshToken.deleteMany({ where: { userId: req.params.id } }),
+    ]);
+
+    logger.info('[Admin] Staff user soft-deleted', { targetId: req.params.id, adminId: req.user.id });
+    return successResponse(res, null, 'Staff user deleted. Session revoked and access removed.');
+  } catch (err) {
+    logger.error('[Admin] deleteStaff error', { error: err.message });
+    throw err;
+  }
+}
+
+module.exports = {
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  loginAdmin,
+  logoutAdmin,
+  getAdminProfile,
+  getEmailStatus,
+  sendTestEmail,
+
+  // ── Users ──────────────────────────────────────────────────────────────────
+  listUsers,
+  getAllUsers: listUsers,
+  listDeletedUsers,
+  toggleUserStatus,
+  deleteUser,
+
+  // ── Analytics ──────────────────────────────────────────────────────────────
+  getAnalytics,
+
+  // ── Payments ───────────────────────────────────────────────────────────────
+  listPayments,
+
+  // ── Reports ────────────────────────────────────────────────────────────────
+  listReports,
+  getAllReports: listReports,
+
+  // ── AI ─────────────────────────────────────────────────────────────────────
+  getAIUsage,
+
+  // ── Exports ────────────────────────────────────────────────────────────────
+  exportLeads,
+  exportPayments,
+
+  // ── Leads / CRM ────────────────────────────────────────────────────────────
+  listLeads,
+  getAllLeads: listLeads,
+  getLeadDetail,
+  getFunnelMetrics,
+  updateLeadAdmin,
+  triggerAdminAction,
+  assignLead,
+
+  // ── Staff ──────────────────────────────────────────────────────────────────
+  listStaff,
+  createStaff,
+  updateStaffRole,
+  toggleStaffStatus,
+  deleteStaff,
+};

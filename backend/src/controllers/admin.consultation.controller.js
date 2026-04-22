@@ -193,7 +193,7 @@ async function updateBooking(req, res) {
     }
 
     if (status) {
-      const validStatuses = new Set(['slot_mail_sent', 'meeting_scheduled', 'meeting_completed', 'counselling_report_ready']);
+      const validStatuses = new Set(['booking_confirmed', 'slot_mail_sent', 'meeting_scheduled', 'meeting_completed', 'counselling_report_ready']);
       if (!validStatuses.has(status)) {
         return errorResponse(res, 'Invalid booking status.', 400, 'INVALID_STATUS');
       }

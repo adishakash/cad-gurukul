@@ -5,6 +5,7 @@ import { selectAssessment } from '../store/slices/assessmentSlice'
 import { selectUser } from '../store/slices/authSlice'
 import { leadApi, paymentApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
+import { isPlanIncluded, formatRupees } from '../utils/planPricing'
 
 // ── Value ladder plan config ──────────────────────────────────────────────────
 const PLAN_CONFIG = {
@@ -97,6 +98,38 @@ export default function Payment() {
   const assessmentId = searchParams.get('assessmentId') || assessment?.id
 
   const [loading, setLoading] = useState(false)
+  const [quote, setQuote] = useState(null)
+  const [quoteLoading, setQuoteLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    const loadQuote = async () => {
+      setQuoteLoading(true)
+      try {
+        const { data } = await paymentApi.getQuote(planId, assessmentId)
+        if (mounted) setQuote(data.data)
+      } catch (err) {
+        if (mounted) {
+          setQuote({
+            currentPlan: 'free',
+            requestedPlan: planId,
+            effectivePrice: plan.priceNum,
+            effectivePriceLabel: plan.price,
+            basePriceLabel: plan.price,
+            alreadyIncluded: false,
+            alreadyOwned: false,
+            canPurchase: true,
+            isUpgrade: false,
+          })
+        }
+      } finally {
+        if (mounted) setQuoteLoading(false)
+      }
+    }
+
+    loadQuote()
+    return () => { mounted = false }
+  }, [planId, assessmentId])
 
   // Track page view
   useEffect(() => {
@@ -104,6 +137,11 @@ export default function Payment() {
   }, [planId])
 
   const handlePayment = async () => {
+    if (quote?.alreadyIncluded || quote?.alreadyOwned || quote?.canPurchase === false) {
+      toast.error(quote?.alreadyOwned ? `You already have the ${plan.label}.` : `${plan.label} is already included in your current plan.`)
+      return
+    }
+
     if (planId !== 'consultation' && !assessmentId) {
       toast.error('Assessment not found. Please complete the assessment first.')
       navigate('/dashboard')
@@ -145,7 +183,7 @@ export default function Payment() {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             })
-            trackEvent('payment_success', { plan: planId, amount: plan.priceNum })
+            trackEvent('payment_success', { plan: planId, amount: quote?.effectivePrice || plan.priceNum })
             leadApi.update({ planType: planId }).catch(() => {})
             toast.success(plan.successMsg)
             navigate('/dashboard')
@@ -166,6 +204,16 @@ export default function Payment() {
       setLoading(false)
     }
   }
+
+  const currentPlan = quote?.currentPlan || 'free'
+  const displayPrice = quote?.effectivePriceLabel || plan.price
+  const displayAmount = quote?.effectivePrice ?? plan.priceNum
+  const isIncluded = Boolean(quote?.alreadyIncluded)
+  const isOwned = Boolean(quote?.alreadyOwned)
+  const isUpgrade = Boolean(quote?.isUpgrade)
+  const planSwitcherEntries = Object.entries(PLAN_CONFIG).filter(([id]) => (
+    id === planId || !isPlanIncluded(currentPlan, id)
+  ))
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -193,12 +241,23 @@ export default function Payment() {
           <div className="mb-5">
             <span className="text-xs font-bold uppercase tracking-widest text-brand-red">{plan.label}</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <div className="text-4xl font-extrabold text-brand-dark">{plan.price}</div>
+              <div className="text-4xl font-extrabold text-brand-dark">{quoteLoading ? '...' : displayPrice}</div>
+              {isUpgrade && quote?.basePriceLabel && (
+                <span className="text-sm text-gray-400 line-through">{quote.basePriceLabel}</span>
+              )}
               {plan.originalPrice && (
-                <span className="text-sm text-gray-400 line-through">{plan.originalPrice}</span>
+                !isUpgrade ? <span className="text-sm text-gray-400 line-through">{plan.originalPrice}</span> : null
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-1">One-time payment · No subscription · Lifetime access</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {isOwned
+                ? 'Already unlocked on your account'
+                : isIncluded
+                  ? `Already included in your ${currentPlan} plan`
+                  : isUpgrade
+                    ? `Upgrade from ${currentPlan} by paying only the difference`
+                    : 'One-time payment · No subscription · Lifetime access'}
+            </p>
           </div>
 
           <ul className="space-y-2 mb-6">
@@ -216,7 +275,7 @@ export default function Payment() {
 
           <button
             onClick={handlePayment}
-            disabled={loading}
+            disabled={loading || quoteLoading || isIncluded || isOwned}
             className="btn-primary w-full py-4 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {loading ? (
@@ -227,7 +286,13 @@ export default function Payment() {
                 </svg>
                 Opening Payment…
               </>
-            ) : plan.cta}
+            ) : isOwned
+              ? `${plan.label} Already Unlocked`
+              : isIncluded
+                ? `${plan.label} Included in Your Plan`
+                : isUpgrade
+                  ? `Upgrade Now — Pay ${formatRupees(displayAmount)}`
+                  : plan.cta}
           </button>
 
           <p className="text-center text-xs text-gray-400 mt-3">
@@ -239,10 +304,11 @@ export default function Payment() {
         <div className="card mb-6">
           <h3 className="font-semibold text-brand-dark text-sm mb-3">Or choose a different plan:</h3>
           <div className="grid grid-cols-3 gap-2">
-            {Object.entries(PLAN_CONFIG).map(([id, p]) => (
+            {planSwitcherEntries.map(([id, p]) => (
               <button
                 key={id}
                 onClick={() => {
+                  if (isPlanIncluded(currentPlan, id) && id !== planId) return
                   const params = new URLSearchParams(searchParams)
                   params.set('plan', id)
                   navigate(`/payment?${params.toString()}`, { replace: true })
@@ -253,7 +319,11 @@ export default function Payment() {
                     : 'border-gray-200 text-gray-600 hover:border-gray-400'
                 }`}
               >
-                <div className="font-bold">{p.price}</div>
+                <div className="font-bold">
+                  {id === planId && quote?.effectivePriceLabel
+                    ? quote.effectivePriceLabel
+                    : formatRupees(currentPlan === 'free' ? p.priceNum : Math.max(0, p.priceNum - (PLAN_CONFIG[currentPlan]?.priceNum || 0)))}
+                </div>
                 <div className="font-normal text-gray-500 mt-0.5 leading-tight">{p.label}</div>
               </button>
             ))}

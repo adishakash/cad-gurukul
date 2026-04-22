@@ -62,7 +62,7 @@ const consultationBlockSchema = Joi.object({
 }).or('date', 'startAt');
 
 const consultationBookingUpdateSchema = Joi.object({
-  status: Joi.string().valid('slot_mail_sent', 'meeting_scheduled', 'meeting_completed', 'counselling_report_ready').optional(),
+  status: Joi.string().valid('booking_confirmed', 'slot_mail_sent', 'meeting_scheduled', 'meeting_completed', 'counselling_report_ready').optional(),
   meetingNotes: Joi.string().trim().max(1000).optional().allow('', null),
   scheduledStartAt: Joi.date().iso().optional(),
   counsellorName: Joi.string().trim().max(120).optional(),

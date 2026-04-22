@@ -87,6 +87,7 @@ export const reportApi = {
 
 // ─── Payment API ──────────────────────────────────────────────────────────────
 export const paymentApi = {
+  getQuote:     (planType, assessmentId) => api.get('/payments/quote', { params: { planType, assessmentId } }),
   createOrder:  (assessmentId, planType = 'standard') => api.post('/payments/create-order', { assessmentId, planType }),
   verify:       (data)         => api.post('/payments/verify', data),
   getHistory:   ()             => api.get('/payments/history'),

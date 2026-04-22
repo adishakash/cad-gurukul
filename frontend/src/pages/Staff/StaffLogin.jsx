@@ -7,12 +7,10 @@ import toast from 'react-hot-toast'
 export default function StaffLogin() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
-  const [serverError, setServerError] = useState(null)
   const { register, handleSubmit, formState: { errors } } = useForm()
 
   const onSubmit = async (data) => {
     setLoading(true)
-    setServerError(null)
     try {
       const response = await staffApiClient.post('/staff/login', data)
       const { accessToken, refreshToken, user } = response.data.data
@@ -27,7 +25,7 @@ export default function StaffLogin() {
         navigate('/staff')
       }
     } catch (err) {
-      setServerError(err?.response?.data?.error?.message || 'Invalid credentials')
+      toast.error(err?.response?.data?.error?.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
@@ -41,12 +39,6 @@ export default function StaffLogin() {
           <h1 className="text-2xl font-extrabold text-white">Staff Access</h1>
           <p className="text-gray-400 text-sm mt-1">Career Counsellor Lead &amp; Counsellor Portal</p>
         </div>
-
-        {serverError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
-            {serverError}
-          </div>
-        )}
 
         <div className="card shadow-2xl">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

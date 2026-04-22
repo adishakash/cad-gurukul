@@ -4,6 +4,7 @@ const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const pdfGenerator = require('../services/report/pdfGenerator');
 const { triggerAutomation } = require('../services/automation/automationService');
+const { getUpgradePrice, formatRupees } = require('../utils/planPricing');
 
 const formatRoadmapLabel = (key) => key
   .replace(/([A-Z])/g, ' $1')
@@ -193,6 +194,9 @@ const getMyReports = async (req, res) => {
         accessLevel: true,
         status: true,
         reportType: true,
+        reportEmailSentAt: true,
+        parentEmailSentAt: true,
+        emailDeliveryError: true,
         topCareers: true,
         recommendedStream: true,
         confidenceScore: true,
@@ -278,7 +282,8 @@ const getReport = async (req, res) => {
         const premiumUpsell = !['premium', 'consultation'].includes(userPlanType)
           ? {
               show: true,
-              price: '₹1,999',
+              price: formatRupees(getUpgradePrice(userPlanType, 'premium')),
+              amountRupees: getUpgradePrice(userPlanType, 'premium'),
               headline: 'Unlock your Deep AI Career Blueprint',
               benefits: [
                 'Year-by-year roadmap from Class 11 → first job',
@@ -362,7 +367,8 @@ const getReport = async (req, res) => {
     )
       ? {
           show: true,
-          price: '₹1,999',
+          price: formatRupees(getUpgradePrice(userPlanType, 'premium')),
+          amountRupees: getUpgradePrice(userPlanType, 'premium'),
           headline: 'Unlock your Deep AI Career Blueprint',
           benefits: [
             'Year-by-year roadmap from Class 11 → first job',
@@ -371,6 +377,14 @@ const getReport = async (req, res) => {
             'Scholarship opportunities',
             'Exhaustive 7+ career matches with salary outlook',
           ],
+        }
+      : null;
+
+    const consultationUpsell = !consultationPurchased && ['standard', 'premium'].includes(userPlanType)
+      ? {
+          show: true,
+          price: formatRupees(getUpgradePrice(userPlanType, 'consultation')),
+          amountRupees: getUpgradePrice(userPlanType, 'consultation'),
         }
       : null;
 
@@ -383,6 +397,7 @@ const getReport = async (req, res) => {
       consultationPurchased,
       ...normalizedReportData,
       premiumUpsell,
+      consultationUpsell,
       generatedAt: report.generatedAt,
     });
   } catch (err) {

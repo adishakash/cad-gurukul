@@ -65,6 +65,63 @@ async function appendLeadEvent(leadId, event, metadata) {
   });
 }
 
+async function sendSchedulingEmailForBooking(booking, userEmail, studentName) {
+  if (!userEmail) {
+    await prisma.consultationBooking.update({
+      where: { id: booking.id },
+      data: {
+        status: 'booking_confirmed',
+        schedulingEmailSentAt: null,
+        schedulingEmailError: 'Student email unavailable',
+      },
+    });
+
+    return {
+      delivered: false,
+      error: 'Student email unavailable',
+    };
+  }
+
+  try {
+    await sendConsultationSlotEmail({
+      to: userEmail,
+      name: studentName,
+      slotToken: booking.slotToken,
+      counsellorName: booking.counsellorName,
+      counsellorExpertise: booking.counsellorExpertise,
+      counsellorContact: booking.counsellorContact,
+    });
+
+    await prisma.consultationBooking.update({
+      where: { id: booking.id },
+      data: {
+        status: 'slot_mail_sent',
+        schedulingEmailSentAt: new Date(),
+        schedulingEmailError: null,
+        lastResendAt: new Date(),
+      },
+    });
+
+    return { delivered: true, error: null };
+  } catch (err) {
+    await prisma.consultationBooking.update({
+      where: { id: booking.id },
+      data: {
+        status: 'booking_confirmed',
+        schedulingEmailSentAt: null,
+        schedulingEmailError: err.message,
+      },
+    }).catch(() => {});
+
+    logger.warn('[Consultation] Scheduling email failed', {
+      bookingId: booking.id,
+      error: err.message,
+    });
+
+    return { delivered: false, error: err.message };
+  }
+}
+
 async function getAvailability(req, res) {
   try {
     const token = req.query.token;
@@ -81,6 +138,8 @@ async function getAvailability(req, res) {
         counsellorName: true,
         counsellorExpertise: true,
         counsellorContact: true,
+        schedulingEmailSentAt: true,
+        schedulingEmailError: true,
         scheduledStartAt: true,
         scheduledEndAt: true,
         meetingLink: true,
@@ -302,6 +361,8 @@ async function getMyBooking(req, res) {
         scheduledTimezone: true,
         meetingProvider: true,
         meetingConfirmedAt: true,
+        schedulingEmailSentAt: true,
+        schedulingEmailError: true,
         counsellorName: true,
         counsellorExpertise: true,
         counsellorContact: true,
@@ -342,75 +403,59 @@ async function resendSlotEmail(req, res) {
       );
     }
 
-    const lastSentAt = booking.lastResendAt || booking.createdAt;
-    const elapsed = Date.now() - new Date(lastSentAt).getTime();
-    if (elapsed < RESEND_COOLDOWN_MS) {
-      const minutesLeft = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 60000);
-      return errorResponse(
-        res,
-        `Please wait ${minutesLeft} more minute${minutesLeft !== 1 ? 's' : ''} before requesting another resend.`,
-        429,
-        'RESEND_COOLDOWN',
-        { nextResendAt: new Date(new Date(lastSentAt).getTime() + RESEND_COOLDOWN_MS).toISOString() },
-      );
-    }
-
-    const { user, studentName, parentEmail, parentName } = await loadBookingContacts(req.user.id);
-    const emailArgs = {
-      slotToken: booking.slotToken,
-      counsellorName: booking.counsellorName,
-      counsellorExpertise: booking.counsellorExpertise,
-      counsellorContact: booking.counsellorContact,
-    };
-
-    const emailResults = { student: false, parent: false };
-
-    if (user?.email) {
-      try {
-        await sendConsultationSlotEmail({ to: user.email, name: studentName, ...emailArgs });
-        emailResults.student = true;
-      } catch (err) {
-        logger.warn('[Consultation] Resend: student email failed', { error: err.message });
+    if (booking.lastResendAt) {
+      const elapsed = Date.now() - new Date(booking.lastResendAt).getTime();
+      if (elapsed < RESEND_COOLDOWN_MS) {
+        const minutesLeft = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 60000);
+        return errorResponse(
+          res,
+          `Please wait ${minutesLeft} more minute${minutesLeft !== 1 ? 's' : ''} before requesting another resend.`,
+          429,
+          'RESEND_COOLDOWN',
+          { nextResendAt: new Date(new Date(booking.lastResendAt).getTime() + RESEND_COOLDOWN_MS).toISOString() },
+        );
       }
     }
 
-    if (parentEmail) {
-      try {
-        await sendConsultationSlotEmail({
-          to: parentEmail,
-          name: parentName || `Parent of ${studentName}`,
-          isParent: true,
-          studentName,
-          ...emailArgs,
-        });
-        emailResults.parent = true;
-      } catch (err) {
-        logger.warn('[Consultation] Resend: parent email failed', { error: err.message });
-      }
-    }
+    const { user, studentName } = await loadBookingContacts(req.user.id);
+    const delivery = await sendSchedulingEmailForBooking(booking, user?.email, studentName);
+
+    const refreshedBooking = await prisma.consultationBooking.findUnique({
+      where: { id: booking.id },
+      select: { lastResendAt: true, schedulingEmailSentAt: true, resendCount: true, status: true, schedulingEmailError: true },
+    });
 
     const updatedBooking = await prisma.consultationBooking.update({
       where: { id: booking.id },
       data: {
-        lastResendAt: new Date(),
         resendCount: { increment: 1 },
       },
-      select: { lastResendAt: true, resendCount: true },
+      select: { lastResendAt: true, resendCount: true, schedulingEmailSentAt: true, status: true, schedulingEmailError: true },
     });
 
-    await appendLeadEvent(booking.leadId, 'consultation_slot_email_resent', {
+    await appendLeadEvent(booking.leadId, delivery.delivered ? 'consultation_slot_email_resent' : 'consultation_slot_email_failed', {
       resendCount: updatedBooking.resendCount,
-      emailResults,
+      delivered: delivery.delivered,
+      error: delivery.error,
     });
 
-    const nextResendAt = new Date(Date.now() + RESEND_COOLDOWN_MS).toISOString();
+    const nextResendAt = refreshedBooking?.lastResendAt
+      ? new Date(new Date(refreshedBooking.lastResendAt).getTime() + RESEND_COOLDOWN_MS).toISOString()
+      : null;
 
     return successResponse(
       res,
-      { resentAt: updatedBooking.lastResendAt, emailResults, nextResendAt },
-      emailResults.student || emailResults.parent
+      {
+        resentAt: refreshedBooking?.lastResendAt || null,
+        delivered: delivery.delivered,
+        status: updatedBooking.status,
+        schedulingEmailSentAt: updatedBooking.schedulingEmailSentAt,
+        schedulingEmailError: updatedBooking.schedulingEmailError,
+        nextResendAt,
+      },
+      delivery.delivered
         ? 'Scheduling email resent successfully. Check your inbox.'
-        : 'Resend attempted but email delivery failed. Please contact support.',
+        : 'Scheduling email attempt failed. Please verify your email setup or contact support.',
     );
   } catch (err) {
     logger.error('[Consultation] resendSlotEmail error', { error: err.message });
@@ -464,46 +509,17 @@ async function recoverConsultationBooking(req, res) {
         paymentId: payment.id,
         leadId: lead?.id || null,
         slotToken,
-        status: 'slot_mail_sent',
+        status: 'booking_confirmed',
       },
     });
 
-    const { user, studentName, parentEmail, parentName } = await loadBookingContacts(req.user.id);
-    const emailArgs = {
-      slotToken,
-      counsellorName: booking.counsellorName,
-      counsellorExpertise: booking.counsellorExpertise,
-      counsellorContact: booking.counsellorContact,
-    };
-    const emailResults = { student: false, parent: false };
-
-    if (user?.email) {
-      try {
-        await sendConsultationSlotEmail({ to: user.email, name: studentName, ...emailArgs });
-        emailResults.student = true;
-      } catch (err) {
-        logger.warn('[Consultation] Recover: student email failed', { error: err.message });
-      }
-    }
-
-    if (parentEmail) {
-      try {
-        await sendConsultationSlotEmail({
-          to: parentEmail,
-          name: parentName || `Parent of ${studentName}`,
-          isParent: true,
-          studentName,
-          ...emailArgs,
-        });
-        emailResults.parent = true;
-      } catch (err) {
-        logger.warn('[Consultation] Recover: parent email failed', { error: err.message });
-      }
-    }
+    const { user, studentName } = await loadBookingContacts(req.user.id);
+    const delivery = await sendSchedulingEmailForBooking(booking, user?.email, studentName);
 
     await appendLeadEvent(lead?.id, 'consultation_booking_recovered', {
       bookingId: booking.id,
-      emailResults,
+      delivered: delivery.delivered,
+      error: delivery.error,
     });
 
     return successResponse(
@@ -511,11 +527,12 @@ async function recoverConsultationBooking(req, res) {
       {
         recovered: true,
         bookingId: booking.id,
-        emailResults,
+        delivered: delivery.delivered,
+        schedulingEmailError: delivery.error,
       },
-      emailResults.student || emailResults.parent
+      delivery.delivered
         ? 'Booking created and scheduling email sent. Please check your inbox.'
-        : 'Booking created, but email delivery failed. Please contact support.',
+        : 'Booking created, but the scheduling email could not be delivered.',
       201,
     );
   } catch (err) {

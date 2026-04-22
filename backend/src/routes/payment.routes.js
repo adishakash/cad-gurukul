@@ -13,6 +13,7 @@ router.post('/webhook', paymentController.handleWebhook);
 // User portal: only STUDENT and PARENT may access these routes.
 router.use(authenticate, requirePortalRole('STUDENT', 'PARENT'));
 
+router.get('/quote', paymentController.getQuote);
 router.post('/create-order', validate(createOrderSchema), paymentController.createOrder);
 router.post('/verify', validate(verifyPaymentSchema), paymentController.verifyPayment);
 router.get('/history', paymentController.getPaymentHistory);
