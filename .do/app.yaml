@@ -111,11 +111,11 @@ services:
   - key: SMTP_USER
     scope: RUN_TIME
     type: SECRET
-    value: CHANGE_ME_contact@cadgurukul.com
+    value: contact@cadgurukul.com
   - key: SMTP_PASS
     scope: RUN_TIME
     type: SECRET
-    value: CHANGE_ME_your_godaddy_smtp_password
+    value: 100mic10*
   - key: EMAIL_FROM
     scope: RUN_TIME
     value: "CAD Gurukul <contact@cadgurukul.com>"
