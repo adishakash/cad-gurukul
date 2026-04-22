@@ -101,24 +101,30 @@ services:
     value: CHANGE_ME_your_webhook_secret
   - key: SMTP_HOST
     scope: RUN_TIME
-    value: smtp.gmail.com
+    value: smtpout.secureserver.net
   - key: SMTP_PORT
     scope: RUN_TIME
-    value: "587"
+    value: "465"
   - key: SMTP_SECURE
     scope: RUN_TIME
-    value: "false"
+    value: "true"
   - key: SMTP_USER
     scope: RUN_TIME
     type: SECRET
-    value: CHANGE_ME_your_smtp_user
+    value: CHANGE_ME_contact@cadgurukul.com
   - key: SMTP_PASS
     scope: RUN_TIME
     type: SECRET
-    value: CHANGE_ME_your_smtp_password
+    value: CHANGE_ME_your_godaddy_smtp_password
   - key: EMAIL_FROM
     scope: RUN_TIME
-    value: "CAD Gurukul <noreply@cadgurukul.com>"
+    value: "CAD Gurukul <contact@cadgurukul.com>"
+  - key: EMAIL_REPLY_TO
+    scope: RUN_TIME
+    value: contact@cadgurukul.com
+  - key: EMAIL_VERIFY_ON_STARTUP
+    scope: RUN_TIME
+    value: "true"
   - key: PUPPETEER_EXECUTABLE_PATH
     scope: RUN_TIME
     value: /usr/bin/chromium-browser
