@@ -33,6 +33,7 @@ import LeadDetail       from './pages/Admin/LeadDetail'
 import AdminPartners    from './pages/Admin/AdminPartners'
 import AdminPayouts     from './pages/Admin/AdminPayouts'
 import StaffManagement  from './pages/Admin/StaffManagement'
+import AdminConsultations from './pages/Admin/AdminConsultations'
 
 // Staff pages (Career Counsellor Lead portal)
 import StaffLogin       from './pages/Staff/StaffLogin'
@@ -149,6 +150,7 @@ export default function App() {
         <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
         <Route path="/admin/partners" element={<AdminRoute><AdminPartners /></AdminRoute>} />
         <Route path="/admin/payouts" element={<AdminRoute><AdminPayouts /></AdminRoute>} />
+        <Route path="/admin/consultations" element={<AdminRoute><AdminConsultations /></AdminRoute>} />
         <Route path="/admin/staff" element={<AdminRoute><StaffManagement /></AdminRoute>} />
 
         {/* Partner registration (public) */}

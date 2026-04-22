@@ -279,10 +279,10 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
 // ── ₹9,999 Consultation Timeline ─────────────────────────────────────────────
 const CONSULTATION_STEPS = [
   { key: 'purchased',                label: 'Booking Confirmed',           icon: '💳', desc: 'Payment captured — ₹9,999 consultation booked' },
-  { key: 'slot_mail_sent',           label: 'Slot-Selection Email Sent',   icon: '📧', desc: 'Email with slot-selection link sent to your inbox' },
-  { key: 'slot_selected',            label: 'Slot Selected',               icon: '📅', desc: 'You chose a preferred session window' },
-  { key: 'meeting_scheduled',        label: 'Meeting Scheduled',           icon: '📆', desc: 'Team confirmed exact date & meeting link' },
-  { key: 'meeting_completed',        label: 'Session Completed',           icon: '🎤', desc: '45-min 1:1 Career Blueprint Session done' },
+  { key: 'slot_mail_sent',           label: 'Scheduling Email Sent',       icon: '📧', desc: 'Email with your private booking link has been sent' },
+  { key: 'slot_selected',            label: 'Exact Slot Selected',         icon: '📅', desc: 'You locked a specific date and time for the session' },
+  { key: 'meeting_scheduled',        label: 'Meeting Link Ready',          icon: '📆', desc: 'Meeting link generated and shared for the live session' },
+  { key: 'meeting_completed',        label: 'Session Completed',           icon: '🎤', desc: '1:1 Career Blueprint Session completed' },
   { key: 'counselling_report_ready', label: 'Personalised Report Ready',   icon: '🎓', desc: 'Your 1:1 counselling report has been prepared and emailed to you' },
 ]
 
@@ -302,6 +302,8 @@ function ConsultationTimeline({ booking, onResend }) {
   const [recoverResult, setRecoverResult] = useState(null) // { ok, message }
 
   const currentStepIdx = booking ? (BOOKING_STATUS_TO_STEP[booking.status] ?? 1) : -1
+  const hasExactSlot = Boolean(booking?.slotSelectedAt || booking?.scheduledStartAt)
+  const hasMeetingLink = Boolean(booking?.meetingLink || booking?.scheduledStartAt)
 
   // Cooldown state
   const lastSentAt    = booking ? (booking.lastResendAt || booking.createdAt) : null
@@ -323,7 +325,7 @@ function ConsultationTimeline({ booking, onResend }) {
         message:     res.data.message || 'Email resent successfully.',
         nextResendAt: data.nextResendAt,
       })
-      toast.success('Slot-selection email resent! Check your inbox.')
+      toast.success('Scheduling email resent! Check your inbox.')
       if (onResend) onResend()
     } catch (err) {
       const msg = err?.response?.data?.error?.message || 'Failed to resend. Please try again.'
@@ -340,8 +342,8 @@ function ConsultationTimeline({ booking, onResend }) {
     setRecoverResult(null)
     try {
       await consultationApi.recover()
-      setRecoverResult({ ok: true, message: 'Booking created! Slot-selection email sent to your inbox.' })
-      toast.success('Success! Check your email for the slot-selection link.')
+      setRecoverResult({ ok: true, message: 'Booking created! Scheduling email sent to your inbox.' })
+      toast.success('Success! Check your email for the scheduling link.')
       if (onResend) onResend() // re-fetches booking
     } catch (err) {
       const msg = err?.response?.data?.error?.message || 'Recovery failed. Please contact support.'
@@ -370,7 +372,7 @@ function ConsultationTimeline({ booking, onResend }) {
             Your payment was received but your booking record is still being created. This usually resolves in a few seconds — try refreshing the page.
           </p>
           <p className="text-yellow-700 dark:text-yellow-400 text-xs mb-4">
-            If this persists, click <strong>"Send Slot Email"</strong> below and we'll set up your booking immediately.
+            If this persists, click <strong>"Send Scheduling Email"</strong> below and we'll set up your booking immediately.
           </p>
 
           {recoverResult ? (
@@ -395,7 +397,7 @@ function ConsultationTimeline({ booking, onResend }) {
                   : 'bg-orange-500 text-white border-orange-600 hover:bg-orange-600'
               }`}
             >
-              {recovering ? '⏳ Setting up…' : recoverResult?.ok ? '✅ Done' : '📧 Send Slot Email'}
+              {recovering ? '⏳ Setting up…' : recoverResult?.ok ? '✅ Done' : '📧 Send Scheduling Email'}
             </button>
             <a
               href="mailto:support@cadgurukul.com?subject=Consultation%20Booking%20Issue"
@@ -438,7 +440,11 @@ function ConsultationTimeline({ booking, onResend }) {
 
       <div className="space-y-2">
         {CONSULTATION_STEPS.map((step, idx) => {
-          const done    = idx <= currentStepIdx
+          const done = step.key === 'slot_selected'
+            ? hasExactSlot
+            : step.key === 'meeting_scheduled'
+              ? hasMeetingLink
+              : idx <= currentStepIdx
           const current = idx === currentStepIdx
           return (
             <TimelineStep key={step.key} done={done} current={current} icon={step.icon} label={step.label} description={step.desc}>
@@ -454,16 +460,16 @@ function ConsultationTimeline({ booking, onResend }) {
               {/* Slot selected detail */}
               {step.key === 'slot_selected' && booking.selectedSlot && (
                 <div className="mt-1 text-xs text-teal-700 dark:text-teal-400 font-semibold">
-                  📍 {SLOT_LABELS[booking.selectedSlot] || booking.selectedSlot}
-                  {booking.slotSelectedAt && ` · ${fmt(booking.slotSelectedAt)}`}
+                  📍 {booking.scheduledStartAt ? fmt(booking.scheduledStartAt) : (SLOT_LABELS[booking.selectedSlot] || booking.selectedSlot)}
+                  {booking.slotSelectedAt && ` · booked ${fmt(booking.slotSelectedAt)}`}
                 </div>
               )}
 
               {/* Meeting detail */}
-              {step.key === 'meeting_scheduled' && booking.meetingDate && (
+              {step.key === 'meeting_scheduled' && booking.scheduledStartAt && (
                 <div className="mt-1 space-y-0.5">
                   <div className="text-xs text-purple-700 dark:text-purple-400 font-semibold">
-                    📆 {fmt(booking.meetingDate)}
+                    📆 {fmt(booking.scheduledStartAt)}
                   </div>
                   {booking.meetingLink && (
                     <a href={booking.meetingLink} target="_blank" rel="noopener noreferrer"
@@ -506,7 +512,7 @@ function ConsultationTimeline({ booking, onResend }) {
         <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-300 dark:border-yellow-700 rounded-xl">
           <div className="font-semibold text-yellow-800 dark:text-yellow-300 text-sm mb-1">⏰ Action Required — Select Your Session Slot</div>
           <p className="text-yellow-700 dark:text-yellow-400 text-xs mb-3">
-            A slot-selection link was sent to your registered email ({booking.resendCount > 0 ? `resent ${booking.resendCount} time${booking.resendCount !== 1 ? 's' : ''}` : 'initial send'}). Click the link in the email to choose your preferred session time.
+            A scheduling link was sent to your registered email ({booking.resendCount > 0 ? `resent ${booking.resendCount} time${booking.resendCount !== 1 ? 's' : ''}` : 'initial send'}). Click the link in the email to choose your exact session date and time.
           </p>
 
           {/* Resend section */}
@@ -522,7 +528,7 @@ function ConsultationTimeline({ booking, onResend }) {
                     : 'bg-yellow-600 text-white border-yellow-700 hover:bg-yellow-700'
                 }`}
               >
-                {resending ? '⏳ Sending…' : cooldownOver ? '📧 Resend Slot-Selection Email' : `⏳ Resend in ${minutesLeft} min`}
+                {resending ? '⏳ Sending…' : cooldownOver ? '📧 Resend Scheduling Email' : `⏳ Resend in ${minutesLeft} min`}
               </button>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 Also check spam/junk folder · 
@@ -535,13 +541,6 @@ function ConsultationTimeline({ booking, onResend }) {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Slot selected — waiting for team to schedule */}
-      {booking.status === 'slot_selected' && (
-        <div className="mt-4 p-3 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-700 rounded-xl text-xs text-teal-800 dark:text-teal-300">
-          <strong>✅ Slot confirmed!</strong> Our team will send you the exact meeting date and Zoom/Meet link within <strong>24 hours</strong>. Check your email inbox.
         </div>
       )}
 
@@ -824,15 +823,17 @@ export default function Dashboard() {
             <button
               onClick={() =>
                 consultationBooking?.status === 'slot_mail_sent'
-                  ? toast('Check your email to select a session slot.')
-                  : navigate('/consultation/select-slot')
+                  ? toast('Check your email to schedule your session.')
+                  : consultationBooking?.meetingLink
+                    ? window.open(consultationBooking.meetingLink, '_blank', 'noopener,noreferrer')
+                    : toast('Your consultation details are visible above in the timeline.')
               }
               className="card hover:shadow-lg transition-shadow text-left border-l-4 border-orange-500 cursor-pointer"
             >
               <div className="text-3xl mb-2">📞</div>
               <div className="font-bold text-brand-dark">My 1:1 Session</div>
               <div className="text-sm text-gray-500 mt-1">{consultationBooking ? `Status: ${consultationBooking.status.replace(/_/g, ' ')}` : 'Session booked'}</div>
-              <div className="mt-3 text-orange-600 text-sm font-semibold">View Details →</div>
+              <div className="mt-3 text-orange-600 text-sm font-semibold">{consultationBooking?.meetingLink ? 'Join Session →' : 'View Details →'}</div>
             </button>
           ) : paidReport ? (
             // Has a paid completed report — link to it

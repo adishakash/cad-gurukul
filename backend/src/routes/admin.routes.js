@@ -7,9 +7,13 @@ const { validate } = require('../middleware/validate');
 const { authLimiter } = require('../middleware/rateLimiter');
 const { upload, enforceSizeLimit } = require('../middleware/upload');
 const adminController = require('../controllers/admin.controller');
+const adminConsultationController = require('../controllers/admin.consultation.controller');
 const cclAdminController = require('../controllers/ccl.admin.controller');
 const {
   adminLoginSchema,
+  consultationBlockSchema,
+  consultationBookingUpdateSchema,
+  emailTestSchema,
   leadListQuerySchema,
   triggerActionSchema,
 } = require('../validators/admin.validator');
@@ -30,6 +34,14 @@ router.use(authenticate, requirePortalRole('ADMIN'));
 // Profile
 router.get('/profile', adminController.getAdminProfile);
 router.post('/logout', adminController.logoutAdmin);
+router.get('/email/status', adminController.getEmailStatus);
+router.post('/email/test', validate(emailTestSchema), adminController.sendTestEmail);
+
+// Consultation scheduling
+router.get('/consultations', adminConsultationController.listConsultations);
+router.post('/consultations/blocks', validate(consultationBlockSchema), adminConsultationController.createAvailabilityBlock);
+router.delete('/consultations/blocks/:id', adminConsultationController.deleteAvailabilityBlock);
+router.patch('/consultations/bookings/:id', validate(consultationBookingUpdateSchema), adminConsultationController.updateBooking);
 
 // Users
 router.get('/users', adminController.listUsers);

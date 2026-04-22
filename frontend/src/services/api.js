@@ -135,6 +135,18 @@ export const adminLeadApi = {
   listStaffForAssign: ()         => adminApiClient.get('/admin/staff'),
 }
 
+export const adminEmailApi = {
+  status:   (refresh = false) => adminApiClient.get('/admin/email/status', { params: refresh ? { refresh: true } : {} }),
+  sendTest: (data = {})       => adminApiClient.post('/admin/email/test', data),
+}
+
+export const adminConsultationApi = {
+  list:        (params = {}) => adminApiClient.get('/admin/consultations', { params }),
+  block:       (data)        => adminApiClient.post('/admin/consultations/blocks', data),
+  unblock:     (id)          => adminApiClient.delete(`/admin/consultations/blocks/${id}`),
+  updateBooking: (id, data)  => adminApiClient.patch(`/admin/consultations/bookings/${id}`, data),
+}
+
 // ─── Admin Discount Policy API (Phase 6 + Phase 9) ───────────────────────────
 export const adminDiscountApi = {
   listPolicies:   ()       => adminApiClient.get('/admin/discount-policies'),
@@ -325,6 +337,7 @@ export const trackEvent = (event, metadata = {}) => {
 // ─── Consultation API ─────────────────────────────────────────────────────────
 export const consultationApi = {
   /** Public — no auth required */
+  getAvailability: (token) => api.get('/consultation/availability', { params: { token } }),
   selectSlot: (data) => api.post('/consultation/select-slot', data),
   /** Auth-protected — returns ConsultationBooking or null */
   getMyBooking: () => api.get('/consultation/my'),

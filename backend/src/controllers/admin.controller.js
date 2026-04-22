@@ -7,7 +7,13 @@ const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../util
 const logger = require('../utils/logger');
 const { triggerAutomation } = require('../services/automation/automationService');
 const { generateReportAsync } = require('./assessment.controller');
-const { sendReportReadyEmail, sendCounsellingReportEmail } = require('../services/email/emailService');
+const {
+  sendEmail,
+  sendReportReadyEmail,
+  verifyEmailTransport,
+  getEmailHealthSnapshot,
+} = require('../services/email/emailService');
+const { sendCounsellingReportForBooking } = require('../services/consultation/consultationAutomationService');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH
@@ -110,6 +116,87 @@ const getAdminProfile = async (req, res) => {
     return successResponse(res, { user });
   } catch (err) {
     logger.error('[Admin] getAdminProfile error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * GET /api/v1/admin/email/status
+ * Returns the current email transport snapshot and can optionally force
+ * a live SMTP verification check with ?refresh=true.
+ */
+const getEmailStatus = async (req, res) => {
+  try {
+    const refresh = req.query.refresh === 'true';
+
+    if (refresh) {
+      try {
+        await verifyEmailTransport({ force: true });
+      } catch (err) {
+        logger.warn('[Admin] Email refresh verification failed', { error: err.message, adminId: req.user.id });
+      }
+    }
+
+    return successResponse(res, getEmailHealthSnapshot());
+  } catch (err) {
+    logger.error('[Admin] getEmailStatus error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * POST /api/v1/admin/email/test
+ * Sends a real SMTP test email so the team can verify Titan delivery quickly.
+ */
+const sendTestEmail = async (req, res) => {
+  try {
+    const targetEmail = req.body?.to || req.user?.email;
+    if (!targetEmail) {
+      return errorResponse(res, 'No target email found for test email.', 400, 'NO_EMAIL');
+    }
+
+    try {
+      await verifyEmailTransport({ force: true });
+    } catch (err) {
+      return errorResponse(
+        res,
+        `SMTP verification failed before send: ${err.message}`,
+        502,
+        'SMTP_VERIFICATION_FAILED'
+      );
+    }
+
+    const subject = req.body?.subject || 'CAD Gurukul Email Test';
+    const timestamp = new Date().toISOString();
+
+    const info = await sendEmail({
+      to: targetEmail,
+      subject,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+          <div style="background:#0f3460;padding:28px 30px;text-align:center;">
+            <h1 style="color:#e94560;margin:0;font-size:26px;">CAD Gurukul</h1>
+            <p style="color:#ccd6f6;margin:6px 0 0;font-size:13px;">SMTP delivery test</p>
+          </div>
+          <div style="padding:30px;">
+            <p style="font-size:16px;color:#1a1a2e;margin:0 0 12px;">Titan email is working.</p>
+            <p style="font-size:14px;color:#444;line-height:1.6;">This is a live test email triggered from the admin backend.</p>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:20px;">
+              <div style="font-size:12px;color:#475569;margin-bottom:6px;">Sent At</div>
+              <div style="font-size:14px;font-weight:bold;color:#0f172a;">${timestamp}</div>
+            </div>
+          </div>
+        </div>
+      `,
+    });
+
+    return successResponse(res, {
+      to: targetEmail,
+      messageId: info.messageId,
+      transport: getEmailHealthSnapshot(),
+    }, `Test email sent to ${targetEmail}`);
+  } catch (err) {
+    logger.error('[Admin] sendTestEmail error', { error: err.message });
     throw err;
   }
 };
@@ -820,40 +907,32 @@ const triggerAdminAction = async (req, res) => {
       // Admin manually triggers final counselling-report-ready email after session completion
       if (!lead.userId) return errorResponse(res, 'Lead has no linked user', 400, 'NO_USER');
 
-      const leadUser = await prisma.user.findUnique({
-        where: { id: lead.userId },
-        select: {
-          email: true,
-          studentProfile: {
-            select: { fullName: true, parentDetail: { select: { email: true, parentName: true } } },
+      const booking = await prisma.consultationBooking.findFirst({
+        where: { userId: lead.userId },
+        include: {
+          user: {
+            select: {
+              email: true,
+              studentProfile: {
+                select: { fullName: true, parentDetail: { select: { email: true, parentName: true } } },
+              },
+            },
+          },
+          lead: {
+            select: { reportId: true },
           },
         },
       });
 
-      if (!leadUser?.email) return errorResponse(res, 'User email not found', 400, 'NO_EMAIL');
+      if (!booking?.user?.email) return errorResponse(res, 'User email not found', 400, 'NO_EMAIL');
 
-      const sName = leadUser.studentProfile?.fullName || leadUser.email.split('@')[0];
-      const pEmail = leadUser.studentProfile?.parentDetail?.email;
-      const pName  = leadUser.studentProfile?.parentDetail?.parentName;
-
-      const booking = await prisma.consultationBooking.findFirst({ where: { userId: lead.userId } });
-
-      // Fire-and-forget
-      sendCounsellingReportEmail({
-        to: leadUser.email, name: sName, reportId: lead.reportId, bookingId: booking?.id,
-      }).catch((e) => logger.warn('[Admin] send_counselling_report email failed', { error: e.message }));
-
-      if (pEmail) {
-        sendCounsellingReportEmail({
-          to: pEmail, name: pName || `Parent of ${sName}`, reportId: lead.reportId,
-          bookingId: booking?.id, isParent: true, studentName: sName,
-        }).catch((e) => logger.warn('[Admin] send_counselling_report parent email failed', { error: e.message }));
-      }
+      await sendCounsellingReportForBooking(booking);
 
       await prisma.leadEvent.create({
         data: { id: crypto.randomUUID(), leadId: lead.id, event: 'admin_send_counselling_report', metadata: { adminId: req.user.id } },
       });
 
+      const pEmail = booking.user.studentProfile?.parentDetail?.email;
       return successResponse(res, null, 'Counselling report email sent to student' + (pEmail ? ' and parent' : ''));
     }
 
@@ -869,6 +948,8 @@ module.exports = {
   loginAdmin,
   logoutAdmin,
   getAdminProfile,
+  getEmailStatus,
+  sendTestEmail,
 
   // ── Users ──────────────────────────────────────────────────────────────────
   listUsers,

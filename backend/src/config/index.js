@@ -115,6 +115,16 @@ const config = {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
     from: process.env.EMAIL_FROM || 'CAD Gurukul <noreply@cadgurukul.com>',
+    replyTo: process.env.EMAIL_REPLY_TO || process.env.EMAIL_FROM || 'CAD Gurukul <noreply@cadgurukul.com>',
+    verifyOnStartup: process.env.EMAIL_VERIFY_ON_STARTUP !== 'false',
+    connectionTimeoutMs: parseInteger(process.env.SMTP_CONNECTION_TIMEOUT_MS, 20000),
+    greetingTimeoutMs: parseInteger(process.env.SMTP_GREETING_TIMEOUT_MS, 20000),
+    socketTimeoutMs: parseInteger(process.env.SMTP_SOCKET_TIMEOUT_MS, 30000),
+  },
+
+  consultationAutomation: {
+    enabled: process.env.ENABLE_CONSULTATION_AUTOMATION !== 'false',
+    intervalMs: parseInteger(process.env.CONSULTATION_AUTOMATION_INTERVAL_MS, 5 * 60 * 1000),
   },
 
   rateLimit: {
