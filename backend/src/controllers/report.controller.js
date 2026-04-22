@@ -192,6 +192,7 @@ const getMyReports = async (req, res) => {
         assessmentId: true,
         accessLevel: true,
         status: true,
+        reportType: true,
         topCareers: true,
         recommendedStream: true,
         confidenceScore: true,

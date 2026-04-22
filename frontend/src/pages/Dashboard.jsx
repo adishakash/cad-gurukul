@@ -703,12 +703,21 @@ export default function Dashboard() {
   // record — including free users who never paid — has planType = 'standard'.
   // We must use lead.status as the primary payment gate; only use planType to
   // distinguish *which* plan was purchased (for users who have actually paid).
+  //
+  // Fallback: if no lead record is linked to this user (e.g. lead-linking race
+  // condition or data gap), use paidReport.reportType / consultationBooking so
+  // the correct timeline still renders for users who genuinely paid.
   const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed']
   const leadStatus  = lead?.status || 'new_lead'
-  const userHasPaid = PAID_STATUSES.includes(leadStatus)
-  const planType    = userHasPaid ? (lead?.planType || 'standard') : 'free'
+  const userHasPaid = PAID_STATUSES.includes(leadStatus) || Boolean(paidReport) || Boolean(consultationBooking)
+  // Resolve plan type: lead record is authoritative; fall back to paidReport.reportType
+  const planType    = userHasPaid
+    ? (lead?.planType || paidReport?.reportType || 'standard')
+    : 'free'
 
-  const hasConsultation   = planType === 'consultation'
+  // A consultation booking is definitive proof of the consultation plan even if
+  // the lead planType hasn't been updated yet.
+  const hasConsultation   = planType === 'consultation' || Boolean(consultationBooking)
   const hasPremium        = planType === 'premium' || hasConsultation
   const hasStandard       = planType === 'standard'
   const hasAnyPaidPlan    = userHasPaid   // simplest, most reliable
