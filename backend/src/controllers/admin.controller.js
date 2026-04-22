@@ -160,6 +160,38 @@ const listUsers = async (req, res) => {
 };
 
 /**
+ * GET /admin/users/deleted
+ * List soft-deleted users for admin audit. Shows anonymised email and deletedAt.
+ */
+const listDeletedUsers = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = { deletedAt: { not: null } };
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { deletedAt: 'desc' },
+        select: {
+          id: true, email: true, role: true, deletedAt: true, createdAt: true,
+          studentProfile: { select: { fullName: true, classStandard: true, city: true } },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return successResponse(res, { users, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (err) {
+    logger.error('[Admin] listDeletedUsers error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
  * GET /admin/analytics
  */
 const getAnalytics = async (req, res) => {
@@ -368,15 +400,19 @@ const deleteUser = async (req, res) => {
       return errorResponse(res, 'User is already deleted', 409, 'ALREADY_DELETED');
     }
 
+    // Anonymise email so the address is freed for re-registration.
+    // This mirrors the user self-delete (deleteAccount) pattern in auth.controller.js.
+    const anonymisedEmail = `deleted_${user.id}@deleted.cadgurukul.internal`;
+
     await prisma.$transaction([
       prisma.user.update({
         where: { id: req.params.id },
-        data: { deletedAt: new Date(), isActive: false },
+        data: { deletedAt: new Date(), isActive: false, email: anonymisedEmail },
       }),
       prisma.refreshToken.deleteMany({ where: { userId: req.params.id } }),
     ]);
 
-    logger.info('[Admin] User soft-deleted', { targetId: req.params.id, adminId: req.user.id });
+    logger.info('[Admin] User soft-deleted', { targetId: req.params.id, originalEmail: user.email, adminId: req.user.id });
     return successResponse(res, null, 'User account deleted. Login access revoked.');
   } catch (err) {
     logger.error('[Admin] deleteUser error', { error: err.message });
@@ -837,6 +873,7 @@ module.exports = {
   // ── Users ──────────────────────────────────────────────────────────────────
   listUsers,
   getAllUsers: listUsers,   // spec alias
+  listDeletedUsers,
   toggleUserStatus,
   deleteUser,
 

@@ -33,6 +33,7 @@ router.post('/logout', adminController.logoutAdmin);
 
 // Users
 router.get('/users', adminController.listUsers);
+router.get('/users/deleted', adminController.listDeletedUsers);
 router.put('/users/:id/toggle-status', adminController.toggleUserStatus);
 router.delete('/users/:id', adminController.deleteUser);
 

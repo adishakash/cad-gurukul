@@ -360,9 +360,10 @@ export const adminStaffApi = {
 
 // ─── Admin User API ───────────────────────────────────────────────────────────
 export const adminUserApi = {
-  list:         (params)        => adminApiClient.get('/admin/users', { params }),
-  toggleStatus: (id)            => adminApiClient.put(`/admin/users/${id}/toggle-status`),
-  delete:       (id)            => adminApiClient.delete(`/admin/users/${id}`),
+  list:           (params) => adminApiClient.get('/admin/users', { params }),
+  listDeleted:    (params) => adminApiClient.get('/admin/users/deleted', { params }),
+  toggleStatus:   (id)     => adminApiClient.put(`/admin/users/${id}/toggle-status`),
+  delete:         (id)     => adminApiClient.delete(`/admin/users/${id}`),
 }
 
 export default api
