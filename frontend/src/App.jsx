@@ -50,6 +50,9 @@ import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfService from './pages/TermsOfService'
 import RefundPolicy from './pages/RefundPolicy'
 
+// Email verification page (public — link from email)
+import VerifyEmail from './pages/VerifyEmail'
+
 // Public consultation slot-selection page (no auth required — link from email)
 import ConsultationSlotPage from './pages/Public/ConsultationSlotPage'
 
@@ -124,6 +127,8 @@ export default function App() {
         {/* Guest-only routes */}
         <Route path="/login" element={<GuestRoute><PublicLayout><Login /></PublicLayout></GuestRoute>} />
         <Route path="/register" element={<GuestRoute><PublicLayout><Register /></PublicLayout></GuestRoute>} />
+        {/* Email verification — fully public, accessible from email link */}
+        <Route path="/verify-email" element={<PublicLayout><VerifyEmail /></PublicLayout>} />
 
         {/* Protected student routes */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

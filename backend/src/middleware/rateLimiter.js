@@ -37,6 +37,24 @@ const authLimiter = rateLimit({
 });
 
 /**
+ * Extra-strict limiter for verification resend endpoint.
+ * Lower cap than authLimiter to protect against email spam abuse.
+ */
+const resendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 4,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Too many resend attempts. Please wait before trying again.',
+    },
+  },
+});
+
+/**
  * AI endpoint limiter – protect expensive AI calls
  */
 const aiLimiter = rateLimit({
@@ -53,4 +71,4 @@ const aiLimiter = rateLimit({
   },
 });
 
-module.exports = { generalLimiter, authLimiter, aiLimiter };
+module.exports = { generalLimiter, authLimiter, resendLimiter, aiLimiter };

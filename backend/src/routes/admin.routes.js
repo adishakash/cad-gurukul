@@ -98,6 +98,7 @@ router.patch('/ccl/payouts/:id',        cclAdminController.updatePayoutStatus);
 // Training content CRUD (with optional file upload)
 router.get('/ccl/training',          cclAdminController.listAllTraining);
 router.get('/ccl/training/history',  cclAdminController.listTrainingHistory);
+router.get('/ccl/training/:id/file', cclAdminController.serveAdminTrainingFile);
 router.post('/ccl/training',         upload.single('file'), enforceSizeLimit, cclAdminController.createTrainingContent);
 router.patch('/ccl/training/:id',    cclAdminController.updateTrainingContent);
 router.delete('/ccl/training/:id',   cclAdminController.deleteTrainingContent);

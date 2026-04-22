@@ -672,6 +672,10 @@ export default function LeadDashboard() {
                           <button
                             onClick={async () => {
                               try {
+                                if (item.url?.startsWith('http')) {
+                                  window.open(item.url, '_blank')
+                                  return
+                                }
                                 const res = await staffApi.getTrainingFile(item.id)
                                 const url = URL.createObjectURL(res.data)
                                 window.open(url, '_blank')
@@ -689,6 +693,14 @@ export default function LeadDashboard() {
                             <button
                               onClick={async () => {
                                 try {
+                                  if (item.url?.startsWith('http')) {
+                                    const a = document.createElement('a')
+                                    a.href = item.url
+                                    a.download = item.title
+                                    a.target = '_blank'
+                                    a.click()
+                                    return
+                                  }
                                   const res = await staffApi.downloadTrainingFile(item.id)
                                   const url = URL.createObjectURL(res.data)
                                   const a = document.createElement('a')

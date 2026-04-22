@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/database');
@@ -27,4 +28,38 @@ const saveRefreshToken = async (userId, token) => {
   await prisma.refreshToken.create({ data: { userId, token, expiresAt } });
 };
 
-module.exports = { signAccessToken, signRefreshToken, saveRefreshToken };
+/**
+ * Generate a cryptographically secure email verification token (64-char hex).
+ * The raw token is sent in the email link; only its SHA-256 hash is stored in DB.
+ */
+const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
+
+/**
+ * Hash a raw verification token with SHA-256 before DB storage/lookup.
+ * This way a DB breach does NOT expose usable verification tokens.
+ */
+const hashVerificationToken = (rawToken) =>
+  crypto.createHash('sha256').update(rawToken).digest('hex');
+
+/**
+ * Persist an email verification token with a 24-hour expiry.
+ * Stores only the SHA-256 hash of the raw token — never the raw value.
+ * Deletes any existing tokens for the user before creating a new one.
+ */
+const saveVerificationToken = async (userId, rawToken) => {
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 24);
+  // Invalidate any previous unverified tokens for this user
+  await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+  const hashedToken = hashVerificationToken(rawToken);
+  return prisma.emailVerificationToken.create({ data: { userId, token: hashedToken, expiresAt } });
+};
+
+module.exports = {
+  signAccessToken,
+  signRefreshToken,
+  saveRefreshToken,
+  generateVerificationToken,
+  hashVerificationToken,
+  saveVerificationToken,
+};

@@ -215,8 +215,8 @@ const listUsers = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const where = search
-      ? { OR: [{ email: { contains: search, mode: 'insensitive' } }] }
-      : {};
+      ? { deletedAt: null, OR: [{ email: { contains: search, mode: 'insensitive' } }] }
+      : { deletedAt: null };
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({

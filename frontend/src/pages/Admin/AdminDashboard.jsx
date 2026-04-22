@@ -270,6 +270,51 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleOpenTraining = async (item) => {
+    if (item.url?.startsWith('http')) {
+      window.open(item.url, '_blank')
+      return
+    }
+    if (!item.storagePath) {
+      toast.error('No file available for this resource.')
+      return
+    }
+    try {
+      const res = await adminTrainingApi.openFile(item.id)
+      const url = URL.createObjectURL(res.data)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+    } catch {
+      toast.error('Could not open file.')
+    }
+  }
+
+  const handleDownloadTraining = async (item) => {
+    if (item.url?.startsWith('http')) {
+      const a = document.createElement('a')
+      a.href = item.url
+      a.download = item.title
+      a.target = '_blank'
+      a.click()
+      return
+    }
+    if (!item.storagePath) {
+      toast.error('No downloadable file for this resource.')
+      return
+    }
+    try {
+      const res = await adminTrainingApi.downloadFile(item.id)
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = item.title
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } catch {
+      toast.error('Download failed.')
+    }
+  }
+
   const loadUsers = async () => {
     setUsersLoading(true)
     try {
@@ -428,12 +473,20 @@ export default function AdminDashboard() {
                       <div className="flex justify-between"><span>Configured</span><strong>{emailStatus?.configured ? 'Yes' : 'No'}</strong></div>
                       <div className="flex justify-between"><span>Verified</span><strong className={emailStatus?.verified ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{emailStatus?.verified ? 'Yes' : 'No'}</strong></div>
                       <div className="flex justify-between"><span>SMTP Host</span><strong>{emailStatus?.host || '—'}</strong></div>
+                      <div className="flex justify-between"><span>SMTP Port</span><strong>{emailStatus?.port || '—'}</strong></div>
+                      <div className="flex justify-between"><span>TLS Mode</span><strong>{emailStatus ? (emailStatus.secure ? 'SSL/TLS (port 465)' : 'STARTTLS (port 587)') : '—'}</strong></div>
                       <div className="flex justify-between"><span>SMTP User</span><strong>{emailStatus?.user || '—'}</strong></div>
                       <div className="flex justify-between"><span>Last Check</span><strong>{emailStatus?.lastVerifiedAt ? new Date(emailStatus.lastVerifiedAt).toLocaleString('en-IN') : '—'}</strong></div>
                     </div>
                     {emailStatus?.lastError && (
                       <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                        {emailStatus.lastError}
+                        {emailStatus.lastError.includes('535') || emailStatus.lastError.includes('authentication') || emailStatus.lastError.includes('credentials')
+                          ? '⚠️ Authentication failed — check SMTP_USER / SMTP_PASS in your environment config.'
+                          : emailStatus.lastError.includes('ECONNREFUSED') || emailStatus.lastError.includes('ETIMEDOUT') || emailStatus.lastError.includes('ENOTFOUND')
+                          ? '⚠️ Cannot reach SMTP server — check SMTP_HOST / SMTP_PORT and network connectivity.'
+                          : emailStatus.lastError.includes('certificate') || emailStatus.lastError.includes('SSL') || emailStatus.lastError.includes('TLS')
+                          ? '⚠️ TLS/SSL handshake error — verify SMTP_SECURE and port settings.'
+                          : `⚠️ ${emailStatus.lastError}`}
                       </div>
                     )}
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -533,9 +586,9 @@ export default function AdminDashboard() {
                       <tbody>
                         {usersLoading ? (
                           <tr><td colSpan={8} className="text-center py-8 text-gray-400 dark:text-gray-500">Loading users…</td></tr>
-                        ) : users.length === 0 ? (
+                        ) : users.filter(u => !u.email?.endsWith('@deleted.cadgurukul.internal')).length === 0 ? (
                           <tr><td colSpan={8} className="text-center py-8 text-gray-400 dark:text-gray-500">No active users found.</td></tr>
-                        ) : users.map((u) => (
+                        ) : users.filter(u => !u.email?.endsWith('@deleted.cadgurukul.internal')).map((u) => (
                           <tr key={u.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.studentProfile?.fullName || u.email.split('@')[0]}</td>
                             <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{u.email}</td>
@@ -846,7 +899,17 @@ export default function AdminDashboard() {
                         item.isActive
                           ? <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Active</span>
                           : <span key="i" className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">Hidden</span>,
-                        <div key="actions" className="flex gap-2">
+                        <div key="actions" className="flex gap-2 flex-wrap">
+                          {(item.storagePath || item.url?.startsWith('http')) && (
+                            <button onClick={() => handleOpenTraining(item)} className="text-xs text-blue-600 hover:underline">
+                              Open
+                            </button>
+                          )}
+                          {(item.storagePath || item.url?.startsWith('http')) && (
+                            <button onClick={() => handleDownloadTraining(item)} className="text-xs text-purple-600 hover:underline">
+                              ⬇
+                            </button>
+                          )}
                           <button onClick={() => handleToggleTraining(item)} className="text-xs text-blue-600 hover:underline">
                             {item.isActive ? 'Hide' : 'Show'}
                           </button>

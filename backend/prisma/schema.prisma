@@ -138,6 +138,7 @@ model User {
   activityLogs    ActivityLog[]
   aiSessions      AISession[]
   refreshTokens   RefreshToken[]
+  emailVerificationTokens EmailVerificationToken[]
   leads           Lead[]           @relation("LeadOwner")
   assignedLeads   Lead[]           @relation("AssignedLeads")
 
@@ -182,6 +183,22 @@ model RefreshToken {
   @@index([userId])
   @@index([token])
   @@map("refresh_tokens")
+}
+
+/// One-time email verification token.
+/// Created at registration (or resend); deleted on successful verification.
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("email_verification_tokens")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

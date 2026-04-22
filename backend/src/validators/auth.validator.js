@@ -38,4 +38,15 @@ const resetPassword = Joi.object({
     .required(),
 });
 
-module.exports = { register, login, refreshToken, forgotPassword, resetPassword };
+const verifyEmail = Joi.object({
+  token: Joi.string().length(64).hex().required().messages({
+    'string.length': 'Invalid verification token',
+    'string.hex': 'Invalid verification token',
+  }),
+});
+
+const resendVerification = Joi.object({
+  email: Joi.string().email().lowercase().trim().required(),
+});
+
+module.exports = { register, login, refreshToken, forgotPassword, resetPassword, verifyEmail, resendVerification };

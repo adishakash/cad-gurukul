@@ -158,6 +158,7 @@ const getEmailHealthSnapshot = () => ({
   lastError: emailHealth.lastError,
   host: config.email.host || null,
   port: config.email.port || null,
+  secure: Boolean(config.email.secure),
   user: maskEmailAddress(config.email.user),
   from: config.email.from || null,
 });
@@ -687,9 +688,56 @@ const sendAdminSlotNotification = async ({
   });
 };
 
+/**
+ * Send email verification link to a newly registered user.
+ * @param {{ to: string, name: string, token: string }} opts
+ */
+const sendVerificationEmail = async ({ to, name, token }) => {
+  const verifyUrl = `${config.frontendUrl}/verify-email?token=${token}`;
+  return sendEmail({
+    to,
+    subject: 'Verify your email – CAD Gurukul',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+        ${emailHeader}
+        <div style="padding:32px;">
+          <h2 style="color:#1a1a2e;margin:0 0 12px;">Hi ${name}, confirm your email 📬</h2>
+          <p style="font-size:15px;color:#444;line-height:1.7;margin:0 0 24px;">
+            Thanks for joining CAD Gurukul! Click the button below to verify your email address and activate your account.
+          </p>
+
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${verifyUrl}"
+               style="display:inline-block;background:#e94560;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;letter-spacing:0.3px;">
+              Verify My Email
+            </a>
+          </div>
+
+          <p style="font-size:13px;color:#666;line-height:1.6;margin:0 0 8px;">
+            If the button doesn't work, copy and paste this link into your browser:
+          </p>
+          <p style="font-size:12px;color:#0f3460;word-break:break-all;background:#f5f7ff;padding:10px 14px;border-radius:6px;margin:0 0 24px;">
+            ${verifyUrl}
+          </p>
+
+          <div style="background:#fffbea;border:1px solid #fde68a;border-radius:6px;padding:12px 16px;font-size:13px;color:#92400e;">
+            ⏳ This link expires in <strong>24 hours</strong>. If it expires, you can request a new one from the login page.
+          </div>
+
+          <p style="font-size:12px;color:#aaa;margin:24px 0 0;">
+            If you didn't create an account with CAD Gurukul, you can safely ignore this email.
+          </p>
+        </div>
+        ${emailFooter}
+      </div>
+    `,
+  });
+};
+
 module.exports = {
   sendEmail,
   sendWelcomeEmail,
+  sendVerificationEmail,
   sendReportReadyEmail,
   sendCounsellingReportEmail,
   sendConsultationSlotEmail,

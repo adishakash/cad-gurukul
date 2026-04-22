@@ -158,11 +158,13 @@ export const adminDiscountApi = {
 
 // ─── Admin Training API (Phase 6) ────────────────────────────────────────────
 export const adminTrainingApi = {
-  list:    ()           => adminApiClient.get('/admin/ccl/training'),
-  history: ()           => adminApiClient.get('/admin/ccl/training/history'),
-  create:  (formData)   => adminApiClient.post('/admin/ccl/training', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update:  (id, data)   => adminApiClient.patch(`/admin/ccl/training/${id}`, data),
-  remove:  (id)         => adminApiClient.delete(`/admin/ccl/training/${id}`),
+  list:         ()           => adminApiClient.get('/admin/ccl/training'),
+  history:      ()           => adminApiClient.get('/admin/ccl/training/history'),
+  create:       (formData)   => adminApiClient.post('/admin/ccl/training', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:       (id, data)   => adminApiClient.patch(`/admin/ccl/training/${id}`, data),
+  remove:       (id)         => adminApiClient.delete(`/admin/ccl/training/${id}`),
+  openFile:     (id)         => adminApiClient.get(`/admin/ccl/training/${id}/file`,              { responseType: 'blob' }),
+  downloadFile: (id)         => adminApiClient.get(`/admin/ccl/training/${id}/file?download=true`, { responseType: 'blob' }),
 }
 
 // ─── Staff API client (uses cg_staff_token, for Career Counsellor Lead / CC) ──
