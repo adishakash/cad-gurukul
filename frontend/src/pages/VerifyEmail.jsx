@@ -36,7 +36,7 @@ export default function VerifyEmail() {
       if (verifyEmailToken.fulfilled.match(result)) {
         setStatus(STATUS.SUCCESS)
         // Navigate to onboarding after short delay so the user sees the success screen
-        setTimeout(() => navigate('/onboarding', { replace: true }), 2000)
+        setTimeout(() => navigate('/onboarding', { replace: true }), 1500)
       } else {
         const code = result.payload?.code
         setStatus(code === 'TOKEN_EXPIRED' ? STATUS.EXPIRED : STATUS.INVALID)
@@ -90,7 +90,7 @@ export default function VerifyEmail() {
             <div className="text-5xl mb-4">🎉</div>
             <h2 className="text-2xl font-bold text-brand-dark mb-2">Email Verified!</h2>
             <p className="text-gray-600 text-sm mb-4">
-              Your email has been confirmed. Redirecting you to your dashboard…
+              Your email has been confirmed. Taking you to your profile setup…
             </p>
             <div className="flex justify-center mb-4">
               <svg className="animate-spin w-5 h-5 text-brand-red" viewBox="0 0 24 24" fill="none">
@@ -98,10 +98,16 @@ export default function VerifyEmail() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
             </div>
+            <Link
+              to="/onboarding"
+              className="inline-block btn-primary w-full text-center mb-3"
+            >
+              Continue to Profile Setup →
+            </Link>
             <p className="text-xs text-gray-400">
-              Not redirected?{' '}
-              <Link to="/onboarding" className="text-brand-red font-semibold hover:underline">
-                Go to onboarding →
+              Already set up?{' '}
+              <Link to="/dashboard" className="text-brand-red font-semibold hover:underline">
+                Go to Dashboard →
               </Link>
             </p>
           </div>

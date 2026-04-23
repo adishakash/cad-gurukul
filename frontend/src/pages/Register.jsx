@@ -74,8 +74,8 @@ export default function Register() {
               <p className="font-semibold mb-1">What to do next:</p>
               <ol className="list-decimal list-inside space-y-1 text-blue-700">
                 <li>Open the email from CAD Gurukul</li>
-                <li>Click the <strong>Verify My Email</strong> button</li>
-                <li>You'll be signed in automatically</li>
+                <li>Click the <strong>Verify My Email</strong> button in the email</li>
+                <li>You'll be redirected to complete your profile setup</li>
               </ol>
             </div>
 
@@ -92,6 +92,11 @@ export default function Register() {
             </button>
 
             <p className="text-center text-xs text-gray-400 mt-4">
+              Already verified?{' '}
+              <Link to="/login" className="text-brand-red font-semibold hover:underline">
+                Sign in
+              </Link>
+              {' · '}
               Wrong email?{' '}
               <button
                 onClick={() => dispatch(clearPendingVerification())}
