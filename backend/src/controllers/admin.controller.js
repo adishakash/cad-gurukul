@@ -1123,6 +1123,10 @@ async function deleteStaff(req, res) {
 }
 
 module.exports = {
+  // ── Google OAuth admin connect ────────────────────────────────────────────
+  googleConnectInitiate,
+  googleConnectCallback,
+
   // ── Auth ───────────────────────────────────────────────────────────────────
   loginAdmin,
   logoutAdmin,
