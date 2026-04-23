@@ -116,22 +116,34 @@ export default function VerifyEmail() {
               /* ── In-app browser (Outlook, Yahoo, etc.) warning ── */
               <>
                 <p className="text-gray-600 text-sm mb-4">
-                  Your email is confirmed. You're currently inside your email app's browser.
+                  Your email is confirmed! You're currently inside your email app's browser.
                 </p>
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-left text-sm text-amber-800 mb-5">
-                  <p className="font-semibold mb-1">⚠️ One more step to stay signed in</p>
-                  <p>Copy the link below and open it in <strong>Chrome, Safari, or your default browser</strong> to keep your session after closing the email app.</p>
+                  <p className="font-semibold mb-2">⚠️ One more step to stay signed in</p>
+                  <p className="mb-3">
+                    Your email app uses an isolated browser that won't keep you logged in
+                    once you close it. To continue, open your main browser and sign in:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-amber-700">
+                    <li>Open <strong>Chrome</strong>, <strong>Safari</strong>, or your default browser</li>
+                    <li>Go to <strong>cadgurukul.com/login</strong></li>
+                    <li>Sign in with your email and password</li>
+                  </ol>
                 </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 break-all mb-4 text-left font-mono select-all">
-                  {window.location.href}
-                </div>
-                <Link
-                  to="/onboarding"
-                  className="inline-block btn-primary w-full text-center mb-2"
+                <a
+                  href="https://cadgurukul.com/login"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block btn-primary w-full text-center mb-3"
                 >
-                  Continue here →
-                </Link>
-                <p className="text-xs text-gray-400">You can also close this and open cadgurukul.com → Sign In.</p>
+                  Open Sign In Page →
+                </a>
+                <p className="text-xs text-gray-400">
+                  Or continue in this browser (session will be lost when you close the email app).{' '}
+                  <Link to="/onboarding" className="text-brand-red font-semibold hover:underline">
+                    Continue anyway →
+                  </Link>
+                </p>
               </>
             ) : (
               /* ── Normal browser ── */

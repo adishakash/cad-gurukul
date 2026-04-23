@@ -80,8 +80,9 @@ export default function Register() {
             </div>
 
             <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-left text-xs text-gray-600 mb-4">
-              📱 <strong>On mobile?</strong> If the link opens inside your email app (Outlook, Yahoo, etc.),
-              the page will guide you to copy the link and open it in Chrome or Safari to stay signed in.
+              📱 <strong>On mobile?</strong> If your email app opens the link in its own browser,
+              your session won't carry over. After verifying, open Chrome or Safari and go to{' '}
+              <strong>cadgurukul.com/login</strong> to sign in.
             </div>
 
             <p className="text-xs text-gray-400 mb-4">
