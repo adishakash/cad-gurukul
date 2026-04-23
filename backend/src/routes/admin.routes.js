@@ -1,9 +1,3 @@
-// Google OAuth admin connect endpoints
-const { googleConnectInitiate, googleConnectCallback } = require('../controllers/admin.controller');
-
-// Public: Google OAuth admin connect (for refresh token generation)
-router.get('/google/connect/initiate', googleConnectInitiate);
-router.get('/google/connect/callback', googleConnectCallback);
 'use strict';
 const express = require('express');
 const router = express.Router();
@@ -15,6 +9,7 @@ const { upload, enforceSizeLimit } = require('../middleware/upload');
 const adminController = require('../controllers/admin.controller');
 const adminConsultationController = require('../controllers/admin.consultation.controller');
 const cclAdminController = require('../controllers/ccl.admin.controller');
+const { googleConnectInitiate, googleConnectCallback } = adminController;
 const {
   adminLoginSchema,
   consultationBlockSchema,
@@ -25,6 +20,10 @@ const {
 } = require('../validators/admin.validator');
 
 // ─── Public routes (no auth) ──────────────────────────────────────────────────
+
+// Public: Google OAuth admin connect (for refresh token generation)
+router.get('/google/connect/initiate', googleConnectInitiate);
+router.get('/google/connect/callback', googleConnectCallback);
 
 router.post(
   '/login',
