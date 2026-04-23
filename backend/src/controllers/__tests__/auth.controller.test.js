@@ -5,7 +5,9 @@ jest.mock('../../config/database', () => ({
     findUnique: jest.fn(),
     create: jest.fn(),
   },
-  refreshToken: {
+  emailVerificationToken: {
+    findFirst: jest.fn(),
+    deleteMany: jest.fn(),
     create: jest.fn(),
   },
 }));
@@ -29,10 +31,16 @@ jest.mock('../../utils/logger', () => ({
   error: jest.fn(),
 }));
 
+jest.mock('../../services/email/emailService', () => ({
+  sendWelcomeEmail: jest.fn(),
+  sendVerificationEmail: jest.fn().mockResolvedValue({ messageId: 'mock-email-id' }),
+}));
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const prisma = require('../../config/database');
+const { sendVerificationEmail } = require('../../services/email/emailService');
 const { register } = require('../auth.controller');
 
 describe('auth.controller register', () => {
@@ -48,7 +56,9 @@ describe('auth.controller register', () => {
       role: 'STUDENT',
       createdAt: new Date('2026-04-13T00:00:00.000Z'),
     });
-    prisma.refreshToken.create.mockResolvedValue({ id: 'token-1' });
+    prisma.emailVerificationToken.findFirst.mockResolvedValue(null);
+    prisma.emailVerificationToken.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.emailVerificationToken.create.mockResolvedValue({ id: 'verify-token-1' });
   });
 
   it('creates a student profile with empty required arrays', async () => {
@@ -73,6 +83,7 @@ describe('auth.controller register', () => {
         email: 'student@example.com',
         passwordHash: 'hashed-password',
         role: 'STUDENT',
+        isEmailVerified: false,
         studentProfile: {
           create: {
             fullName: 'Student Example',
@@ -85,8 +96,13 @@ describe('auth.controller register', () => {
       },
       select: { id: true, email: true, role: true, createdAt: true },
     });
-    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ userId: 'user-1', token: 'refresh-token' }),
+    expect(prisma.emailVerificationToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'user-1' }),
+    });
+    expect(sendVerificationEmail).toHaveBeenCalledWith({
+      to: 'student@example.com',
+      name: 'Student Example',
+      token: expect.any(String),
     });
     expect(res.status).toHaveBeenCalledWith(201);
   });

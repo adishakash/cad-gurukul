@@ -33,6 +33,13 @@ const issueAuthPayload = async (user) => {
   return { user: { id: user.id, email: user.email, role: user.role }, accessToken, refreshToken };
 };
 
+const EMAIL_RESEND_GENERIC_MESSAGE = 'If that account exists and is unverified, a new verification link will arrive shortly.';
+const fallbackVerificationName = (email, fullName) => {
+  if (fullName && typeof fullName === 'string' && fullName.trim()) return fullName.trim();
+  if (email && typeof email === 'string' && email.includes('@')) return email.split('@')[0];
+  return 'there';
+};
+
 // ─── Controllers ─────────────────────────────────────────────────────────────
 
 const register = async (req, res) => {
@@ -66,11 +73,11 @@ const register = async (req, res) => {
       if (existingToken) {
         const ageMs = Date.now() - new Date(existingToken.createdAt).getTime();
         if (ageMs < 60_000) {
-          // Silently succeed to avoid timing attacks; caller sees same "link sent" message
+          // Keep response generic to avoid account enumeration.
           return successResponse(
             res,
             { emailSent: false, email, alreadyExists: true },
-            'A new verification link has been sent to your email address.',
+            EMAIL_RESEND_GENERIC_MESSAGE,
             200
           );
         }
@@ -78,15 +85,23 @@ const register = async (req, res) => {
 
       const newToken = generateVerificationToken();
       await saveVerificationToken(existing.id, newToken);
-
-      sendVerificationEmail({ to: email, name: fullName, token: newToken })
-        .then(() => logger.info('[Auth] Re-sent verification email (existing unverified)', { userId: existing.id }))
-        .catch((e) => logger.warn('[Auth] Verification re-send failed', { userId: existing.id, error: e.message }));
+      let emailSent = false;
+      try {
+        await sendVerificationEmail({
+          to: email,
+          name: fallbackVerificationName(email, fullName),
+          token: newToken,
+        });
+        emailSent = true;
+        logger.info('[Auth] Re-sent verification email (existing unverified)', { userId: existing.id });
+      } catch (e) {
+        logger.warn('[Auth] Verification re-send failed', { userId: existing.id, error: e.message });
+      }
 
       return successResponse(
         res,
-        { emailSent: true, email, alreadyExists: true },
-        'A new verification link has been sent to your email address.',
+        { emailSent, email, alreadyExists: true },
+        EMAIL_RESEND_GENERIC_MESSAGE,
         200
       );
     }
@@ -110,19 +125,22 @@ const register = async (req, res) => {
     logger.info('[Auth] User registered (awaiting verification)', { userId: user.id, email: user.email });
 
     // Verification email is blocking — this is the whole point of the feature
+    let emailSent = false;
     try {
       await sendVerificationEmail({ to: user.email, name: fullName, token: verifyToken });
+      emailSent = true;
       logger.info('[Auth] Verification email sent', { userId: user.id });
     } catch (emailErr) {
-      // Email failed but the user record exists — log the error so it can be
-      // resent later; don't expose internal details to the client.
+      // Email failed but the user record exists — users can retry via resend endpoint.
       logger.error('[Auth] Verification email failed', { userId: user.id, error: emailErr.message });
     }
 
     return successResponse(
       res,
-      { emailSent: true, email: user.email },
-      'Account created! Please check your email to verify your address.',
+      { emailSent, email: user.email },
+      emailSent
+        ? 'Account created! Please check your email to verify your address.'
+        : 'Account created, but we could not send the verification email right now. Please use "Resend verification email" in a minute.',
       201
     );
   } catch (err) {
@@ -220,7 +238,7 @@ const resendVerification = async (req, res) => {
     });
 
     // Always return the same generic message to avoid user enumeration
-    const genericMsg = 'If that account exists and is unverified, a new verification link has been sent.';
+    const genericMsg = EMAIL_RESEND_GENERIC_MESSAGE;
 
     if (!user || user.deletedAt || !user.isActive) {
       return successResponse(res, { emailSent: false }, genericMsg);
@@ -246,12 +264,20 @@ const resendVerification = async (req, res) => {
 
     const newToken = generateVerificationToken();
     await saveVerificationToken(user.id, newToken);
+    let emailSent = false;
+    try {
+      await sendVerificationEmail({
+        to: user.email,
+        name: fallbackVerificationName(user.email),
+        token: newToken,
+      });
+      emailSent = true;
+      logger.info('[Auth] Verification re-sent', { userId: user.id });
+    } catch (e) {
+      logger.warn('[Auth] Verification re-send failed', { userId: user.id, error: e.message });
+    }
 
-    sendVerificationEmail({ to: user.email, name: user.email, token: newToken })
-      .then(() => logger.info('[Auth] Verification re-sent', { userId: user.id }))
-      .catch((e) => logger.warn('[Auth] Verification re-send failed', { userId: user.id, error: e.message }));
-
-    return successResponse(res, { emailSent: true }, genericMsg);
+    return successResponse(res, { emailSent }, genericMsg);
   } catch (err) {
     logger.error('[Auth] resendVerification error', { error: err.message });
     throw err;

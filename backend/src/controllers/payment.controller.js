@@ -677,10 +677,23 @@ const getPaymentHistory = async (req, res) => {
         razorpayPaymentId: true,
         paidAt: true,
         createdAt: true,
+        metadata: true,
       },
     });
 
-    return successResponse(res, payments);
+    const sanitizedPayments = payments.map((payment) => ({
+      id: payment.id,
+      amountPaise: payment.amountPaise,
+      currency: payment.currency,
+      status: payment.status,
+      razorpayOrderId: payment.razorpayOrderId,
+      razorpayPaymentId: payment.razorpayPaymentId,
+      paidAt: payment.paidAt,
+      createdAt: payment.createdAt,
+      planType: payment.metadata?.planType || 'standard',
+    }));
+
+    return successResponse(res, sanitizedPayments);
   } catch (err) {
     logger.error('[Payment] getPaymentHistory error', { error: err.message });
     throw err;

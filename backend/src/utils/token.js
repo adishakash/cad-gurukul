@@ -5,6 +5,21 @@ const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/database');
 const config = require('../config');
 
+const assertEmailVerificationStoreAvailable = () => {
+  if (prisma.emailVerificationToken
+    && typeof prisma.emailVerificationToken.deleteMany === 'function'
+    && typeof prisma.emailVerificationToken.create === 'function') {
+    return;
+  }
+
+  const err = new Error(
+    'Email verification storage is unavailable. Run Prisma generate/migrations so EmailVerificationToken exists.'
+  );
+  err.code = 'EMAIL_VERIFICATION_STORE_UNAVAILABLE';
+  err.statusCode = 503;
+  throw err;
+};
+
 /**
  * Sign a short-lived JWT access token.
  * Payload: { userId, role } — decoded by `authenticate` middleware.
@@ -47,6 +62,7 @@ const hashVerificationToken = (rawToken) =>
  * Deletes any existing tokens for the user before creating a new one.
  */
 const saveVerificationToken = async (userId, rawToken) => {
+  assertEmailVerificationStoreAvailable();
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24);
   // Invalidate any previous unverified tokens for this user
