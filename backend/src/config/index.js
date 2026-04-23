@@ -161,4 +161,5 @@ required.forEach((key) => {
   }
 });
 
+console.log(`[Config] Loaded configuration for environment: ${config}`);
 module.exports = config;
