@@ -70,13 +70,18 @@ export default function Register() {
               {pendingVerification.email}
             </p>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-left text-sm text-blue-800 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-left text-sm text-blue-800 mb-4">
               <p className="font-semibold mb-1">What to do next:</p>
               <ol className="list-decimal list-inside space-y-1 text-blue-700">
                 <li>Open the email from CAD Gurukul</li>
                 <li>Click the <strong>Verify My Email</strong> button in the email</li>
                 <li>You'll be redirected to complete your profile setup</li>
               </ol>
+            </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-left text-xs text-gray-600 mb-4">
+              📱 <strong>On mobile?</strong> If the link opens inside your email app (Outlook, Yahoo, etc.),
+              the page will guide you to copy the link and open it in Chrome or Safari to stay signed in.
             </div>
 
             <p className="text-xs text-gray-400 mb-4">

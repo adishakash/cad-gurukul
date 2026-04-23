@@ -14,6 +14,22 @@ const STATUS = {
   EXPIRED: 'expired',
 }
 
+// Detects common in-app browsers (Outlook, Yahoo Mail, Gmail app, Facebook, etc.)
+// whose WebViews are isolated from the user's main browser session.
+const detectInAppBrowser = () => {
+  if (typeof window === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  return (
+    /Instagram|FBAN|FBAV|Twitter|Line\/|GSA\/|YahooApp|Snapchat/.test(ua) ||
+    // Outlook mobile (iOS + Android)
+    /Outlook|MSOutlookApp|MailApp/.test(ua) ||
+    // Android WebView (generic email apps)
+    (ua.includes('Android') && ua.includes('wv')) ||
+    // iOS WKWebView without Safari in UA
+    (ua.includes('iPhone') && !ua.includes('Safari') && !ua.includes('CriOS') && !ua.includes('FxiOS'))
+  )
+}
+
 export default function VerifyEmail() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
@@ -23,6 +39,7 @@ export default function VerifyEmail() {
   const [resendEmail, setResendEmail] = useState('')
   const [resendCooldown, setResendCooldown] = useState(false)
   const [resendSent, setResendSent] = useState(false)
+  const [inAppBrowser, setInAppBrowser] = useState(false)
   const token = searchParams.get('token')
 
   useEffect(() => {
@@ -34,9 +51,14 @@ export default function VerifyEmail() {
     const doVerify = async () => {
       const result = await dispatch(verifyEmailToken(token))
       if (verifyEmailToken.fulfilled.match(result)) {
+        setInAppBrowser(detectInAppBrowser())
         setStatus(STATUS.SUCCESS)
-        // Navigate to onboarding after short delay so the user sees the success screen
-        setTimeout(() => navigate('/onboarding', { replace: true }), 1500)
+        // Only auto-redirect when NOT in an in-app browser — in-app browsers
+        // have isolated storage, so the user must tap Continue and then switch
+        // to their real browser to stay logged in.
+        if (!detectInAppBrowser()) {
+          setTimeout(() => navigate('/onboarding', { replace: true }), 1500)
+        }
       } else {
         const code = result.payload?.code
         setStatus(code === 'TOKEN_EXPIRED' ? STATUS.EXPIRED : STATUS.INVALID)
@@ -89,27 +111,54 @@ export default function VerifyEmail() {
           <div className="card shadow-xl text-center">
             <div className="text-5xl mb-4">🎉</div>
             <h2 className="text-2xl font-bold text-brand-dark mb-2">Email Verified!</h2>
-            <p className="text-gray-600 text-sm mb-4">
-              Your email has been confirmed. Taking you to your profile setup…
-            </p>
-            <div className="flex justify-center mb-4">
-              <svg className="animate-spin w-5 h-5 text-brand-red" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-            </div>
-            <Link
-              to="/onboarding"
-              className="inline-block btn-primary w-full text-center mb-3"
-            >
-              Continue to Profile Setup →
-            </Link>
-            <p className="text-xs text-gray-400">
-              Already set up?{' '}
-              <Link to="/dashboard" className="text-brand-red font-semibold hover:underline">
-                Go to Dashboard →
-              </Link>
-            </p>
+
+            {inAppBrowser ? (
+              /* ── In-app browser (Outlook, Yahoo, etc.) warning ── */
+              <>
+                <p className="text-gray-600 text-sm mb-4">
+                  Your email is confirmed. You're currently inside your email app's browser.
+                </p>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-left text-sm text-amber-800 mb-5">
+                  <p className="font-semibold mb-1">⚠️ One more step to stay signed in</p>
+                  <p>Copy the link below and open it in <strong>Chrome, Safari, or your default browser</strong> to keep your session after closing the email app.</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 break-all mb-4 text-left font-mono select-all">
+                  {window.location.href}
+                </div>
+                <Link
+                  to="/onboarding"
+                  className="inline-block btn-primary w-full text-center mb-2"
+                >
+                  Continue here →
+                </Link>
+                <p className="text-xs text-gray-400">You can also close this and open cadgurukul.com → Sign In.</p>
+              </>
+            ) : (
+              /* ── Normal browser ── */
+              <>
+                <p className="text-gray-600 text-sm mb-4">
+                  Your email has been confirmed. Taking you to your profile setup…
+                </p>
+                <div className="flex justify-center mb-4">
+                  <svg className="animate-spin w-5 h-5 text-brand-red" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                </div>
+                <Link
+                  to="/onboarding"
+                  className="inline-block btn-primary w-full text-center mb-3"
+                >
+                  Continue to Profile Setup →
+                </Link>
+                <p className="text-xs text-gray-400">
+                  Already set up?{' '}
+                  <Link to="/dashboard" className="text-brand-red font-semibold hover:underline">
+                    Go to Dashboard →
+                  </Link>
+                </p>
+              </>
+            )}
           </div>
         )}
 
