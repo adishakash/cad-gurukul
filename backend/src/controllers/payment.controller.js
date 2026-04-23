@@ -9,13 +9,15 @@ const { triggerAutomation } = require('../services/automation/automationService'
 const analytics = require('../services/analytics/analyticsService');
 const { sendConsultationSlotEmail } = require('../services/email/emailService');
 const { getEffectiveChargeAmount } = require('../utils/testPricing');
-
-// ── Value Ladder pricing ─────────────────────────────────────────────────────
-const PLAN_PRICES = {
-  standard:     499,    // Full report — stream + career suggestions
-  premium:      1999,   // Deep AI analysis — personalised roadmap + subject strategy
-  consultation: 9999,   // 1:1 Career Blueprint Session with Adish Gupta
-};
+const { safeLeadUpdate } = require('../utils/leadStatusHelper');
+const {
+  PLAN_PRICES,
+  normalizePlanType,
+  isPlanIncluded,
+  getUpgradePrice,
+  formatRupees,
+  PAID_STATUSES,
+} = require('../utils/planPricing');
 
 // Back-compat: keep the old constant so webhook path doesn't break
 const PAID_REPORT_PRICE_RUPEES = PLAN_PRICES.standard;
@@ -33,6 +35,81 @@ const getAutomationEventForPlan = (planType) => {
   return 'payment_success';
 };
 
+const getHighestCapturedPlan = (payments = []) => {
+  return payments.reduce((highestPlan, payment) => {
+    const planType = normalizePlanType(payment?.metadata?.planType || 'free');
+    return isPlanIncluded(planType, highestPlan) ? planType : highestPlan;
+  }, 'free');
+};
+
+const resolveCurrentPlanForUser = async (userId) => {
+  const [lead, consultationBooking, capturedPayments] = await Promise.all([
+    prisma.lead.findFirst({
+      where: { userId },
+      select: { planType: true, status: true },
+    }),
+    prisma.consultationBooking.findFirst({
+      where: { userId },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.payment.findMany({
+      where: { userId, status: 'CAPTURED' },
+      select: { metadata: true },
+    }),
+  ]);
+
+  if (consultationBooking) return 'consultation';
+
+  const highestCapturedPlan = getHighestCapturedPlan(capturedPayments);
+  if (highestCapturedPlan !== 'free') return highestCapturedPlan;
+
+  const leadPlanType = normalizePlanType(lead?.planType || 'free');
+  if (lead && PAID_STATUSES.includes(lead.status) && leadPlanType !== 'free') {
+    return leadPlanType;
+  }
+
+  return 'free';
+};
+
+const buildQuote = ({ currentPlan, requestedPlan }) => {
+  const targetPlan = normalizePlanType(requestedPlan);
+  const sourcePlan = normalizePlanType(currentPlan);
+  const basePrice = PLAN_PRICES[targetPlan];
+  const effectivePrice = getUpgradePrice(sourcePlan, targetPlan);
+  const alreadyIncluded = isPlanIncluded(sourcePlan, targetPlan);
+  const alreadyOwned = sourcePlan === targetPlan && sourcePlan !== 'free';
+
+  return {
+    currentPlan: sourcePlan,
+    requestedPlan: targetPlan,
+    basePrice,
+    effectivePrice,
+    basePriceLabel: formatRupees(basePrice),
+    effectivePriceLabel: formatRupees(effectivePrice),
+    isUpgrade: sourcePlan !== 'free' && !alreadyIncluded,
+    upgradeFrom: sourcePlan !== 'free' && !alreadyIncluded ? sourcePlan : null,
+    alreadyIncluded,
+    alreadyOwned,
+    canPurchase: !alreadyIncluded && effectivePrice > 0,
+  };
+};
+
+const getQuote = async (req, res) => {
+  try {
+    const requestedPlan = normalizePlanType(req.query.planType || 'standard');
+    if (!PLAN_PRICES[requestedPlan] || requestedPlan === 'free') {
+      return errorResponse(res, 'Invalid plan type', 400, 'INVALID_PLAN');
+    }
+
+    const currentPlan = await resolveCurrentPlanForUser(req.user.id);
+    return successResponse(res, buildQuote({ currentPlan, requestedPlan }));
+  } catch (err) {
+    logger.error('[Payment] getQuote error', { error: err.message });
+    throw err;
+  }
+};
+
 /**
  * POST /payments/create-order
  * Creates a Razorpay order and a pending payment record.
@@ -45,6 +122,15 @@ const createOrder = async (req, res) => {
     // Validate planType
     if (!PLAN_PRICES[planType]) {
       return errorResponse(res, 'Invalid plan type', 400, 'INVALID_PLAN');
+    }
+
+    const currentPlan = await resolveCurrentPlanForUser(req.user.id);
+    const quote = buildQuote({ currentPlan, requestedPlan: planType });
+    if (quote.alreadyOwned) {
+      return errorResponse(res, `You already have the ${planType} plan on your account.`, 409, 'ALREADY_OWNED');
+    }
+    if (quote.alreadyIncluded) {
+      return errorResponse(res, `${planType} is already included in your ${currentPlan} plan.`, 409, 'PLAN_INCLUDED');
     }
 
     // CONSULTATION orders don't require an assessment
@@ -76,7 +162,7 @@ const createOrder = async (req, res) => {
       }
     }
 
-    const amountRupees = PLAN_PRICES[planType];
+    const amountRupees = quote.effectivePrice;
     const amountPaise  = rupeesToPaise(amountRupees);
 
     // ── Test pricing override ─────────────────────────────────────────────────
@@ -109,6 +195,8 @@ const createOrder = async (req, res) => {
         metadata: {
           assessmentId: assessmentId || null,
           planType,
+          currentPlan,
+          effectiveAmountRupees: amountRupees,
           ...(isTestMode ? { testMode: true, chargeAmountPaise } : {}),
         },
       },
@@ -121,10 +209,7 @@ const createOrder = async (req, res) => {
     // Link lead to payment_pending
     const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
     if (lead) {
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { status: 'payment_pending', planType },
-      });
+      await safeLeadUpdate(lead.id, { status: 'payment_pending', planType });
       await triggerAutomation('payment_initiated', { leadId: lead.id, userId: req.user.id, planType });
     }
 
@@ -137,6 +222,7 @@ const createOrder = async (req, res) => {
       keyId:    config.razorpay.keyId,
       paymentId: payment.id,
       planType,
+      quote,
     }, 'Order created', 201);
   } catch (err) {
     logger.error('[Payment] createOrder error', { error: err.message });
@@ -288,7 +374,7 @@ const verifyPayment = async (req, res) => {
     }
 
     const successMsg = planType === 'consultation'
-      ? 'Booking confirmed! Check your email to select your preferred session slot.'
+      ? 'Booking confirmed! Your scheduling email is being prepared now.'
       : 'Payment successful! Your report is being generated.';
 
     return successResponse(res, { paymentId: payment.id, status: 'CAPTURED', planType }, successMsg);
@@ -591,10 +677,23 @@ const getPaymentHistory = async (req, res) => {
         razorpayPaymentId: true,
         paidAt: true,
         createdAt: true,
+        metadata: true,
       },
     });
 
-    return successResponse(res, payments);
+    const sanitizedPayments = payments.map((payment) => ({
+      id: payment.id,
+      amountPaise: payment.amountPaise,
+      currency: payment.currency,
+      status: payment.status,
+      razorpayOrderId: payment.razorpayOrderId,
+      razorpayPaymentId: payment.razorpayPaymentId,
+      paidAt: payment.paidAt,
+      createdAt: payment.createdAt,
+      planType: payment.metadata?.planType || 'standard',
+    }));
+
+    return successResponse(res, sanitizedPayments);
   } catch (err) {
     logger.error('[Payment] getPaymentHistory error', { error: err.message });
     throw err;
@@ -626,8 +725,8 @@ const getPaymentStatus = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Creates a ConsultationBooking record and sends slot-selection emails to the
- * student and (if present) their parent.  Called immediately after a ₹9,999
+ * Creates a ConsultationBooking record and sends the scheduling email to the
+ * registered student email. Called immediately after a ₹9,999
  * consultation payment is captured in verifyPayment / handleWebhook.
  *
  * Idempotent — if a booking already exists for this paymentId it returns early.
@@ -650,7 +749,7 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
       leadId:    leadId || null,
       paymentId,
       slotToken,
-      status:    'slot_mail_sent',
+      status:    'booking_confirmed',
     },
   });
 
@@ -660,7 +759,7 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
       data: {
         id:       crypto.randomUUID(),
         leadId,
-        event:    'consultation_slot_mail_sent',
+        event:    'consultation_booking_confirmed',
         metadata: { bookingId: booking.id },
       },
     }).catch((err) =>
@@ -668,16 +767,13 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
     );
   }
 
-  // Fetch user + parent for email sending
+  // Fetch the registered user email for scheduling
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       email: true,
       studentProfile: {
-        select: {
-          fullName: true,
-          parentDetail: { select: { parentName: true, email: true } },
-        },
+        select: { fullName: true },
       },
     },
   });
@@ -685,8 +781,6 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
   const studentName = user?.studentProfile?.fullName
     || user?.email?.split('@')[0]
     || 'Student';
-  const parentEmail = user?.studentProfile?.parentDetail?.email;
-  const parentName  = user?.studentProfile?.parentDetail?.parentName;
 
   const emailArgs = {
     slotToken,
@@ -695,38 +789,87 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
     counsellorContact:   booking.counsellorContact,
   };
 
-  // Send to student
+  // Send only to the registered student email
   if (user?.email) {
-    await sendConsultationSlotEmail({
-      to:   user.email,
-      name: studentName,
-      ...emailArgs,
-    }).catch((err) =>
-      logger.warn('[Payment] Slot-selection email to student failed', { error: err.message }),
-    );
+    try {
+      await sendConsultationSlotEmail({
+        to:   user.email,
+        name: studentName,
+        ...emailArgs,
+      });
+
+      await prisma.consultationBooking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'slot_mail_sent',
+          schedulingEmailSentAt: new Date(),
+          schedulingEmailError: null,
+          lastResendAt: new Date(),
+        },
+      });
+
+      if (leadId) {
+        await prisma.leadEvent.create({
+          data: {
+            id: crypto.randomUUID(),
+            leadId,
+            event: 'consultation_slot_mail_sent',
+            metadata: { bookingId: booking.id },
+          },
+        }).catch(() => {});
+      }
+    } catch (err) {
+      await prisma.consultationBooking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'booking_confirmed',
+          schedulingEmailSentAt: null,
+          schedulingEmailError: err.message,
+        },
+      }).catch(() => {});
+
+      logger.warn('[Payment] Slot-selection email to student failed', { error: err.message });
+
+      if (leadId) {
+        await prisma.leadEvent.create({
+          data: {
+            id: crypto.randomUUID(),
+            leadId,
+            event: 'consultation_slot_mail_failed',
+            metadata: { bookingId: booking.id, error: err.message },
+          },
+        }).catch(() => {});
+      }
+    }
+  } else {
+    await prisma.consultationBooking.update({
+      where: { id: booking.id },
+      data: {
+        status: 'booking_confirmed',
+        schedulingEmailSentAt: null,
+        schedulingEmailError: 'Student email unavailable',
+      },
+    }).catch(() => {});
+
+    if (leadId) {
+      await prisma.leadEvent.create({
+        data: {
+          id: crypto.randomUUID(),
+          leadId,
+          event: 'consultation_slot_mail_failed',
+          metadata: { bookingId: booking.id, error: 'Student email unavailable' },
+        },
+      }).catch(() => {});
+    }
   }
 
-  // Send to parent
-  if (parentEmail) {
-    await sendConsultationSlotEmail({
-      to:          parentEmail,
-      name:        parentName || `Parent of ${studentName}`,
-      isParent:    true,
-      studentName,
-      ...emailArgs,
-    }).catch((err) =>
-      logger.warn('[Payment] Slot-selection email to parent failed', { error: err.message }),
-    );
-  }
-
-  logger.info('[Payment] ConsultationBooking created + slot email sent', {
+  logger.info('[Payment] ConsultationBooking created', {
     bookingId: booking.id,
     userId,
     studentEmail: user?.email,
-    hasParentEmail: Boolean(parentEmail),
   });
 
   return booking;
 }
 
-module.exports = { createOrder, verifyPayment, handleWebhook, getPaymentHistory, getPaymentStatus };
+module.exports = { createOrder, getQuote, verifyPayment, handleWebhook, getPaymentHistory, getPaymentStatus };

@@ -4,6 +4,7 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tool
 import { reportApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
 import PremiumUpsell from '../components/PremiumUpsell'
+import { formatRupees, getUpgradePrice } from '../utils/planPricing'
 
 const POLL_INTERVAL = 12000
 
@@ -192,6 +193,8 @@ export default function Report() {
   const userPlanType          = report.userPlanType || (isPaid ? reportType : 'free')
   // Only show upgrade CTAs when upgradeCTA is present (backend suppresses it for paid-plan users)
   const showUpgradeCTA = !isPaid && Boolean(report.upgradeCTA)
+  const premiumUpgradePrice = report.premiumUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'premium'))
+  const consultationUpgradePrice = report.consultationUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'consultation'))
 
   // Header label
   const reportLabel = isPremium ? '🚀 Premium AI Report' : isPaid ? '💎 Full Report' : '🆓 Free Preview'
@@ -374,9 +377,9 @@ export default function Report() {
                   onClick={() => { trackEvent('premium_clicked', { source: 'standard_report_upsell' }); navigate(`/payment?plan=premium&assessmentId=${report.assessmentId}`) }}
                   className="mt-4 bg-purple-600 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-purple-700 transition"
                 >
-                  Upgrade to Premium AI Report — ₹1,999 →
+                  Upgrade to Premium AI Report — {premiumUpgradePrice} →
                 </button>
-                <p className="text-xs text-gray-400 mt-2">One-time · Instant upgrade · Lifetime access</p>
+                <p className="text-xs text-gray-400 mt-2">Your ₹499 plan is already included. Pay only the difference.</p>
               </div>
             </div>
           </div>
@@ -392,12 +395,12 @@ export default function Report() {
                 <h3 className="font-extrabold text-brand-dark text-lg">1:1 Career Blueprint Session with Adish Gupta</h3>
                 <p className="text-sm text-gray-600 mt-1">45-minute personalised session · Parents can join · Session recording included · 30-day email support</p>
                 <button
-                  onClick={() => { trackEvent('premium_clicked', { source: 'premium_report_consultation' }); navigate(`/payment?plan=consultation`) }}
+                  onClick={() => { trackEvent('premium_clicked', { source: 'premium_report_consultation' }); navigate(`/payment?plan=consultation${report.assessmentId ? `&assessmentId=${report.assessmentId}` : ''}`) }}
                   className="mt-4 bg-orange-500 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-orange-600 transition"
                 >
-                  Book My Slot — ₹9,999 →
+                  Upgrade to 1:1 Session — {consultationUpgradePrice} →
                 </button>
-                <p className="text-xs text-gray-400 mt-2">This decision impacts your next 5 years. Invest 45 mins with India's expert.</p>
+                <p className="text-xs text-gray-400 mt-2">Your Premium AI Report is already included. Pay only the difference for the live counselling session.</p>
               </div>
             </div>
           </div>

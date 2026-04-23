@@ -2,9 +2,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { selectUser, clearCredentials } from '../store/slices/authSlice'
-import api, { leadApi, consultationApi, authApi } from '../services/api'
+import api, { leadApi, consultationApi, authApi, paymentApi } from '../services/api'
 import toast from 'react-hot-toast'
 import ThemeToggle from '../components/ThemeToggle'
+import { formatRupees, getUpgradePrice } from '../utils/planPricing'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 const SLOT_LABELS = {
@@ -47,12 +48,14 @@ function TimelineStep({ done, current, icon, label, description, children }) {
 }
 
 // ── ₹499 Standard Plan Timeline ──────────────────────────────────────────────
-function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
+function StandardTimeline({ leadStatus, paidReport, generatingReport, onRefresh, refreshing }) {
   const reportReady = Boolean(paidReport)
   const generating  = Boolean(generatingReport) || ['paid', 'premium_report_generating'].includes(leadStatus)
   const reportDone  = reportReady || leadStatus === 'premium_report_ready'
+  const emailDelivered = Boolean(paidReport?.reportEmailSentAt)
+  const emailError = paidReport?.emailDeliveryError
 
-  const statusLabel = reportReady ? 'Delivered' : generating ? 'Generating' : 'Processing'
+  const statusLabel = emailDelivered ? 'Delivered' : reportReady ? 'Ready' : generating ? 'Generating' : 'Processing'
   const statusColor = reportReady
     ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700'
     : generating
@@ -97,10 +100,13 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
       key:     'report_emailed',
       label:   'Report Emailed to You',
       icon:    '📧',
-      desc:    reportReady
-        ? 'A link to your full report was sent to your registered email.'
+      desc:    emailDelivered
+        ? `Delivered on ${fmt(paidReport.reportEmailSentAt)} to your registered email.`
+        : reportReady && emailError
+          ? `Report is ready, but email delivery failed: ${emailError}`
         : 'Email will be sent as soon as the report is ready.',
-      done:    reportReady,
+      done:    emailDelivered,
+      current: reportReady && !emailDelivered,
     },
     {
       key:     'downloadable',
@@ -114,7 +120,7 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
   return (
     <div className="card mb-6 border-2 border-green-300 dark:border-green-700 bg-gradient-to-br from-green-50 to-white dark:from-green-950/20 dark:to-gray-900">
       {/* Status card */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl shrink-0">📋</div>
           <div>
@@ -123,6 +129,18 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${
+              refreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+            title="Refresh timeline status"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
           <span className="text-xs font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700 px-2 py-0.5 rounded-full">
             ₹499 Report
           </span>
@@ -162,12 +180,14 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
 }
 
 // ── ₹1,999 Premium Plan Timeline ─────────────────────────────────────────────
-function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
+function PremiumTimeline({ leadStatus, paidReport, generatingReport, onRefresh, refreshing }) {
   const generating  = Boolean(generatingReport) || leadStatus === 'premium_report_generating'
   const reportReady = Boolean(paidReport)
   const reportDone  = reportReady || leadStatus === 'premium_report_ready'
+  const emailDelivered = Boolean(paidReport?.reportEmailSentAt)
+  const emailError = paidReport?.emailDeliveryError
 
-  const statusLabel = reportReady ? 'Delivered' : generating ? 'Analysing' : 'Processing'
+  const statusLabel = emailDelivered ? 'Delivered' : reportReady ? 'Ready' : generating ? 'Analysing' : 'Processing'
   const statusColor = reportReady
     ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700'
     : generating
@@ -212,10 +232,13 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
       key:     'report_emailed',
       label:   'Premium Report Emailed to You',
       icon:    '📧',
-      desc:    reportReady
-        ? 'Your premium report link was sent to your registered email address.'
+      desc:    emailDelivered
+        ? `Delivered on ${fmt(paidReport.reportEmailSentAt)} to your registered email.`
+        : reportReady && emailError
+          ? `Premium report is ready, but email delivery failed: ${emailError}`
         : 'Email will be sent as soon as your premium report is ready.',
-      done:    reportReady,
+      done:    emailDelivered,
+      current: reportReady && !emailDelivered,
     },
     {
       key:     'downloadable',
@@ -229,7 +252,7 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
   return (
     <div className="card mb-6 border-2 border-purple-300 dark:border-purple-700 bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-gray-900">
       {/* Status card */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl shrink-0">🚀</div>
           <div>
@@ -238,6 +261,18 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${
+              refreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+            title="Refresh timeline status"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
           <span className="text-xs font-bold text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 border border-purple-300 dark:border-purple-700 px-2 py-0.5 rounded-full">
             ₹1,999 Premium
           </span>
@@ -279,15 +314,16 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
 // ── ₹9,999 Consultation Timeline ─────────────────────────────────────────────
 const CONSULTATION_STEPS = [
   { key: 'purchased',                label: 'Booking Confirmed',           icon: '💳', desc: 'Payment captured — ₹9,999 consultation booked' },
-  { key: 'slot_mail_sent',           label: 'Slot-Selection Email Sent',   icon: '📧', desc: 'Email with slot-selection link sent to your inbox' },
-  { key: 'slot_selected',            label: 'Slot Selected',               icon: '📅', desc: 'You chose a preferred session window' },
-  { key: 'meeting_scheduled',        label: 'Meeting Scheduled',           icon: '📆', desc: 'Team confirmed exact date & meeting link' },
-  { key: 'meeting_completed',        label: 'Session Completed',           icon: '🎤', desc: '45-min 1:1 Career Blueprint Session done' },
+  { key: 'slot_mail_sent',           label: 'Scheduling Email Sent',       icon: '📧', desc: 'Email with your private booking link has been sent' },
+  { key: 'slot_selected',            label: 'Exact Slot Selected',         icon: '📅', desc: 'You locked a specific date and time for the session' },
+  { key: 'meeting_scheduled',        label: 'Meeting Link Ready',          icon: '📆', desc: 'Meeting link generated and shared for the live session' },
+  { key: 'meeting_completed',        label: 'Session Completed',           icon: '🎤', desc: '1:1 Career Blueprint Session completed' },
   { key: 'counselling_report_ready', label: 'Personalised Report Ready',   icon: '🎓', desc: 'Your 1:1 counselling report has been prepared and emailed to you' },
 ]
 
 // Derive current step index from booking.status
 const BOOKING_STATUS_TO_STEP = {
+  booking_confirmed:        0,
   slot_mail_sent:           1,   // step 1 (email sent)
   slot_selected:            2,
   meeting_scheduled:        3,
@@ -295,16 +331,20 @@ const BOOKING_STATUS_TO_STEP = {
   counselling_report_ready: 5,
 }
 
-function ConsultationTimeline({ booking, onResend }) {
+function ConsultationTimeline({ booking, onResend, onRefresh, refreshing }) {
   const [resending, setResending] = useState(false)
   const [resendResult, setResendResult] = useState(null) // { ok, message, nextResendAt }
   const [recovering, setRecovering] = useState(false)
   const [recoverResult, setRecoverResult] = useState(null) // { ok, message }
 
-  const currentStepIdx = booking ? (BOOKING_STATUS_TO_STEP[booking.status] ?? 1) : -1
+  const currentStepIdx = booking ? (BOOKING_STATUS_TO_STEP[booking.status] ?? 0) : -1
+  const hasExactSlot = Boolean(booking?.slotSelectedAt || booking?.scheduledStartAt)
+  const hasMeetingLink = Boolean(booking?.meetingLink || booking?.scheduledStartAt)
+  const schedulingEmailSent = Boolean(booking?.schedulingEmailSentAt)
+  const schedulingEmailError = booking?.schedulingEmailError
 
   // Cooldown state
-  const lastSentAt    = booking ? (booking.lastResendAt || booking.createdAt) : null
+  const lastSentAt    = booking?.lastResendAt || null
   const nextResendAt  = resendResult?.nextResendAt
     || (lastSentAt ? new Date(new Date(lastSentAt).getTime() + 30 * 60 * 1000) : null)
   const cooldownOver  = !nextResendAt || Date.now() > new Date(nextResendAt).getTime()
@@ -319,11 +359,15 @@ function ConsultationTimeline({ booking, onResend }) {
       const res = await consultationApi.resend()
       const data = res.data.data || {}
       setResendResult({
-        ok:          true,
+        ok:          Boolean(data.delivered),
         message:     res.data.message || 'Email resent successfully.',
         nextResendAt: data.nextResendAt,
       })
-      toast.success('Slot-selection email resent! Check your inbox.')
+      if (data.delivered) {
+        toast.success('Scheduling email resent! Check your inbox.')
+      } else {
+        toast.error(res.data.message || 'Scheduling email delivery failed.')
+      }
       if (onResend) onResend()
     } catch (err) {
       const msg = err?.response?.data?.error?.message || 'Failed to resend. Please try again.'
@@ -339,9 +383,14 @@ function ConsultationTimeline({ booking, onResend }) {
     setRecovering(true)
     setRecoverResult(null)
     try {
-      await consultationApi.recover()
-      setRecoverResult({ ok: true, message: 'Booking created! Slot-selection email sent to your inbox.' })
-      toast.success('Success! Check your email for the slot-selection link.')
+      const res = await consultationApi.recover()
+      const data = res.data.data || {}
+      setRecoverResult({ ok: Boolean(data.delivered), message: res.data.message || 'Booking recovered.' })
+      if (data.delivered) {
+        toast.success('Success! Check your email for the scheduling link.')
+      } else {
+        toast.error(res.data.message || 'Booking recovered, but email delivery failed.')
+      }
       if (onResend) onResend() // re-fetches booking
     } catch (err) {
       const msg = err?.response?.data?.error?.message || 'Recovery failed. Please contact support.'
@@ -370,7 +419,7 @@ function ConsultationTimeline({ booking, onResend }) {
             Your payment was received but your booking record is still being created. This usually resolves in a few seconds — try refreshing the page.
           </p>
           <p className="text-yellow-700 dark:text-yellow-400 text-xs mb-4">
-            If this persists, click <strong>"Send Slot Email"</strong> below and we'll set up your booking immediately.
+            If this persists, click <strong>"Send Scheduling Email"</strong> below and we'll set up your booking immediately.
           </p>
 
           {recoverResult ? (
@@ -381,10 +430,15 @@ function ConsultationTimeline({ booking, onResend }) {
 
           <div className="flex flex-col sm:flex-row gap-2">
             <button
-              onClick={() => window.location.reload()}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg border border-yellow-500 text-yellow-700 bg-white hover:bg-yellow-50 transition"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition ${
+                refreshing
+                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600 cursor-not-allowed'
+                  : 'border-yellow-500 text-yellow-700 dark:text-yellow-400 bg-white dark:bg-gray-900 hover:bg-yellow-50 dark:hover:bg-yellow-950/30'
+              }`}
             >
-              🔄 Refresh Page
+              {refreshing ? '⏳ Refreshing…' : '🔄 Refresh Status'}
             </button>
             <button
               onClick={handleRecover}
@@ -395,7 +449,7 @@ function ConsultationTimeline({ booking, onResend }) {
                   : 'bg-orange-500 text-white border-orange-600 hover:bg-orange-600'
               }`}
             >
-              {recovering ? '⏳ Setting up…' : recoverResult?.ok ? '✅ Done' : '📧 Send Slot Email'}
+              {recovering ? '⏳ Setting up…' : recoverResult?.ok ? '✅ Done' : '📧 Send Scheduling Email'}
             </button>
             <a
               href="mailto:support@cadgurukul.com?subject=Consultation%20Booking%20Issue"
@@ -411,7 +465,7 @@ function ConsultationTimeline({ booking, onResend }) {
 
   return (
     <div className="card mb-6 border-2 border-orange-300 dark:border-orange-700 bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-gray-900">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-xl shrink-0">📞</div>
           <div>
@@ -421,6 +475,18 @@ function ConsultationTimeline({ booking, onResend }) {
         </div>
         {/* Status chip */}
         <div className="flex flex-col items-end gap-1.5">
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${
+              refreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+            title="Refresh timeline status"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
           <span className="text-xs font-bold text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/40 border border-orange-300 dark:border-orange-700 px-2 py-0.5 rounded-full">
             ₹9,999 Session
           </span>
@@ -438,32 +504,44 @@ function ConsultationTimeline({ booking, onResend }) {
 
       <div className="space-y-2">
         {CONSULTATION_STEPS.map((step, idx) => {
-          const done    = idx <= currentStepIdx
+          const done = step.key === 'slot_selected'
+            ? hasExactSlot
+            : step.key === 'slot_mail_sent'
+              ? schedulingEmailSent
+            : step.key === 'meeting_scheduled'
+              ? hasMeetingLink
+              : idx <= currentStepIdx
           const current = idx === currentStepIdx
           return (
             <TimelineStep key={step.key} done={done} current={current} icon={step.icon} label={step.label} description={step.desc}>
               {/* Slot email step: show sent-at + resend button */}
               {step.key === 'slot_mail_sent' && done && (
                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  First sent: {fmt(booking.createdAt)}
+                  First sent: {fmt(booking.schedulingEmailSentAt)}
                   {booking.resendCount > 0 && ` · Resent ${booking.resendCount}×`}
                   {booking.lastResendAt && ` (last: ${fmt(booking.lastResendAt)})`}
+                </div>
+              )}
+
+              {step.key === 'slot_mail_sent' && !done && schedulingEmailError && (
+                <div className="mt-1 text-xs text-red-600 dark:text-red-400">
+                  Email delivery failed: {schedulingEmailError}
                 </div>
               )}
 
               {/* Slot selected detail */}
               {step.key === 'slot_selected' && booking.selectedSlot && (
                 <div className="mt-1 text-xs text-teal-700 dark:text-teal-400 font-semibold">
-                  📍 {SLOT_LABELS[booking.selectedSlot] || booking.selectedSlot}
-                  {booking.slotSelectedAt && ` · ${fmt(booking.slotSelectedAt)}`}
+                  📍 {booking.scheduledStartAt ? fmt(booking.scheduledStartAt) : (SLOT_LABELS[booking.selectedSlot] || booking.selectedSlot)}
+                  {booking.slotSelectedAt && ` · booked ${fmt(booking.slotSelectedAt)}`}
                 </div>
               )}
 
               {/* Meeting detail */}
-              {step.key === 'meeting_scheduled' && booking.meetingDate && (
+              {step.key === 'meeting_scheduled' && booking.scheduledStartAt && (
                 <div className="mt-1 space-y-0.5">
                   <div className="text-xs text-purple-700 dark:text-purple-400 font-semibold">
-                    📆 {fmt(booking.meetingDate)}
+                    📆 {fmt(booking.scheduledStartAt)}
                   </div>
                   {booking.meetingLink && (
                     <a href={booking.meetingLink} target="_blank" rel="noopener noreferrer"
@@ -502,11 +580,15 @@ function ConsultationTimeline({ booking, onResend }) {
       )}
 
       {/* ── Action Required: Slot not yet selected ── */}
-      {booking.status === 'slot_mail_sent' && (
+      {!hasExactSlot && (
         <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-300 dark:border-yellow-700 rounded-xl">
-          <div className="font-semibold text-yellow-800 dark:text-yellow-300 text-sm mb-1">⏰ Action Required — Select Your Session Slot</div>
+          <div className="font-semibold text-yellow-800 dark:text-yellow-300 text-sm mb-1">
+            ⏰ Action Required — {schedulingEmailSent ? 'Select Your Session Slot' : 'Get Your Scheduling Email'}
+          </div>
           <p className="text-yellow-700 dark:text-yellow-400 text-xs mb-3">
-            A slot-selection link was sent to your registered email ({booking.resendCount > 0 ? `resent ${booking.resendCount} time${booking.resendCount !== 1 ? 's' : ''}` : 'initial send'}). Click the link in the email to choose your preferred session time.
+            {schedulingEmailSent
+              ? `A scheduling link was sent to your registered email (${booking.resendCount > 0 ? `resent ${booking.resendCount} time${booking.resendCount !== 1 ? 's' : ''}` : 'initial send'}). Click the link in the email to choose your exact session date and time.`
+              : `Your booking is confirmed, but the scheduling email has not been delivered yet${schedulingEmailError ? `: ${schedulingEmailError}` : '.'} Use the resend button below to try again right now.`}
           </p>
 
           {/* Resend section */}
@@ -522,7 +604,7 @@ function ConsultationTimeline({ booking, onResend }) {
                     : 'bg-yellow-600 text-white border-yellow-700 hover:bg-yellow-700'
                 }`}
               >
-                {resending ? '⏳ Sending…' : cooldownOver ? '📧 Resend Slot-Selection Email' : `⏳ Resend in ${minutesLeft} min`}
+                {resending ? '⏳ Sending…' : cooldownOver ? '📧 Resend Scheduling Email' : `⏳ Resend in ${minutesLeft} min`}
               </button>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 Also check spam/junk folder · 
@@ -535,13 +617,6 @@ function ConsultationTimeline({ booking, onResend }) {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Slot selected — waiting for team to schedule */}
-      {booking.status === 'slot_selected' && (
-        <div className="mt-4 p-3 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-700 rounded-xl text-xs text-teal-800 dark:text-teal-300">
-          <strong>✅ Slot confirmed!</strong> Our team will send you the exact meeting date and Zoom/Meet link within <strong>24 hours</strong>. Check your email inbox.
         </div>
       )}
 
@@ -638,7 +713,10 @@ export default function Dashboard() {
   const [reports, setReports]   = useState([])
   const [lead, setLead]         = useState(null)
   const [consultationBooking, setConsultationBooking] = useState(null)
+  const [hasConsultationPayment, setHasConsultationPayment] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [timelineRefreshing, setTimelineRefreshing] = useState(false)
+  const [lastSyncedAt, setLastSyncedAt] = useState(null)
 
   // Delete-account modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -653,6 +731,34 @@ export default function Dashboard() {
       setConsultationBooking(res.data.data)
     } catch {
       // non-fatal — booking shown stale is fine
+    }
+  }, [])
+
+  const loadDashboardData = useCallback(async ({ showSpinner = false, showToast = false } = {}) => {
+    if (showSpinner) setTimelineRefreshing(true)
+    try {
+      const [profileRes, reportsRes, leadRes, consultationRes, paymentsRes] = await Promise.all([
+        api.get('/students/me').catch(() => ({ data: { data: null } })),
+        api.get('/reports/my').catch(() => ({ data: { data: [] } })),
+        leadApi.getMe().catch(() => ({ data: { data: null } })),
+        consultationApi.getMyBooking().catch(() => ({ data: { data: null } })),
+        paymentApi.getHistory().catch(() => ({ data: { data: [] } })),
+      ])
+      const paymentHistory = paymentsRes.data.data || []
+      const consultationPaid = paymentHistory.some((p) => p.status === 'CAPTURED' && p.planType === 'consultation')
+
+      setProfile(profileRes.data.data)
+      setReports(reportsRes.data.data || [])
+      setLead(leadRes.data.data)
+      setConsultationBooking(consultationRes.data.data)
+      setHasConsultationPayment(consultationPaid)
+      setLastSyncedAt(new Date())
+
+      if (showToast) toast.success('Timeline refreshed.')
+    } catch {
+      if (showToast) toast.error('Failed to refresh timeline data.')
+    } finally {
+      if (showSpinner) setTimelineRefreshing(false)
     }
   }, [])
 
@@ -674,25 +780,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     const loadData = async () => {
-      try {
-        const [profileRes, reportsRes, leadRes, consultationRes] = await Promise.all([
-          api.get('/students/me').catch(() => ({ data: { data: null } })),
-          api.get('/reports/my').catch(() => ({ data: { data: [] } })),
-          leadApi.getMe().catch(() => ({ data: { data: null } })),
-          consultationApi.getMyBooking().catch(() => ({ data: { data: null } })),
-        ])
-        setProfile(profileRes.data.data)
-        setReports(reportsRes.data.data || [])
-        setLead(leadRes.data.data)
-        setConsultationBooking(consultationRes.data.data)
-      } catch {
-        toast.error('Failed to load dashboard data')
-      } finally {
-        setIsLoading(false)
-      }
+      await loadDashboardData()
+      setIsLoading(false)
     }
     loadData()
-  }, [])
+  }, [loadDashboardData])
 
   const completedReports  = reports.filter((r) => r.status === 'COMPLETED')
   const generatingReports = reports.filter((r) => r.status === 'GENERATING')
@@ -704,15 +796,26 @@ export default function Dashboard() {
   // record — including free users who never paid — has planType = 'standard'.
   // We must use lead.status as the primary payment gate; only use planType to
   // distinguish *which* plan was purchased (for users who have actually paid).
+  //
+  // Fallback: if no lead record is linked to this user (e.g. lead-linking race
+  // condition or data gap), use paidReport.reportType / consultationBooking so
+  // the correct timeline still renders for users who genuinely paid.
   const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed']
   const leadStatus  = lead?.status || 'new_lead'
-  const userHasPaid = PAID_STATUSES.includes(leadStatus)
-  const planType    = userHasPaid ? (lead?.planType || 'standard') : 'free'
+  const userHasPaid = PAID_STATUSES.includes(leadStatus) || Boolean(paidReport) || Boolean(consultationBooking)
+  // Resolve plan type: lead record is authoritative; fall back to paidReport.reportType
+  const planType    = userHasPaid
+    ? (lead?.planType || paidReport?.reportType || 'standard')
+    : 'free'
 
-  const hasConsultation   = planType === 'consultation'
+  // A consultation booking is definitive proof of the consultation plan even if
+  // the lead planType hasn't been updated yet.
+  const hasConsultation   = planType === 'consultation' || Boolean(consultationBooking) || hasConsultationPayment
   const hasPremium        = planType === 'premium' || hasConsultation
   const hasStandard       = planType === 'standard'
   const hasAnyPaidPlan    = userHasPaid   // simplest, most reliable
+  const premiumUpgradePrice = formatRupees(getUpgradePrice('standard', 'premium'))
+  const consultationUpgradePrice = formatRupees(getUpgradePrice(planType === 'standard' ? 'standard' : 'premium', 'consultation'))
 
   if (isLoading) {
     return (
@@ -739,15 +842,39 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Last synced: {lastSyncedAt ? fmt(lastSyncedAt) : '—'}
+          </p>
+          <button
+            onClick={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            disabled={timelineRefreshing}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
+              timelineRefreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+          >
+            {timelineRefreshing ? 'Refreshing…' : '↻ Refresh Timeline'}
+          </button>
+        </div>
+
         {/* ── Plan-specific timeline ─────────────────────────────────────────── */}
         {hasConsultation && (
-          <ConsultationTimeline booking={consultationBooking} onResend={refreshBooking} />
+          <ConsultationTimeline
+            booking={consultationBooking}
+            onResend={refreshBooking}
+            onRefresh={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            refreshing={timelineRefreshing}
+          />
         )}
         {hasPremium && !hasConsultation && (
           <PremiumTimeline
             leadStatus={leadStatus}
             paidReport={paidReport}
             generatingReport={generatingReports[0]}
+            onRefresh={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            refreshing={timelineRefreshing}
           />
         )}
         {hasStandard && !hasPremium && !hasConsultation && (
@@ -755,6 +882,8 @@ export default function Dashboard() {
             leadStatus={leadStatus}
             paidReport={paidReport}
             generatingReport={generatingReports[0]}
+            onRefresh={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            refreshing={timelineRefreshing}
           />
         )}
         {!userHasPaid && lead && <FunnelProgress status={lead.status} />}
@@ -777,14 +906,14 @@ export default function Dashboard() {
           <div className="mb-6 rounded-2xl border-2 border-purple-400 bg-gradient-to-r from-purple-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1">🚀 Unlock Deeper Clarity</div>
-              <div className="font-bold text-brand-dark">Upgrade to Premium AI Report — ₹1,999</div>
-              <p className="text-sm text-gray-600 mt-0.5">Year-by-year roadmap · Subject strategy · Exam timeline · Scholarship list</p>
+              <div className="font-bold text-brand-dark">Upgrade to Premium AI Report — {premiumUpgradePrice}</div>
+              <p className="text-sm text-gray-600 mt-0.5">Your ₹499 report is already included. Pay only the difference for premium depth.</p>
             </div>
             <button
               onClick={() => navigate(`/payment?plan=premium&assessmentId=${paidReport.assessmentId || ''}`)}
               className="bg-purple-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-purple-700 transition shrink-0"
             >
-              Upgrade Now →
+              Upgrade for {premiumUpgradePrice} →
             </button>
           </div>
         )}
@@ -794,14 +923,14 @@ export default function Dashboard() {
           <div className="mb-6 rounded-2xl border-2 border-orange-400 bg-gradient-to-r from-orange-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">🔥 Limited — 3 slots/day</div>
-              <div className="font-bold text-brand-dark">Book 1:1 Session with Adish Gupta — ₹9,999</div>
-              <p className="text-sm text-gray-600 mt-0.5">45-min personalised session · Recording included · Parents can join</p>
+              <div className="font-bold text-brand-dark">Upgrade to 1:1 Session with Adish Gupta — {consultationUpgradePrice}</div>
+              <p className="text-sm text-gray-600 mt-0.5">Your Premium AI Report is already included. Pay only the difference for the live counselling session.</p>
             </div>
             <button
-              onClick={() => navigate('/payment?plan=consultation')}
+              onClick={() => navigate(`/payment?plan=consultation${paidReport?.assessmentId ? `&assessmentId=${paidReport.assessmentId}` : ''}`)}
               className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-orange-600 transition shrink-0"
             >
-              Book My Slot →
+              Upgrade for {consultationUpgradePrice} →
             </button>
           </div>
         )}
@@ -823,16 +952,18 @@ export default function Dashboard() {
             // ₹9,999 buyer — show their session status/link
             <button
               onClick={() =>
-                consultationBooking?.status === 'slot_mail_sent'
-                  ? toast('Check your email to select a session slot.')
-                  : navigate('/consultation/select-slot')
+                ['booking_confirmed', 'slot_mail_sent'].includes(consultationBooking?.status)
+                  ? toast(consultationBooking?.schedulingEmailSentAt ? 'Check your email to schedule your session.' : 'Your booking is confirmed. Use the resend option in the timeline to receive the scheduling email.')
+                  : consultationBooking?.meetingLink
+                    ? window.open(consultationBooking.meetingLink, '_blank', 'noopener,noreferrer')
+                    : toast('Your consultation details are visible above in the timeline.')
               }
               className="card hover:shadow-lg transition-shadow text-left border-l-4 border-orange-500 cursor-pointer"
             >
               <div className="text-3xl mb-2">📞</div>
               <div className="font-bold text-brand-dark">My 1:1 Session</div>
               <div className="text-sm text-gray-500 mt-1">{consultationBooking ? `Status: ${consultationBooking.status.replace(/_/g, ' ')}` : 'Session booked'}</div>
-              <div className="mt-3 text-orange-600 text-sm font-semibold">View Details →</div>
+              <div className="mt-3 text-orange-600 text-sm font-semibold">{consultationBooking?.meetingLink ? 'Join Session →' : 'View Details →'}</div>
             </button>
           ) : paidReport ? (
             // Has a paid completed report — link to it

@@ -87,6 +87,7 @@ export const reportApi = {
 
 // ─── Payment API ──────────────────────────────────────────────────────────────
 export const paymentApi = {
+  getQuote:     (planType, assessmentId) => api.get('/payments/quote', { params: { planType, assessmentId } }),
   createOrder:  (assessmentId, planType = 'standard') => api.post('/payments/create-order', { assessmentId, planType }),
   verify:       (data)         => api.post('/payments/verify', data),
   getHistory:   ()             => api.get('/payments/history'),
@@ -135,6 +136,18 @@ export const adminLeadApi = {
   listStaffForAssign: ()         => adminApiClient.get('/admin/staff'),
 }
 
+export const adminEmailApi = {
+  status:   (refresh = false) => adminApiClient.get('/admin/email/status', { params: refresh ? { refresh: true } : {} }),
+  sendTest: (data = {})       => adminApiClient.post('/admin/email/test', data),
+}
+
+export const adminConsultationApi = {
+  list:        (params = {}) => adminApiClient.get('/admin/consultations', { params }),
+  block:       (data)        => adminApiClient.post('/admin/consultations/blocks', data),
+  unblock:     (id)          => adminApiClient.delete(`/admin/consultations/blocks/${id}`),
+  updateBooking: (id, data)  => adminApiClient.patch(`/admin/consultations/bookings/${id}`, data),
+}
+
 // ─── Admin Discount Policy API (Phase 6 + Phase 9) ───────────────────────────
 export const adminDiscountApi = {
   listPolicies:   ()       => adminApiClient.get('/admin/discount-policies'),
@@ -145,11 +158,13 @@ export const adminDiscountApi = {
 
 // ─── Admin Training API (Phase 6) ────────────────────────────────────────────
 export const adminTrainingApi = {
-  list:    ()           => adminApiClient.get('/admin/ccl/training'),
-  history: ()           => adminApiClient.get('/admin/ccl/training/history'),
-  create:  (formData)   => adminApiClient.post('/admin/ccl/training', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update:  (id, data)   => adminApiClient.patch(`/admin/ccl/training/${id}`, data),
-  remove:  (id)         => adminApiClient.delete(`/admin/ccl/training/${id}`),
+  list:         ()           => adminApiClient.get('/admin/ccl/training'),
+  history:      ()           => adminApiClient.get('/admin/ccl/training/history'),
+  create:       (formData)   => adminApiClient.post('/admin/ccl/training', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:       (id, data)   => adminApiClient.patch(`/admin/ccl/training/${id}`, data),
+  remove:       (id)         => adminApiClient.delete(`/admin/ccl/training/${id}`),
+  openFile:     (id)         => adminApiClient.get(`/admin/ccl/training/${id}/file`,              { responseType: 'blob' }),
+  downloadFile: (id)         => adminApiClient.get(`/admin/ccl/training/${id}/file?download=true`, { responseType: 'blob' }),
 }
 
 // ─── Staff API client (uses cg_staff_token, for Career Counsellor Lead / CC) ──
@@ -325,6 +340,7 @@ export const trackEvent = (event, metadata = {}) => {
 // ─── Consultation API ─────────────────────────────────────────────────────────
 export const consultationApi = {
   /** Public — no auth required */
+  getAvailability: (token) => api.get('/consultation/availability', { params: { token } }),
   selectSlot: (data) => api.post('/consultation/select-slot', data),
   /** Auth-protected — returns ConsultationBooking or null */
   getMyBooking: () => api.get('/consultation/my'),
@@ -385,9 +401,10 @@ export const adminStaffApi = {
 
 // ─── Admin User API ───────────────────────────────────────────────────────────
 export const adminUserApi = {
-  list:         (params)        => adminApiClient.get('/admin/users', { params }),
-  toggleStatus: (id)            => adminApiClient.put(`/admin/users/${id}/toggle-status`),
-  delete:       (id)            => adminApiClient.delete(`/admin/users/${id}`),
+  list:           (params) => adminApiClient.get('/admin/users', { params }),
+  listDeleted:    (params) => adminApiClient.get('/admin/users/deleted', { params }),
+  toggleStatus:   (id)     => adminApiClient.put(`/admin/users/${id}/toggle-status`),
+  delete:         (id)     => adminApiClient.delete(`/admin/users/${id}`),
 }
 
 export default api

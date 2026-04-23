@@ -34,6 +34,7 @@ import LeadDetail       from './pages/Admin/LeadDetail'
 import AdminPartners    from './pages/Admin/AdminPartners'
 import AdminPayouts     from './pages/Admin/AdminPayouts'
 import StaffManagement  from './pages/Admin/StaffManagement'
+import AdminConsultations from './pages/Admin/AdminConsultations'
 
 // Staff pages (Career Counsellor Lead portal)
 import StaffLogin       from './pages/Staff/StaffLogin'
@@ -49,6 +50,9 @@ import JoinPage from './pages/Public/JoinPage'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfService from './pages/TermsOfService'
 import RefundPolicy from './pages/RefundPolicy'
+
+// Email verification page (public — link from email)
+import VerifyEmail from './pages/VerifyEmail'
 
 // Public consultation slot-selection page (no auth required — link from email)
 import ConsultationSlotPage from './pages/Public/ConsultationSlotPage'
@@ -124,6 +128,8 @@ export default function App() {
         {/* Guest-only routes */}
         <Route path="/login" element={<GuestRoute><PublicLayout><Login /></PublicLayout></GuestRoute>} />
         <Route path="/register" element={<GuestRoute><PublicLayout><Register /></PublicLayout></GuestRoute>} />
+        {/* Email verification — fully public, accessible from email link */}
+        <Route path="/verify-email" element={<PublicLayout><VerifyEmail /></PublicLayout>} />
 
         {/* Protected student routes */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -151,6 +157,7 @@ export default function App() {
         <Route path="/admin/leads/:id" element={<AdminRoute><LeadDetail /></AdminRoute>} />
         <Route path="/admin/partners" element={<AdminRoute><AdminPartners /></AdminRoute>} />
         <Route path="/admin/payouts" element={<AdminRoute><AdminPayouts /></AdminRoute>} />
+        <Route path="/admin/consultations" element={<AdminRoute><AdminConsultations /></AdminRoute>} />
         <Route path="/admin/staff" element={<AdminRoute><StaffManagement /></AdminRoute>} />
 
         {/* Partner registration (public) */}

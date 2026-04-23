@@ -13,9 +13,13 @@ const { validate } = require('../middleware/validate');
 const { authLimiter } = require('../middleware/rateLimiter');
 const { upload, enforceSizeLimit } = require('../middleware/upload');
 const adminController = require('../controllers/admin.controller');
+const adminConsultationController = require('../controllers/admin.consultation.controller');
 const cclAdminController = require('../controllers/ccl.admin.controller');
 const {
   adminLoginSchema,
+  consultationBlockSchema,
+  consultationBookingUpdateSchema,
+  emailTestSchema,
   leadListQuerySchema,
   triggerActionSchema,
 } = require('../validators/admin.validator');
@@ -36,9 +40,18 @@ router.use(authenticate, requirePortalRole('ADMIN'));
 // Profile
 router.get('/profile', adminController.getAdminProfile);
 router.post('/logout', adminController.logoutAdmin);
+router.get('/email/status', adminController.getEmailStatus);
+router.post('/email/test', validate(emailTestSchema), adminController.sendTestEmail);
+
+// Consultation scheduling
+router.get('/consultations', adminConsultationController.listConsultations);
+router.post('/consultations/blocks', validate(consultationBlockSchema), adminConsultationController.createAvailabilityBlock);
+router.delete('/consultations/blocks/:id', adminConsultationController.deleteAvailabilityBlock);
+router.patch('/consultations/bookings/:id', validate(consultationBookingUpdateSchema), adminConsultationController.updateBooking);
 
 // Users
 router.get('/users', adminController.listUsers);
+router.get('/users/deleted', adminController.listDeletedUsers);
 router.put('/users/:id/toggle-status', adminController.toggleUserStatus);
 router.delete('/users/:id', adminController.deleteUser);
 
@@ -91,6 +104,7 @@ router.patch('/ccl/payouts/:id',        cclAdminController.updatePayoutStatus);
 // Training content CRUD (with optional file upload)
 router.get('/ccl/training',          cclAdminController.listAllTraining);
 router.get('/ccl/training/history',  cclAdminController.listTrainingHistory);
+router.get('/ccl/training/:id/file', cclAdminController.serveAdminTrainingFile);
 router.post('/ccl/training',         upload.single('file'), enforceSizeLimit, cclAdminController.createTrainingContent);
 router.patch('/ccl/training/:id',    cclAdminController.updateTrainingContent);
 router.delete('/ccl/training/:id',   cclAdminController.deleteTrainingContent);

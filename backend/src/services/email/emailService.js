@@ -3,29 +3,206 @@ const nodemailer = require('nodemailer');
 const config = require('../../config');
 const logger = require('../../utils/logger');
 
-const transporter = nodemailer.createTransport({
+let transporterPromise = null;
+let emailHealth = {
+  configured: false,
+  verified: false,
+  lastVerifiedAt: null,
+  lastError: null,
+};
+
+const maskEmailAddress = (value) => {
+  if (!value || typeof value !== 'string' || !value.includes('@')) {
+    return value || null;
+  }
+
+  const [localPart, domain] = value.split('@');
+  if (!localPart || !domain) return value;
+
+  if (localPart.length <= 2) {
+    return `${localPart[0] || '*'}*@${domain}`;
+  }
+
+  return `${localPart.slice(0, 2)}***@${domain}`;
+};
+
+const isEmailConfigured = () => Boolean(
+  config.email.host
+  && config.email.port
+  && config.email.user
+  && config.email.pass
+  && config.email.from
+);
+
+const htmlToPlainText = (html) => {
+  if (!html || typeof html !== 'string') return '';
+
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li>/gi, '- ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+const createTransporter = () => nodemailer.createTransport({
   host: config.email.host,
   port: config.email.port,
   secure: config.email.secure,
-  auth: { user: config.email.user, pass: config.email.pass },
+  pool: true,
+  maxConnections: 3,
+  maxMessages: 100,
+  connectionTimeout: config.email.connectionTimeoutMs,
+  greetingTimeout: config.email.greetingTimeoutMs,
+  socketTimeout: config.email.socketTimeoutMs,
+  auth: {
+    user: config.email.user,
+    pass: config.email.pass,
+  },
+});
+
+const getTransporter = async () => {
+  if (!isEmailConfigured()) {
+    const missingKeys = [
+      ['SMTP_HOST', config.email.host],
+      ['SMTP_PORT', config.email.port],
+      ['SMTP_USER', config.email.user],
+      ['SMTP_PASS', config.email.pass],
+      ['EMAIL_FROM', config.email.from],
+    ].filter(([, value]) => !value).map(([key]) => key);
+
+    const err = new Error(`Email transport is not configured. Missing: ${missingKeys.join(', ')}`);
+    emailHealth = {
+      ...emailHealth,
+      configured: false,
+      verified: false,
+      lastError: err.message,
+    };
+    throw err;
+  }
+
+  if (!transporterPromise) {
+    transporterPromise = Promise.resolve(createTransporter());
+    emailHealth = {
+      ...emailHealth,
+      configured: true,
+      lastError: null,
+    };
+  }
+
+  return transporterPromise;
+};
+
+const verifyEmailTransport = async ({ force = false } = {}) => {
+  if (!isEmailConfigured()) {
+    const err = new Error('Email transport is not configured.');
+    emailHealth = {
+      ...emailHealth,
+      configured: false,
+      verified: false,
+      lastError: err.message,
+    };
+    throw err;
+  }
+
+  const transporter = await getTransporter();
+
+  if (!force && emailHealth.verified) {
+    return emailHealth;
+  }
+
+  try {
+    await transporter.verify();
+    emailHealth = {
+      configured: true,
+      verified: true,
+      lastVerifiedAt: new Date().toISOString(),
+      lastError: null,
+    };
+    logger.info('[Email] SMTP transport verified', {
+      host: config.email.host,
+      port: config.email.port,
+      user: maskEmailAddress(config.email.user),
+    });
+    return emailHealth;
+  } catch (err) {
+    emailHealth = {
+      configured: true,
+      verified: false,
+      lastVerifiedAt: new Date().toISOString(),
+      lastError: err.message,
+    };
+    logger.error('[Email] SMTP transport verification failed', {
+      host: config.email.host,
+      port: config.email.port,
+      user: maskEmailAddress(config.email.user),
+      error: err.message,
+    });
+    throw err;
+  }
+};
+
+const getEmailHealthSnapshot = () => ({
+  configured: isEmailConfigured(),
+  verified: emailHealth.verified,
+  lastVerifiedAt: emailHealth.lastVerifiedAt,
+  lastError: emailHealth.lastError,
+  host: config.email.host || null,
+  port: config.email.port || null,
+  secure: Boolean(config.email.secure),
+  user: maskEmailAddress(config.email.user),
+  from: config.email.from || null,
 });
 
 /**
  * Send a generic email
  */
-const sendEmail = async ({ to, subject, html, text }) => {
+const sendEmail = async ({ to, subject, html, text, replyTo, attachments }) => {
+  const transporter = await getTransporter();
+
   try {
     const info = await transporter.sendMail({
       from: config.email.from,
+      replyTo: replyTo || config.email.replyTo,
       to,
       subject,
       html,
-      text,
+      text: text || htmlToPlainText(html),
+      attachments,
     });
-    logger.info('[Email] Sent', { to, subject, messageId: info.messageId });
+
+    emailHealth = {
+      ...emailHealth,
+      configured: true,
+      lastError: null,
+    };
+
+    logger.info('[Email] Sent', {
+      to: maskEmailAddress(to),
+      subject,
+      messageId: info.messageId,
+    });
     return info;
   } catch (err) {
-    logger.error('[Email] Failed to send', { to, subject, error: err.message });
+    emailHealth = {
+      ...emailHealth,
+      configured: isEmailConfigured(),
+      lastError: err.message,
+    };
+    logger.error('[Email] Failed to send', {
+      to: maskEmailAddress(to),
+      subject,
+      error: err.message,
+    });
     throw err;
   }
 };
@@ -84,7 +261,7 @@ const sendReportReadyEmail = async ({
   isParent = false,
   studentName,
 }) => {
-  const isPaid    = accessLevel === 'PAID';
+  const isPaid = accessLevel === 'PAID';
   const isPremium = reportType === 'premium';
 
   const planLabel = isPremium
@@ -129,7 +306,6 @@ const sendReportReadyEmail = async ({
         <div style="padding:30px;">
           <p style="font-size:16px;color:#1a1a2e;margin:0 0 10px;">${greeting}</p>
 
-          <!-- Report badge -->
           <div style="margin:20px 0;padding:16px 20px;background:#f0f4ff;border-left:4px solid #0f3460;border-radius:6px;">
             <div style="font-size:12px;font-weight:bold;color:#0f3460;letter-spacing:0.5px;margin-bottom:4px;">YOUR REPORT</div>
             <div style="font-size:18px;font-weight:bold;color:#1a1a2e;">${planLabel} Career Report</div>
@@ -164,14 +340,13 @@ const sendCounsellingReportEmail = async ({
   to,
   name,
   reportId,
-  bookingId,
   counsellorName = 'Adish Gupta',
   isParent = false,
   studentName,
 }) => {
   const recipientDesc = isParent
     ? `Your ward <strong>${studentName}</strong>`
-    : `You`;
+    : 'You';
 
   return sendEmail({
     to,
@@ -213,15 +388,108 @@ const sendCounsellingReportEmail = async ({
   });
 };
 
+const sendConsultationReminderEmail = async ({
+  to,
+  name,
+  scheduledStartAt,
+  scheduledEndAt,
+  meetingLink,
+  counsellorName,
+  counsellorContact,
+  reminderLabel,
+  isParent = false,
+  studentName,
+}) => {
+  const recipientLabel = isParent ? `${studentName}'s` : 'your'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSULTATION EMAILS — Phase 7
-// ─────────────────────────────────────────────────────────────────────────────
+  return sendEmail({
+    to,
+    subject: `⏰ Reminder: ${recipientLabel.charAt(0).toUpperCase()}${recipientLabel.slice(1)} career session is ${reminderLabel}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+        ${emailHeader}
+        <div style="padding:30px;">
+          <p style="font-size:16px;color:#1a1a2e;margin:0 0 8px;">Hi ${name}${isParent ? '' : '!'} ⏰</p>
+          <p style="font-size:14px;color:#444;line-height:1.6;">
+            This is a reminder that ${isParent ? `your ward <strong>${studentName}</strong>'s` : 'your'} 1:1 Career Blueprint Session with <strong>${counsellorName}</strong> is <strong>${reminderLabel}</strong>.
+          </p>
 
-const SLOT_LABELS = {
-  morning_9_12:  'Morning — 9:00 AM to 12:00 PM',
-  afternoon_2_5: 'Afternoon — 2:00 PM to 5:00 PM',
-  evening_6_9:   'Evening — 6:00 PM to 9:00 PM',
+          <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:18px;margin:20px 0;">
+            <div style="font-size:13px;font-weight:bold;color:#9a3412;margin-bottom:6px;">SESSION DETAILS</div>
+            <div style="font-size:16px;font-weight:bold;color:#1a1a2e;">${formatConsultationDateTime(scheduledStartAt)}</div>
+            <div style="font-size:13px;color:#9a3412;margin-top:6px;">${formatConsultationTimeRange(scheduledStartAt, scheduledEndAt)}</div>
+          </div>
+
+          <div style="margin:24px 0;">
+            <a href="${meetingLink}" style="display:inline-block;background:#ea580c;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
+              Join Meeting
+            </a>
+            <p style="font-size:12px;color:#9a3412;margin:12px 0 0;">${meetingLink}</p>
+          </div>
+
+          <ul style="font-size:13px;color:#555;line-height:1.9;padding-left:18px;margin:0;">
+            <li>Join 5 minutes before the scheduled time</li>
+            <li>Keep your assessment questions handy</li>
+            <li>Parents can join the same meeting link</li>
+          </ul>
+
+          <p style="font-size:13px;color:#666;margin-top:20px;">Need help? Reply to this email or contact <a href="mailto:${counsellorContact}" style="color:#e94560;">${counsellorContact}</a></p>
+        </div>
+        ${emailFooter}
+      </div>
+    `,
+  })
+}
+
+const sendConsultationFollowUpEmail = async ({
+  to,
+  name,
+  counsellorName,
+  meetingLink,
+  isParent = false,
+  studentName,
+}) => {
+  return sendEmail({
+    to,
+    subject: `🙏 Thanks for attending your CAD Gurukul session${isParent ? ` — ${studentName}` : ''}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+        ${emailHeader}
+        <div style="padding:30px;">
+          <p style="font-size:16px;color:#1a1a2e;margin:0 0 8px;">Hi ${name}${isParent ? '' : '!'} 🙏</p>
+          <p style="font-size:14px;color:#444;line-height:1.6;">
+            ${isParent ? `Thank you for joining <strong>${studentName}</strong>'s` : 'Thank you for attending your'} Career Blueprint Session with <strong>${counsellorName}</strong>.
+          </p>
+          <div style="background:#f0f4ff;border-left:4px solid #0f3460;border-radius:8px;padding:18px;margin:20px 0;">
+            <div style="font-size:13px;font-weight:bold;color:#0f3460;margin-bottom:6px;">WHAT HAPPENS NEXT</div>
+            <ul style="font-size:13px;color:#334155;line-height:1.8;padding-left:18px;margin:0;">
+              <li>Your personalised counselling report will be prepared next</li>
+              <li>You can re-open your meeting link if any quick follow-up is needed: ${meetingLink || 'shared during the session'}</li>
+              <li>Our team remains available on email for follow-up questions</li>
+            </ul>
+          </div>
+          <p style="font-size:13px;color:#666;">We’ll notify you as soon as the final counselling report is ready.</p>
+        </div>
+        ${emailFooter}
+      </div>
+    `,
+  })
+}
+
+const formatConsultationDateTime = (date) => new Intl.DateTimeFormat('en-IN', {
+  dateStyle: 'full',
+  timeStyle: 'short',
+  timeZone: 'Asia/Kolkata',
+}).format(new Date(date));
+
+const formatConsultationTimeRange = (startAt, endAt) => {
+  const formatter = new Intl.DateTimeFormat('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  });
+
+  return `${formatter.format(new Date(startAt))} - ${formatter.format(new Date(endAt))} IST`;
 };
 
 const emailHeader = `
@@ -237,8 +505,8 @@ const emailFooter = `
   </div>`;
 
 /**
- * Send slot-selection email to student (and optionally parent) after consultation purchase.
- * The email contains a link to the slot-selection page; the student picks their preferred window.
+ * Send scheduling email to the registered student after consultation purchase.
+ * The email contains a link to the slot-selection page where they pick an exact date + time.
  */
 const sendConsultationSlotEmail = async ({
   to,
@@ -253,12 +521,12 @@ const sendConsultationSlotEmail = async ({
   const selectionUrl = `${config.frontendUrl}/consultation/select-slot?token=${slotToken}`;
   const greeting = isParent ? `Hi ${name},` : `Hi ${name}! 🎉`;
   const intro = isParent
-    ? `Your ward <strong>${studentName}</strong> has booked a 1:1 Career Blueprint Session with <strong>${counsellorName}</strong>. Please help them select a preferred time slot.`
-    : `Your ₹9,999 Career Blueprint Session with <strong>${counsellorName}</strong> has been confirmed! Please select a time slot that works best for you.`;
+    ? `Your ward <strong>${studentName}</strong> has booked a 1:1 Career Blueprint Session with <strong>${counsellorName}</strong>. Please help them select an exact date and time for the live counselling call.`
+    : `Your ₹9,999 Career Blueprint Session with <strong>${counsellorName}</strong> has been confirmed. Please choose an exact date and time for your live counselling session.`;
 
   return sendEmail({
     to,
-    subject: `📅 Select Your Career Session Slot — Action Required`,
+    subject: '📅 Choose Your Career Session Date & Time — Action Required',
     html: `
       <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
         ${emailHeader}
@@ -266,7 +534,6 @@ const sendConsultationSlotEmail = async ({
           <p style="font-size:16px;color:#1a1a2e;margin:0 0 8px;">${greeting}</p>
           <p style="color:#444;font-size:14px;line-height:1.6;">${intro}</p>
 
-          <!-- Counsellor card -->
           <div style="background:#f0f4ff;border-radius:8px;padding:18px;margin:20px 0;border-left:4px solid #0f3460;">
             <div style="font-size:13px;font-weight:bold;color:#0f3460;margin-bottom:6px;">YOUR COUNSELLOR</div>
             <div style="font-size:16px;font-weight:bold;color:#1a1a2e;">👨‍💼 ${counsellorName}</div>
@@ -274,24 +541,22 @@ const sendConsultationSlotEmail = async ({
             <div style="font-size:13px;color:#e94560;margin-top:6px;">📧 ${counsellorContact}</div>
           </div>
 
-          <!-- What to expect -->
           <div style="margin:20px 0;">
             <div style="font-size:13px;font-weight:bold;color:#0f3460;margin-bottom:8px;">WHAT TO EXPECT IN YOUR SESSION</div>
             <ul style="font-size:13px;color:#555;line-height:1.8;padding-left:18px;margin:0;">
-              <li>45-minute personalised career blueprint discussion</li>
-              <li>Parents are welcome to join the session</li>
-              <li>Session recording sent to your email within 24 hours</li>
-              <li>30-day email support after the session</li>
-            </ul>
-          </div>
+            <li>60-minute personalised career blueprint discussion</li>
+            <li>Parents are welcome to join the session</li>
+            <li>Meeting link generated automatically after your slot is booked</li>
+            <li>30-day email support after the session</li>
+          </ul>
+        </div>
 
-          <!-- Slot selection CTA -->
-          <div style="margin:24px 0;">
-            <div style="font-size:14px;font-weight:bold;color:#1a1a2e;margin-bottom:12px;">📅 SELECT YOUR PREFERRED TIME SLOT</div>
-            <p style="font-size:13px;color:#555;margin:0 0 16px;">Click the button below to view available time slots and book your session:</p>
+        <div style="margin:24px 0;">
+            <div style="font-size:14px;font-weight:bold;color:#1a1a2e;margin-bottom:12px;">📅 SELECT YOUR EXACT DATE & TIME</div>
+            <p style="font-size:13px;color:#555;margin:0 0 16px;">Click below to see live availability and instantly lock your session slot:</p>
             <a href="${selectionUrl}"
                style="display:inline-block;background:#e94560;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;letter-spacing:0.3px;">
-              📅 Choose My Time Slot →
+              📅 Book My Session Slot →
             </a>
             <p style="font-size:11px;color:#999;margin:12px 0 0;">
               Or copy this link: <span style="color:#0f3460;">${selectionUrl}</span>
@@ -299,7 +564,7 @@ const sendConsultationSlotEmail = async ({
           </div>
 
           <div style="background:#fffbea;border:1px solid #fde68a;border-radius:6px;padding:12px 16px;font-size:12px;color:#92400e;margin-top:20px;">
-            ⏰ <strong>Please select your slot within 48 hours.</strong> Our team will send you the exact meeting link and date within 24 hours of your selection.
+            ⏰ <strong>Please select your slot within 48 hours.</strong> As soon as you confirm a slot, your meeting link will be generated automatically and mailed to you.
           </div>
         </div>
         ${emailFooter}
@@ -314,22 +579,25 @@ const sendConsultationSlotEmail = async ({
 const sendSlotConfirmationEmail = async ({
   to,
   name,
-  slot,
-  slotLabel,
+  scheduledStartAt,
+  scheduledEndAt,
   counsellorName,
   counsellorContact,
+  meetingLink,
+  meetingProvider = 'JITSI',
   isParent = false,
   studentName,
 }) => {
-  const label = SLOT_LABELS[slot] || slotLabel || slot;
+  const label = formatConsultationDateTime(scheduledStartAt);
+  const timeRange = formatConsultationTimeRange(scheduledStartAt, scheduledEndAt);
   const subject = isParent
-    ? `✅ Career Session Slot Confirmed for ${studentName} — ${label}`
-    : `✅ Your Career Session Slot is Confirmed! — ${label}`;
+    ? `✅ Career Session Scheduled for ${studentName} — ${label}`
+    : `✅ Your Career Session is Scheduled — ${label}`;
 
-  const greeting = isParent ? `Hi ${name},` : `Great choice, ${name}! ✅`;
+  const greeting = isParent ? `Hi ${name},` : `Booked successfully, ${name}! ✅`;
   const confirmText = isParent
-    ? `Your ward <strong>${studentName}</strong> has confirmed their Career Blueprint Session with <strong>${counsellorName}</strong>.`
-    : `You have confirmed your 1:1 Career Blueprint Session with <strong>${counsellorName}</strong>.`;
+    ? `Your ward <strong>${studentName}</strong> is now scheduled for a Career Blueprint Session with <strong>${counsellorName}</strong>.`
+    : `Your 1:1 Career Blueprint Session with <strong>${counsellorName}</strong> is now scheduled.`;
 
   return sendEmail({
     to,
@@ -341,25 +609,29 @@ const sendSlotConfirmationEmail = async ({
           <p style="font-size:16px;color:#1a1a2e;margin:0 0 8px;">${greeting}</p>
           <p style="color:#444;font-size:14px;line-height:1.6;">${confirmText}</p>
 
-          <!-- Slot confirmed badge -->
           <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:18px;margin:20px 0;text-align:center;">
             <div style="font-size:28px;margin-bottom:8px;">🗓️</div>
-            <div style="font-size:13px;font-weight:bold;color:#065f46;letter-spacing:0.5px;">SELECTED SLOT</div>
+            <div style="font-size:13px;font-weight:bold;color:#065f46;letter-spacing:0.5px;">SCHEDULED SESSION</div>
             <div style="font-size:18px;font-weight:bold;color:#1a1a2e;margin-top:4px;">${label}</div>
+            <div style="font-size:13px;color:#065f46;margin-top:6px;">${timeRange}</div>
           </div>
 
-          <!-- Counsellor contact -->
           <div style="background:#f0f4ff;border-radius:8px;padding:16px;margin-bottom:20px;">
             <div style="font-size:13px;font-weight:bold;color:#0f3460;margin-bottom:6px;">YOUR COUNSELLOR</div>
             <div style="font-size:15px;font-weight:bold;color:#1a1a2e;">👨‍💼 ${counsellorName}</div>
             <div style="font-size:13px;color:#e94560;margin-top:4px;">📧 ${counsellorContact}</div>
           </div>
 
-          <!-- What happens next -->
+          <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:18px;margin-bottom:20px;">
+            <div style="font-size:13px;font-weight:bold;color:#9a3412;margin-bottom:6px;">MEETING LINK</div>
+            <a href="${meetingLink}" style="display:inline-block;background:#ea580c;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px;">Join ${meetingProvider} Meeting</a>
+            <p style="font-size:12px;color:#9a3412;margin:12px 0 0;">${meetingLink}</p>
+          </div>
+
           <div style="font-size:13px;font-weight:bold;color:#0f3460;margin-bottom:8px;">WHAT HAPPENS NEXT</div>
           <ol style="font-size:13px;color:#555;line-height:1.9;padding-left:18px;margin:0 0 20px;">
-            <li>Our team will confirm the exact meeting date &amp; time within 24 hours</li>
-            <li>You will receive a Zoom/Meet link by email before the session</li>
+            <li>Please join the session using the meeting link above 5 minutes early</li>
+            <li>Keep your assessment results and questions ready for the call</li>
             <li>Prepare any questions about your career path, stream selection, or college options</li>
             <li>Parents are encouraged to join — it helps us give the best advice</li>
           </ol>
@@ -380,29 +652,34 @@ const sendSlotConfirmationEmail = async ({
 const sendAdminSlotNotification = async ({
   studentName,
   studentEmail,
-  slot,
-  slotLabel,
   bookingId,
+  scheduledStartAt,
+  scheduledEndAt,
+  meetingLink,
+  meetingProvider = 'JITSI',
 }) => {
-  const label = SLOT_LABELS[slot] || slotLabel || slot;
+  const label = formatConsultationDateTime(scheduledStartAt);
+  const timeRange = formatConsultationTimeRange(scheduledStartAt, scheduledEndAt);
   const adminEmail = config.email.from?.match(/<(.+?)>/)?.[1] || config.email.user || 'noreply@cadgurukul.com';
 
   return sendEmail({
     to: adminEmail,
-    subject: `[Action Required] New Slot Selected — ${studentName} — ${label}`,
+    subject: `[Consultation Scheduled] ${studentName} — ${label}`,
     html: `
       <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;">
         ${emailHeader}
         <div style="padding:24px;">
-          <h2 style="color:#1a1a2e;margin:0 0 16px;">📌 New Consultation Slot Selected</h2>
+          <h2 style="color:#1a1a2e;margin:0 0 16px;">📌 Consultation Scheduled</h2>
           <table style="width:100%;border-collapse:collapse;font-size:14px;">
             <tr><td style="padding:8px 0;color:#555;width:140px;">Student</td><td style="padding:8px 0;font-weight:bold;color:#1a1a2e;">${studentName}</td></tr>
             <tr><td style="padding:8px 0;color:#555;">Email</td><td style="padding:8px 0;color:#0f3460;">${studentEmail || 'N/A'}</td></tr>
-            <tr><td style="padding:8px 0;color:#555;">Slot</td><td style="padding:8px 0;font-weight:bold;color:#e94560;">${label}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Date &amp; Time</td><td style="padding:8px 0;font-weight:bold;color:#e94560;">${label}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Time Range</td><td style="padding:8px 0;color:#1a1a2e;">${timeRange}</td></tr>
             <tr><td style="padding:8px 0;color:#555;">Booking ID</td><td style="padding:8px 0;font-family:monospace;font-size:12px;color:#666;">${bookingId}</td></tr>
+            <tr><td style="padding:8px 0;color:#555;">Meeting</td><td style="padding:8px 0;color:#1a1a2e;"><a href="${meetingLink}" style="color:#e94560;">Join ${meetingProvider}</a></td></tr>
           </table>
-          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 16px;margin-top:20px;font-size:13px;color:#991b1b;">
-            ⚡ Please confirm the exact meeting date and send the calendar invite + Zoom link within 24 hours.
+          <div style="background:#ecfdf5;border:1px solid #86efac;border-radius:6px;padding:12px 16px;margin-top:20px;font-size:13px;color:#166534;">
+            ⚡ The student has locked this slot. It should now appear in the admin consultations calendar for follow-through and live joining.
           </div>
         </div>
         ${emailFooter}
@@ -411,147 +688,45 @@ const sendAdminSlotNotification = async ({
   });
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PHASE 10: MEET DETAILS & SCHEDULING EMAILS
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
- * Send Google Meet / meeting details to student (and optionally parent)
- * after admin schedules the session.
- *
- * @param {object} opts
- * @param {string} opts.to               - Recipient email
- * @param {string} opts.name             - Recipient name
- * @param {string} opts.studentName      - Student's full name (if isParent)
- * @param {boolean} [opts.isParent]
- * @param {string} opts.counsellorName
- * @param {string} opts.counsellorContact
- * @param {string} opts.meetLink         - Google Meet / video call URL
- * @param {string} opts.scheduledDateStr - Human-readable date e.g. "Wednesday, 25 June 2026"
- * @param {string} opts.scheduledTimeStr - Human-readable time e.g. "9:00 AM – 12:00 PM IST"
- * @param {string} opts.bookingId        - ConsultationBooking.id for reference
+ * Send email verification link to a newly registered user.
+ * @param {{ to: string, name: string, token: string }} opts
  */
-const sendMeetDetailsEmail = async ({
-  to,
-  name,
-  studentName,
-  isParent = false,
-  counsellorName,
-  counsellorContact,
-  meetLink,
-  scheduledDateStr,
-  scheduledTimeStr,
-  bookingId,
-}) => {
-  const greeting  = isParent ? `Hi ${name},` : `You're all set, ${name}! 🎉`;
-  const intro     = isParent
-    ? `Your ward <strong>${studentName}</strong>'s Career Blueprint Session has been officially scheduled. Here are the details:`
-    : `Your 1:1 Career Blueprint Session with <strong>${counsellorName}</strong> is officially scheduled. Here are your meeting details:`;
-
+const sendVerificationEmail = async ({ to, name, token }) => {
+  const verifyUrl = `${config.frontendUrl}/verify-email?token=${token}`;
   return sendEmail({
     to,
-    subject: `📹 Meeting Confirmed — Your Career Session Link is Ready${isParent ? ` (${studentName})` : ''}`,
+    subject: 'Verify your email – CAD Gurukul',
     html: `
-      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
         ${emailHeader}
-        <div style="padding:30px;">
-          <p style="font-size:16px;color:#1a1a2e;margin:0 0 8px;">${greeting}</p>
-          <p style="color:#444;font-size:14px;line-height:1.6;">${intro}</p>
+        <div style="padding:32px;">
+          <h2 style="color:#1a1a2e;margin:0 0 12px;">Hi ${name}, confirm your email 📬</h2>
+          <p style="font-size:15px;color:#444;line-height:1.7;margin:0 0 24px;">
+            Thanks for joining CAD Gurukul! Click the button below to verify your email address and activate your account.
+          </p>
 
-          <!-- Meeting card -->
-          <div style="background:#f0f4ff;border:1px solid #c7d2fe;border-radius:10px;padding:22px;margin:22px 0;">
-            <div style="font-size:12px;font-weight:bold;color:#4338ca;letter-spacing:0.8px;margin-bottom:10px;">YOUR MEETING DETAILS</div>
-            <table style="width:100%;border-collapse:collapse;font-size:14px;">
-              <tr>
-                <td style="padding:6px 0;color:#555;width:130px;vertical-align:top;">📅 Date</td>
-                <td style="padding:6px 0;font-weight:bold;color:#1a1a2e;">${scheduledDateStr}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#555;vertical-align:top;">⏰ Time</td>
-                <td style="padding:6px 0;font-weight:bold;color:#1a1a2e;">${scheduledTimeStr}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#555;vertical-align:top;">👨‍💼 Counsellor</td>
-                <td style="padding:6px 0;font-weight:bold;color:#1a1a2e;">${counsellorName}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 0;color:#555;vertical-align:top;">📹 Platform</td>
-                <td style="padding:6px 0;color:#1a1a2e;">Google Meet</td>
-              </tr>
-            </table>
-
-            <!-- Big Meet Join button -->
-            <div style="margin-top:18px;text-align:center;">
-              <a href="${meetLink}"
-                 style="display:inline-block;background:#4338ca;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;letter-spacing:0.2px;">
-                📹 Join Google Meet →
-              </a>
-              <p style="font-size:11px;color:#999;margin:10px 0 0;">
-                Or paste this link: <span style="color:#4338ca;word-break:break-all;">${meetLink}</span>
-              </p>
-            </div>
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${verifyUrl}"
+               style="display:inline-block;background:#e94560;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;letter-spacing:0.3px;">
+              Verify My Email
+            </a>
           </div>
 
-          <!-- Tips -->
-          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px;margin-bottom:20px;">
-            <div style="font-size:12px;font-weight:bold;color:#14532d;margin-bottom:8px;">📋 BEFORE YOUR SESSION</div>
-            <ul style="font-size:13px;color:#166534;margin:0;padding-left:18px;line-height:1.8;">
-              <li>Join 2–3 minutes early to test your audio/video</li>
-              <li>Keep a notepad handy for career path ideas</li>
-              <li>List your top 3 career questions in advance</li>
-              <li>Parents are welcome — it greatly helps the session</li>
-            </ul>
+          <p style="font-size:13px;color:#666;line-height:1.6;margin:0 0 8px;">
+            If the button doesn't work, copy and paste this link into your browser:
+          </p>
+          <p style="font-size:12px;color:#0f3460;word-break:break-all;background:#f5f7ff;padding:10px 14px;border-radius:6px;margin:0 0 24px;">
+            ${verifyUrl}
+          </p>
+
+          <div style="background:#fffbea;border:1px solid #fde68a;border-radius:6px;padding:12px 16px;font-size:13px;color:#92400e;">
+            ⏳ This link expires in <strong>24 hours</strong>. If it expires, you can request a new one from the login page.
           </div>
 
-          <div style="background:#fffbea;border:1px solid #fde68a;border-radius:6px;padding:12px 16px;font-size:12px;color:#92400e;">
-            Need to reschedule or have questions?
-            Contact us at <a href="mailto:${counsellorContact}" style="color:#e94560;">${counsellorContact}</a>
-          </div>
-        </div>
-        ${emailFooter}
-      </div>
-    `,
-  });
-};
-
-/**
- * Notify admin when a customer books a date-specific availability slot.
- */
-const sendAdminNewBookingNotification = async ({
-  studentName,
-  studentEmail,
-  scheduledDateStr,
-  scheduledTimeStr,
-  bookingId,
-  slotId,
-}) => {
-  const adminEmail = config.email.from?.match(/<(.+?)>/)?.[1] || config.email.user || 'noreply@cadgurukul.com';
-
-  return sendEmail({
-    to: adminEmail,
-    subject: `[New Booking] ${studentName} — ${scheduledDateStr} ${scheduledTimeStr}`,
-    html: `
-      <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;">
-        ${emailHeader}
-        <div style="padding:24px;">
-          <h2 style="color:#1a1a2e;margin:0 0 16px;">📆 New Consultation Booked</h2>
-          <table style="width:100%;border-collapse:collapse;font-size:14px;">
-            <tr><td style="padding:8px 0;color:#555;width:140px;">Student</td>
-                <td style="padding:8px 0;font-weight:bold;color:#1a1a2e;">${studentName}</td></tr>
-            <tr><td style="padding:8px 0;color:#555;">Email</td>
-                <td style="padding:8px 0;color:#0f3460;">${studentEmail || 'N/A'}</td></tr>
-            <tr><td style="padding:8px 0;color:#555;">Date</td>
-                <td style="padding:8px 0;font-weight:bold;color:#e94560;">${scheduledDateStr}</td></tr>
-            <tr><td style="padding:8px 0;color:#555;">Time</td>
-                <td style="padding:8px 0;font-weight:bold;color:#e94560;">${scheduledTimeStr}</td></tr>
-            <tr><td style="padding:8px 0;color:#555;">Booking ID</td>
-                <td style="padding:8px 0;font-family:monospace;font-size:12px;color:#666;">${bookingId}</td></tr>
-            <tr><td style="padding:8px 0;color:#555;">Slot ID</td>
-                <td style="padding:8px 0;font-family:monospace;font-size:12px;color:#666;">${slotId}</td></tr>
-          </table>
-          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 16px;margin-top:20px;font-size:13px;color:#991b1b;">
-            ⚡ A Google Meet link has been generated automatically. Please verify the Admin Scheduling dashboard for details.
-          </div>
+          <p style="font-size:12px;color:#aaa;margin:24px 0 0;">
+            If you didn't create an account with CAD Gurukul, you can safely ignore this email.
+          </p>
         </div>
         ${emailFooter}
       </div>
@@ -562,13 +737,15 @@ const sendAdminNewBookingNotification = async ({
 module.exports = {
   sendEmail,
   sendWelcomeEmail,
+  sendVerificationEmail,
   sendReportReadyEmail,
   sendCounsellingReportEmail,
   sendConsultationSlotEmail,
   sendSlotConfirmationEmail,
   sendAdminSlotNotification,
-  // Phase 10 — scheduling & Google Meet
-  sendMeetDetailsEmail,
-  sendAdminNewBookingNotification,
+  sendConsultationReminderEmail,
+  sendConsultationFollowUpEmail,
+  verifyEmailTransport,
+  getEmailHealthSnapshot,
+  isEmailConfigured,
 };
-

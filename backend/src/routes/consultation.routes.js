@@ -2,10 +2,11 @@
 const express = require('express');
 const router  = express.Router();
 
-const { authenticate, authenticateAdmin } = require('../middleware/auth');
+const { authenticate, requirePortalRole } = require('../middleware/auth');
 const consultationController = require('../controllers/consultation.controller');
 
 // ── Public: token-based slot selection (no JWT required) ─────────────────
+router.get('/availability', consultationController.getAvailability);
 router.post('/select-slot', consultationController.selectSlot);
 
 // ── Auth-protected: fetch current user's consultation booking ──────────────
@@ -19,6 +20,6 @@ router.post('/recover', authenticate, consultationController.recoverConsultation
 
 // ── Admin-only: send a test slot-selection email to verify SMTP ────────────
 // POST /consultation/test-email  {  to?: string  }  (defaults to admin's own email)
-router.post('/test-email', authenticateAdmin, consultationController.testSlotEmail);
+router.post('/test-email', authenticate, requirePortalRole('ADMIN'), consultationController.testSlotEmail);
 
 module.exports = router;

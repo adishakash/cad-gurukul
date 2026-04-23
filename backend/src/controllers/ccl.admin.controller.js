@@ -618,6 +618,55 @@ const listPolicyHistory = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/v1/admin/ccl/training/:id/file[?download=true]
+ * Admin-only authenticated file access for uploaded training resources.
+ * Allows admin to open or download any non-deleted training file they have uploaded.
+ */
+const serveAdminTrainingFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const isDownload = req.query.download === 'true';
+
+    const item = await prisma.cclTrainingContent.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!item)            return errorResponse(res, 'Resource not found', 404, 'NOT_FOUND');
+    if (!item.storagePath) return errorResponse(res, 'No file available for this resource', 404, 'NOT_FOUND');
+
+    // Path traversal guard
+    const UPLOADS_BASE = path.resolve(__dirname, '../../uploads/training');
+    const resolvedPath = path.resolve(item.storagePath);
+    if (!resolvedPath.startsWith(UPLOADS_BASE + path.sep) && !resolvedPath.startsWith(UPLOADS_BASE)) {
+      logger.error('[Admin.CCL] serveAdminTrainingFile path traversal attempt blocked', { id, storagePath: item.storagePath });
+      return errorResponse(res, 'File not accessible', 403, 'FORBIDDEN');
+    }
+
+    const contentType = item.mimeType || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    if (isDownload) {
+      const ext = path.extname(item.storagePath);
+      const safeTitle = item.title.replace(/[^a-zA-Z0-9\-_.]/g, '_');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}${ext}"`);
+    } else {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+
+    res.sendFile(resolvedPath, (err) => {
+      if (err && !res.headersSent) {
+        logger.error('[Admin.CCL] serveAdminTrainingFile sendFile error', { error: err.message, id });
+        errorResponse(res, 'File not accessible', 500);
+      }
+    });
+  } catch (err) {
+    logger.error('[Admin.CCL] serveAdminTrainingFile error', { error: err.message });
+    return errorResponse(res, 'Failed to serve training file', 500);
+  }
+};
+
 module.exports = {
   // Joining links
   listAllJoiningLinks,
@@ -636,6 +685,7 @@ module.exports = {
   updateTrainingContent,
   deleteTrainingContent,
   listTrainingHistory,
+  serveAdminTrainingFile,
   // Discount policies (Phase 6 + Phase 9)
   listPolicies,
   upsertPolicy,

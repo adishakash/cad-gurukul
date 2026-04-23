@@ -1,8 +1,14 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
-import { loginUser, selectAuthLoading, selectAuthError, clearError } from '../store/slices/authSlice'
+import {
+  loginUser,
+  resendVerificationEmail,
+  selectAuthLoading,
+  selectAuthError,
+  clearError,
+} from '../store/slices/authSlice'
 
 export default function Login() {
   const dispatch = useDispatch()
@@ -11,12 +17,12 @@ export default function Login() {
   const isLoading = useSelector(selectAuthLoading)
   const authError = useSelector(selectAuthError)
   const sessionExpired = searchParams.get('session') === 'expired'
+  const [resendEmail, setResendEmail] = useState(null)
+  const [resendCooldown, setResendCooldown] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm()
+  const { register, handleSubmit, formState: { errors }, getValues } = useForm()
 
-  // Clear any stale error carried over from a previous page (e.g. a failed registration)
-  // when this page first mounts. The error will persist after a failed login attempt
-  // until the user retries or modifies their input.
+  // Clear any stale error when this page mounts
   useEffect(() => { dispatch(clearError()) }, [dispatch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const registerHref = searchParams.toString() ? `/register?${searchParams.toString()}` : '/register'
@@ -25,10 +31,8 @@ export default function Login() {
     const params = new URLSearchParams({
       plan: (searchParams.get('plan') || 'free').toLowerCase() === 'paid' ? 'PAID' : 'FREE',
     })
-
     const intent = searchParams.get('intent')
     if (intent) params.set('intent', intent)
-
     return `/assessment?${params.toString()}`
   }
 
@@ -39,10 +43,24 @@ export default function Login() {
         navigate(buildPostAuthAssessmentPath())
         return
       }
-
       navigate('/dashboard')
+    } else {
+      // If email not verified, surface resend option pre-filled with their email
+      if (result.payload?.code === 'EMAIL_NOT_VERIFIED') {
+        setResendEmail(data.email)
+      }
     }
   }
+
+  const handleResend = async () => {
+    if (!resendEmail || resendCooldown) return
+    setResendCooldown(true)
+    await dispatch(resendVerificationEmail(resendEmail))
+    setTimeout(() => setResendCooldown(false), 30000)
+  }
+
+  // Resolve displayable error string (authError may be { message, code } or plain string)
+  const errorMessage = typeof authError === 'object' ? authError?.message : authError
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
@@ -64,9 +82,21 @@ export default function Login() {
           </div>
         )}
 
-        {authError && (
+        {errorMessage && (
           <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center">
-            {authError}
+            {errorMessage}
+            {/* Resend option when the account is unverified */}
+            {authError?.code === 'EMAIL_NOT_VERIFIED' && resendEmail && (
+              <div className="mt-2 pt-2 border-t border-red-200">
+                <button
+                  onClick={handleResend}
+                  disabled={isLoading || resendCooldown}
+                  className="text-brand-red font-semibold text-xs hover:underline disabled:opacity-50"
+                >
+                  {resendCooldown ? 'Resent! Check your inbox.' : 'Resend verification email →'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

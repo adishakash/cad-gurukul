@@ -1,7 +1,14 @@
+import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
-import { registerUser, selectAuthLoading } from '../store/slices/authSlice'
+import {
+  registerUser,
+  resendVerificationEmail,
+  selectAuthLoading,
+  selectPendingVerification,
+  clearPendingVerification,
+} from '../store/slices/authSlice'
 import { leadApi } from '../services/api'
 
 export default function Register() {
@@ -9,23 +16,16 @@ export default function Register() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isLoading = useSelector(selectAuthLoading)
+  const pendingVerification = useSelector(selectPendingVerification)
+  const [resendCooldown, setResendCooldown] = useState(false)
+  const [submittedEmail, setSubmittedEmail] = useState(null)
 
   const { register, handleSubmit, formState: { errors }, watch } = useForm()
 
   const loginHref = searchParams.toString() ? `/login?${searchParams.toString()}` : '/login'
 
-  const buildPostAuthAssessmentPath = () => {
-    const params = new URLSearchParams({
-      plan: (searchParams.get('plan') || 'free').toLowerCase() === 'paid' ? 'PAID' : 'FREE',
-    })
-
-    const intent = searchParams.get('intent')
-    if (intent) params.set('intent', intent)
-
-    return `/assessment?${params.toString()}`
-  }
-
   const onSubmit = async (data) => {
+    setSubmittedEmail(data.email)
     const result = await dispatch(registerUser(data))
     if (registerUser.fulfilled.match(result)) {
       // Link any pending lead captured before registration
@@ -34,16 +34,79 @@ export default function Register() {
         leadApi.linkUser(leadId).catch(() => {})
         localStorage.removeItem('cg_lead_id')
       }
-
-      if (searchParams.get('next') === 'assessment') {
-        navigate(buildPostAuthAssessmentPath())
-        return
-      }
-
-      navigate('/onboarding')
+      // Don't navigate — stay on this page and show the "check your email" state
     }
   }
 
+  const handleResend = async () => {
+    const email = pendingVerification?.email || submittedEmail
+    if (!email || resendCooldown) return
+    setResendCooldown(true)
+    await dispatch(resendVerificationEmail(email))
+    setTimeout(() => setResendCooldown(false), 30000) // 30s cooldown
+  }
+
+  // ── "Check your email" holding state ──────────────────────────────────────
+  if (pendingVerification) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <Link to="/" className="inline-flex items-center space-x-2 mb-6">
+              <div className="w-9 h-9 rounded-lg bg-brand-red flex items-center justify-center">
+                <span className="text-white font-bold text-lg">C</span>
+              </div>
+              <span className="font-bold text-xl text-brand-dark">CAD Gurukul</span>
+            </Link>
+          </div>
+
+          <div className="card shadow-xl text-center">
+            <div className="text-5xl mb-4">📬</div>
+            <h1 className="text-2xl font-bold text-brand-dark mb-3">Check your email</h1>
+            <p className="text-gray-600 text-sm leading-relaxed mb-2">
+              We've sent a verification link to:
+            </p>
+            <p className="font-semibold text-brand-dark text-sm mb-6 break-all">
+              {pendingVerification.email}
+            </p>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-left text-sm text-blue-800 mb-6">
+              <p className="font-semibold mb-1">What to do next:</p>
+              <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                <li>Open the email from CAD Gurukul</li>
+                <li>Click the <strong>Verify My Email</strong> button</li>
+                <li>You'll be signed in automatically</li>
+              </ol>
+            </div>
+
+            <p className="text-xs text-gray-400 mb-4">
+              ⏳ The link expires in 24 hours. Check your spam folder if you don't see it.
+            </p>
+
+            <button
+              onClick={handleResend}
+              disabled={isLoading || resendCooldown}
+              className="w-full py-2 px-4 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {resendCooldown ? 'Resent! Wait 30 seconds before trying again' : 'Resend verification email'}
+            </button>
+
+            <p className="text-center text-xs text-gray-400 mt-4">
+              Wrong email?{' '}
+              <button
+                onClick={() => dispatch(clearPendingVerification())}
+                className="text-brand-red font-semibold hover:underline"
+              >
+                Start over
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Registration form ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md">

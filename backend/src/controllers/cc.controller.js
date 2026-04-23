@@ -644,7 +644,7 @@ const listTraining = async (req, res) => {
     const content = await prisma.cclTrainingContent.findMany({
       where:   { isActive: true, targetRole: { in: ['CC', 'ALL'] } },
       orderBy: { displayOrder: 'asc' },
-      select:  { id: true, title: true, type: true, description: true, isDownloadable: true, targetRole: true, displayOrder: true },
+      select:  { id: true, title: true, type: true, description: true, isDownloadable: true, targetRole: true, displayOrder: true, url: true },
     });
     return successResponse(res, content);
   } catch (err) {
@@ -677,6 +677,14 @@ const serveTrainingFile = async (req, res) => {
     }
 
     const path = require('path');
+    // Path traversal guard: ensure the resolved path stays within the uploads directory
+    const UPLOADS_BASE = path.resolve(__dirname, '../../uploads/training');
+    const resolvedPath = path.resolve(item.storagePath);
+    if (!resolvedPath.startsWith(UPLOADS_BASE + path.sep) && !resolvedPath.startsWith(UPLOADS_BASE)) {
+      logger.error('[CC] serveTrainingFile path traversal attempt blocked', { id, storagePath: item.storagePath });
+      return errorResponse(res, 'File not accessible', 403, 'FORBIDDEN');
+    }
+
     const contentType = item.mimeType || 'application/octet-stream';
     res.setHeader('Content-Type', contentType);
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -689,7 +697,7 @@ const serveTrainingFile = async (req, res) => {
       res.setHeader('Content-Disposition', 'inline');
     }
 
-    res.sendFile(item.storagePath, (err) => {
+    res.sendFile(resolvedPath, (err) => {
       if (err && !res.headersSent) {
         logger.error('[CC] serveTrainingFile sendFile error', { error: err.message, id });
         errorResponse(res, 'File not accessible', 500);

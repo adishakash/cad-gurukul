@@ -5,6 +5,7 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const { markDatabaseWriteProbeSkipped, runDatabaseWriteProbe } = require('./utils/databaseReadiness');
 const prisma = require('./config/database');
+const { isEmailConfigured, verifyEmailTransport } = require('./services/email/emailService');
 
 const connectWithTimeout = (ms) =>
   Promise.race([
@@ -28,6 +29,16 @@ const start = async () => {
     logger.info('[Server] Database write probe skipped');
   }
 
+  if (isEmailConfigured() && config.email.verifyOnStartup) {
+    try {
+      await verifyEmailTransport({ force: true });
+    } catch (emailErr) {
+      logger.error('[Server] Email transport verification failed', { error: emailErr.message });
+    }
+  } else if (!isEmailConfigured()) {
+    logger.warn('[Server] Email transport not configured. Application emails will fail until SMTP env vars are set.');
+  }
+
   server = app.listen(config.port, () => {
     logger.info(`[Server] CAD Gurukul API started`, {
       port: config.port,
@@ -43,6 +54,18 @@ const start = async () => {
         logger.info('[Server] Payout scheduler started');
       } catch (schedErr) {
         logger.warn('[Server] Payout scheduler failed to start', { error: schedErr.message });
+      }
+    }
+
+    if (config.consultationAutomation.enabled) {
+      try {
+        const { startConsultationAutomation } = require('./services/consultation/consultationAutomationService');
+        startConsultationAutomation(config.consultationAutomation.intervalMs);
+        logger.info('[Server] Consultation automation started', {
+          intervalMs: config.consultationAutomation.intervalMs,
+        });
+      } catch (schedErr) {
+        logger.warn('[Server] Consultation automation failed to start', { error: schedErr.message });
       }
     }
   });

@@ -183,17 +183,7 @@ const authorizeRoles = (...allowedRoles) => {
 
 /**
  * Portal-boundary role middleware.
- *
- * Unlike `authorizeRoles` (which uses numeric hierarchy so higher roles
- * auto-pass lower-level checks), this middleware uses EXACT set membership.
- * A user must have one of the listed roles — no hierarchy promotion.
- *
- * Use this at the TOP of every portal router to prevent cross-portal access:
- *   router.use(authenticate, requirePortalRole('STUDENT', 'PARENT'))   // user portal
- *   router.use(authenticate, requirePortalRole('CAREER_COUNSELLOR_LEAD')) // staff portal
- *   router.use(authenticate, requirePortalRole('ADMIN'))                // admin portal
- *
- * Must be used AFTER `authenticate` (requires req.user to be set).
+ * Uses exact role membership rather than hierarchy promotion.
  */
 const requirePortalRole = (...roles) => {
   if (!roles.length) {
@@ -222,4 +212,12 @@ const requirePortalRole = (...roles) => {
   };
 };
 
-module.exports = { authenticate, authenticateAdmin, optionalAuthenticate, requireRole, requireSuperAdmin, authorizeRoles, requirePortalRole };
+module.exports = {
+  authenticate,
+  authenticateAdmin,
+  optionalAuthenticate,
+  requireRole,
+  requireSuperAdmin,
+  authorizeRoles,
+  requirePortalRole,
+};
