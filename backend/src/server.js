@@ -43,6 +43,7 @@ const start = async () => {
     logger.info(`[Server] CAD Gurukul API started`, {
       port: config.port,
       env: config.env,
+      frontendUrl: config.frontendUrl,
       url: `http://localhost:${config.port}/api/v1/health`,
     });
 
