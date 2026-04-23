@@ -1,2 +1,3 @@
 # Ignore local environment overrides and secrets
 .env.local
+.env
