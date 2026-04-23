@@ -65,11 +65,11 @@ if (runtimeDatabaseUrl) {
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 5000,
-  frontendUrl: process.env.FRONTEND_URL || 'https://www.cadgurukul.com',
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
   frontendUrls: (
     process.env.FRONTEND_URLS
       ? process.env.FRONTEND_URLS.split(',').map((url) => url.trim()).filter(Boolean)
-      : [process.env.FRONTEND_URL || 'https://www.cadgurukul.com']
+      : [process.env.FRONTEND_URL || 'http://localhost:3000']
   ),
   allowDigitalOceanPreviewOrigins: process.env.ALLOW_DO_PREVIEW_ORIGINS !== 'false',
 
