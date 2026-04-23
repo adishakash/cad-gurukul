@@ -50,7 +50,7 @@ services:
     value: "${db.DATABASE_URL}"
   - key: FRONTEND_URL
     scope: RUN_TIME
-    value: "https://cadgurukul.com"
+    value: "https://www.cadgurukul.com"
   - key: FRONTEND_URLS
     scope: RUN_TIME
     value: "https://cadgurukul.com,https://www.cadgurukul.com,${frontend.PUBLIC_URL}"
