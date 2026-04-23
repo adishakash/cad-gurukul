@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { selectUser, clearCredentials } from '../store/slices/authSlice'
-import api, { leadApi, consultationApi, authApi } from '../services/api'
+import api, { leadApi, consultationApi, authApi, paymentApi } from '../services/api'
 import toast from 'react-hot-toast'
 import ThemeToggle from '../components/ThemeToggle'
 import { formatRupees, getUpgradePrice } from '../utils/planPricing'
@@ -48,7 +48,7 @@ function TimelineStep({ done, current, icon, label, description, children }) {
 }
 
 // ── ₹499 Standard Plan Timeline ──────────────────────────────────────────────
-function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
+function StandardTimeline({ leadStatus, paidReport, generatingReport, onRefresh, refreshing }) {
   const reportReady = Boolean(paidReport)
   const generating  = Boolean(generatingReport) || ['paid', 'premium_report_generating'].includes(leadStatus)
   const reportDone  = reportReady || leadStatus === 'premium_report_ready'
@@ -120,7 +120,7 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
   return (
     <div className="card mb-6 border-2 border-green-300 dark:border-green-700 bg-gradient-to-br from-green-50 to-white dark:from-green-950/20 dark:to-gray-900">
       {/* Status card */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl shrink-0">📋</div>
           <div>
@@ -129,6 +129,18 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${
+              refreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+            title="Refresh timeline status"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
           <span className="text-xs font-bold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700 px-2 py-0.5 rounded-full">
             ₹499 Report
           </span>
@@ -168,7 +180,7 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport }) {
 }
 
 // ── ₹1,999 Premium Plan Timeline ─────────────────────────────────────────────
-function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
+function PremiumTimeline({ leadStatus, paidReport, generatingReport, onRefresh, refreshing }) {
   const generating  = Boolean(generatingReport) || leadStatus === 'premium_report_generating'
   const reportReady = Boolean(paidReport)
   const reportDone  = reportReady || leadStatus === 'premium_report_ready'
@@ -240,7 +252,7 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
   return (
     <div className="card mb-6 border-2 border-purple-300 dark:border-purple-700 bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-gray-900">
       {/* Status card */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl shrink-0">🚀</div>
           <div>
@@ -249,6 +261,18 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport }) {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${
+              refreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+            title="Refresh timeline status"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
           <span className="text-xs font-bold text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 border border-purple-300 dark:border-purple-700 px-2 py-0.5 rounded-full">
             ₹1,999 Premium
           </span>
@@ -307,7 +331,7 @@ const BOOKING_STATUS_TO_STEP = {
   counselling_report_ready: 5,
 }
 
-function ConsultationTimeline({ booking, onResend }) {
+function ConsultationTimeline({ booking, onResend, onRefresh, refreshing }) {
   const [resending, setResending] = useState(false)
   const [resendResult, setResendResult] = useState(null) // { ok, message, nextResendAt }
   const [recovering, setRecovering] = useState(false)
@@ -406,10 +430,15 @@ function ConsultationTimeline({ booking, onResend }) {
 
           <div className="flex flex-col sm:flex-row gap-2">
             <button
-              onClick={() => window.location.reload()}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg border border-yellow-500 text-yellow-700 bg-white hover:bg-yellow-50 transition"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition ${
+                refreshing
+                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600 cursor-not-allowed'
+                  : 'border-yellow-500 text-yellow-700 dark:text-yellow-400 bg-white dark:bg-gray-900 hover:bg-yellow-50 dark:hover:bg-yellow-950/30'
+              }`}
             >
-              🔄 Refresh Page
+              {refreshing ? '⏳ Refreshing…' : '🔄 Refresh Status'}
             </button>
             <button
               onClick={handleRecover}
@@ -436,7 +465,7 @@ function ConsultationTimeline({ booking, onResend }) {
 
   return (
     <div className="card mb-6 border-2 border-orange-300 dark:border-orange-700 bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-gray-900">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-xl shrink-0">📞</div>
           <div>
@@ -446,6 +475,18 @@ function ConsultationTimeline({ booking, onResend }) {
         </div>
         {/* Status chip */}
         <div className="flex flex-col items-end gap-1.5">
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${
+              refreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+            title="Refresh timeline status"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
           <span className="text-xs font-bold text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/40 border border-orange-300 dark:border-orange-700 px-2 py-0.5 rounded-full">
             ₹9,999 Session
           </span>
@@ -672,7 +713,10 @@ export default function Dashboard() {
   const [reports, setReports]   = useState([])
   const [lead, setLead]         = useState(null)
   const [consultationBooking, setConsultationBooking] = useState(null)
+  const [hasConsultationPayment, setHasConsultationPayment] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [timelineRefreshing, setTimelineRefreshing] = useState(false)
+  const [lastSyncedAt, setLastSyncedAt] = useState(null)
 
   // Delete-account modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -687,6 +731,34 @@ export default function Dashboard() {
       setConsultationBooking(res.data.data)
     } catch {
       // non-fatal — booking shown stale is fine
+    }
+  }, [])
+
+  const loadDashboardData = useCallback(async ({ showSpinner = false, showToast = false } = {}) => {
+    if (showSpinner) setTimelineRefreshing(true)
+    try {
+      const [profileRes, reportsRes, leadRes, consultationRes, paymentsRes] = await Promise.all([
+        api.get('/students/me').catch(() => ({ data: { data: null } })),
+        api.get('/reports/my').catch(() => ({ data: { data: [] } })),
+        leadApi.getMe().catch(() => ({ data: { data: null } })),
+        consultationApi.getMyBooking().catch(() => ({ data: { data: null } })),
+        paymentApi.getHistory().catch(() => ({ data: { data: [] } })),
+      ])
+      const paymentHistory = paymentsRes.data.data || []
+      const consultationPaid = paymentHistory.some((p) => p.status === 'CAPTURED' && p.planType === 'consultation')
+
+      setProfile(profileRes.data.data)
+      setReports(reportsRes.data.data || [])
+      setLead(leadRes.data.data)
+      setConsultationBooking(consultationRes.data.data)
+      setHasConsultationPayment(consultationPaid)
+      setLastSyncedAt(new Date())
+
+      if (showToast) toast.success('Timeline refreshed.')
+    } catch {
+      if (showToast) toast.error('Failed to refresh timeline data.')
+    } finally {
+      if (showSpinner) setTimelineRefreshing(false)
     }
   }, [])
 
@@ -708,25 +780,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     const loadData = async () => {
-      try {
-        const [profileRes, reportsRes, leadRes, consultationRes] = await Promise.all([
-          api.get('/students/me').catch(() => ({ data: { data: null } })),
-          api.get('/reports/my').catch(() => ({ data: { data: [] } })),
-          leadApi.getMe().catch(() => ({ data: { data: null } })),
-          consultationApi.getMyBooking().catch(() => ({ data: { data: null } })),
-        ])
-        setProfile(profileRes.data.data)
-        setReports(reportsRes.data.data || [])
-        setLead(leadRes.data.data)
-        setConsultationBooking(consultationRes.data.data)
-      } catch {
-        toast.error('Failed to load dashboard data')
-      } finally {
-        setIsLoading(false)
-      }
+      await loadDashboardData()
+      setIsLoading(false)
     }
     loadData()
-  }, [])
+  }, [loadDashboardData])
 
   const completedReports  = reports.filter((r) => r.status === 'COMPLETED')
   const generatingReports = reports.filter((r) => r.status === 'GENERATING')
@@ -752,7 +810,7 @@ export default function Dashboard() {
 
   // A consultation booking is definitive proof of the consultation plan even if
   // the lead planType hasn't been updated yet.
-  const hasConsultation   = planType === 'consultation' || Boolean(consultationBooking)
+  const hasConsultation   = planType === 'consultation' || Boolean(consultationBooking) || hasConsultationPayment
   const hasPremium        = planType === 'premium' || hasConsultation
   const hasStandard       = planType === 'standard'
   const hasAnyPaidPlan    = userHasPaid   // simplest, most reliable
@@ -784,15 +842,39 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Last synced: {lastSyncedAt ? fmt(lastSyncedAt) : '—'}
+          </p>
+          <button
+            onClick={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            disabled={timelineRefreshing}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
+              timelineRefreshing
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+          >
+            {timelineRefreshing ? 'Refreshing…' : '↻ Refresh Timeline'}
+          </button>
+        </div>
+
         {/* ── Plan-specific timeline ─────────────────────────────────────────── */}
         {hasConsultation && (
-          <ConsultationTimeline booking={consultationBooking} onResend={refreshBooking} />
+          <ConsultationTimeline
+            booking={consultationBooking}
+            onResend={refreshBooking}
+            onRefresh={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            refreshing={timelineRefreshing}
+          />
         )}
         {hasPremium && !hasConsultation && (
           <PremiumTimeline
             leadStatus={leadStatus}
             paidReport={paidReport}
             generatingReport={generatingReports[0]}
+            onRefresh={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            refreshing={timelineRefreshing}
           />
         )}
         {hasStandard && !hasPremium && !hasConsultation && (
@@ -800,6 +882,8 @@ export default function Dashboard() {
             leadStatus={leadStatus}
             paidReport={paidReport}
             generatingReport={generatingReports[0]}
+            onRefresh={() => loadDashboardData({ showSpinner: true, showToast: true })}
+            refreshing={timelineRefreshing}
           />
         )}
         {!userHasPaid && lead && <FunnelProgress status={lead.status} />}
