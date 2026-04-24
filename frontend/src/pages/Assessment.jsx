@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
@@ -10,66 +10,71 @@ import { selectIsAuthenticated } from '../store/slices/authSlice'
 import toast from 'react-hot-toast'
 import { leadApi } from '../services/api'
 import LeadCaptureForm from '../components/LeadCaptureForm'
+import { useTranslation } from 'react-i18next'
 
-// ── 3 static hook questions shown to guests before requiring any login ────────
-const GUEST_QUESTIONS = [
+const buildGuestQuestions = (t) => ([
   {
     id: 'g1',
-    category: 'INTEREST',
-    questionText: 'Even after a long day, which activity makes you feel energized?',
+    category: 'INTERESTS',
+    questionText: t('assessment.guestQuestions.q1.text'),
     questionType: 'MCQ',
     options: [
-      { value: 'a', label: 'Solving problems or puzzles' },
-      { value: 'b', label: 'Creating something — art, music, or writing' },
-      { value: 'c', label: 'Talking to people, leading or making plans' },
-      { value: 'd', label: 'Learning how things work through experiments' },
+      { value: 'a', label: t('assessment.guestQuestions.q1.options.a') },
+      { value: 'b', label: t('assessment.guestQuestions.q1.options.b') },
+      { value: 'c', label: t('assessment.guestQuestions.q1.options.c') },
+      { value: 'd', label: t('assessment.guestQuestions.q1.options.d') },
     ],
   },
   {
     id: 'g2',
     category: 'ASPIRATION',
-    questionText: 'When you imagine your future, which dream feels most like yours?',
+    questionText: t('assessment.guestQuestions.q2.text'),
     questionType: 'MCQ',
     options: [
-      { value: 'a', label: 'Being a top professional (Doctor, Engineer, CA)' },
-      { value: 'b', label: 'Starting or running my own business' },
-      { value: 'c', label: 'Serving the nation — government, law, or social work' },
-      { value: 'd', label: 'Creating impact through design, content, or innovation' },
+      { value: 'a', label: t('assessment.guestQuestions.q2.options.a') },
+      { value: 'b', label: t('assessment.guestQuestions.q2.options.b') },
+      { value: 'c', label: t('assessment.guestQuestions.q2.options.c') },
+      { value: 'd', label: t('assessment.guestQuestions.q2.options.d') },
     ],
   },
   {
     id: 'g3',
     category: 'APTITUDE',
-    questionText: 'Which school subject do you secretly enjoy the most?',
+    questionText: t('assessment.guestQuestions.q3.text'),
     questionType: 'MCQ',
     options: [
-      { value: 'a', label: 'Maths or Science — numbers and logic excite me' },
-      { value: 'b', label: 'Commerce or Economics — I think about money and business' },
-      { value: 'c', label: 'History, Civics, or Geography — society fascinates me' },
-      { value: 'd', label: 'Arts, Literature, or Languages — expression is my thing' },
+      { value: 'a', label: t('assessment.guestQuestions.q3.options.a') },
+      { value: 'b', label: t('assessment.guestQuestions.q3.options.b') },
+      { value: 'c', label: t('assessment.guestQuestions.q3.options.c') },
+      { value: 'd', label: t('assessment.guestQuestions.q3.options.d') },
     ],
   },
-]
+])
 
-// ── Motivational copy by progress % ──────────────────────────────────────────
-function getMotivationalText(percent) {
-  if (percent === 0) return 'Let\'s discover your ideal career path 🎯'
-  if (percent < 30) return 'Great start! Your profile is taking shape...'
-  if (percent < 60) return `You're ${percent}% done. Few more questions to unlock your career path 🎯`
-  if (percent < 80) return 'Almost there! The AI is learning a lot about you 🧠'
-  return 'Final stretch! Your personalised report is nearly ready 🚀'
+const getMotivationalText = (t, percent) => {
+  if (percent === 0) return t('assessment.motivational.start')
+  if (percent < 30) return t('assessment.motivational.early')
+  if (percent < 60) return t('assessment.motivational.mid', { percent })
+  if (percent < 80) return t('assessment.motivational.late')
+  return t('assessment.motivational.final')
+}
+
+const getCategoryLabel = (t, category) => {
+  if (!category) return ''
+  return t(`assessment.categories.${category}`, { defaultValue: category.replace(/_/g, ' ') })
 }
 
 const QuestionCard = ({ question, onAnswer, isSubmitting }) => {
+  const { t } = useTranslation()
   const [answer, setAnswer] = useState('')
   const [selectedOption, setSelectedOption] = useState(null)
 
   const handleSubmit = () => {
     if (question.questionType === 'OPEN_TEXT') {
-      if (!answer.trim()) return toast.error('Please enter an answer')
+      if (!answer.trim()) return toast.error(t('assessment.errors.enterAnswer'))
       onAnswer({ answerText: answer })
     } else {
-      if (!selectedOption) return toast.error('Please select an option')
+      if (!selectedOption) return toast.error(t('assessment.errors.selectOption'))
       onAnswer({ answerText: selectedOption.label, answerValue: selectedOption })
     }
     setAnswer('')
@@ -79,7 +84,7 @@ const QuestionCard = ({ question, onAnswer, isSubmitting }) => {
   return (
     <div className="animate-slide-up">
       <div className="text-xs font-bold text-brand-red tracking-widest uppercase mb-1">
-        {question.category?.replace(/_/g, ' ')}
+        {getCategoryLabel(t, question.category)}
       </div>
       <h2 className="text-xl font-bold text-brand-dark mb-6 leading-relaxed">{question.questionText}</h2>
 
@@ -107,7 +112,7 @@ const QuestionCard = ({ question, onAnswer, isSubmitting }) => {
           onChange={(e) => setAnswer(e.target.value)}
           className="input-field mb-6"
           rows={4}
-          placeholder="Type your answer here..."
+          placeholder={t('assessment.placeholders.openText')}
         />
       )}
 
@@ -122,9 +127,9 @@ const QuestionCard = ({ question, onAnswer, isSubmitting }) => {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
             </svg>
-            Saving...
+            {t('assessment.actions.saving')}
           </>
-        ) : 'Submit Answer →'}
+        ) : t('assessment.actions.submit')}
       </button>
     </div>
   )
@@ -134,6 +139,7 @@ export default function Assessment() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { t } = useTranslation()
   const plan = searchParams.get('plan') || 'FREE'
   const intent = searchParams.get('intent') || ''
 
@@ -151,16 +157,17 @@ export default function Assessment() {
   const [guestAnswers, setGuestAnswers] = useState([])
   const [guestSelected, setGuestSelected] = useState(null)
   const [showLeadCapture, setShowLeadCapture] = useState(false)
+  const guestQuestions = useMemo(() => buildGuestQuestions(t), [t])
 
   // If user is not authenticated, run the guest 3-question preview
   const isGuestMode = !isAuthenticated
 
   const handleGuestAnswer = () => {
-    if (!guestSelected) return toast.error('Please select an option')
-    const newAnswers = [...guestAnswers, { questionId: GUEST_QUESTIONS[guestStep].id, answer: guestSelected }]
+    if (!guestSelected) return toast.error(t('assessment.errors.selectOption'))
+    const newAnswers = [...guestAnswers, { questionId: guestQuestions[guestStep].id, answer: guestSelected }]
     setGuestAnswers(newAnswers)
     setGuestSelected(null)
-    if (guestStep < GUEST_QUESTIONS.length - 1) {
+    if (guestStep < guestQuestions.length - 1) {
       setGuestStep((s) => s + 1)
     } else {
       // All 3 guest questions done → show lead capture
@@ -233,7 +240,7 @@ export default function Assessment() {
 
   // ── GUEST MODE RENDER ──────────────────────────────────────────────────────
   if (isGuestMode) {
-    const guestProgress = Math.round((guestStep / (GUEST_QUESTIONS.length + 7)) * 100) // out of ~10 total
+    const guestProgress = Math.round((guestStep / (guestQuestions.length + 7)) * 100) // out of ~10 total
 
     if (showLeadCapture) {
       return (
@@ -242,9 +249,9 @@ export default function Assessment() {
             <div className="card shadow-xl">
               <div className="text-center mb-6">
                 <div className="text-4xl mb-2">🎯</div>
-                <h2 className="text-xl font-bold text-brand-dark">You're doing great!</h2>
+                <h2 className="text-xl font-bold text-brand-dark">{t('assessment.guest.captureTitle')}</h2>
                 <p className="text-gray-500 text-sm mt-1">
-                  Almost there — enter your details to unlock your personalised career report
+                  {t('assessment.guest.captureSubtitle')}
                 </p>
               </div>
               {/* Compact progress indicator */}
@@ -252,7 +259,7 @@ export default function Assessment() {
                 <div className="bg-brand-red h-2 rounded-full transition-all" style={{ width: '30%' }} />
               </div>
               <p className="text-xs text-center text-gray-500 mb-6">
-                ✅ 3 questions done &nbsp;·&nbsp; 7 more to complete your full report
+                {t('assessment.guest.captureProgress')}
               </p>
               <LeadCaptureForm
                 selectedPlan={plan.toLowerCase()}
@@ -265,29 +272,31 @@ export default function Assessment() {
       )
     }
 
-    const gq = GUEST_QUESTIONS[guestStep]
+    const gq = guestQuestions[guestStep]
     return (
       <div className="min-h-screen bg-gray-50 py-10 px-4">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-lg font-bold text-brand-dark">AI Career Assessment</h1>
-              <p className="text-xs text-gray-500">🆓 Free · Question {guestStep + 1} of 10</p>
+              <h1 className="text-lg font-bold text-brand-dark">{t('assessment.title')}</h1>
+              <p className="text-xs text-gray-500">
+                🆓 {t('assessment.plan.free')} · {t('assessment.progress.questionOf', { current: guestStep + 1, total: 10 })}
+              </p>
             </div>
             <div className="text-right">
               <div className="text-2xl font-bold text-brand-red">{guestProgress}%</div>
-              <div className="text-xs text-gray-500">Complete</div>
+              <div className="text-xs text-gray-500">{t('assessment.progress.complete')}</div>
             </div>
           </div>
 
           <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
             <div className="bg-brand-red h-2 rounded-full transition-all duration-500" style={{ width: `${guestProgress}%` }} />
           </div>
-          <p className="text-xs text-brand-red font-medium mb-6">{getMotivationalText(guestProgress)}</p>
+          <p className="text-xs text-brand-red font-medium mb-6">{getMotivationalText(t, guestProgress)}</p>
 
           <div className="card shadow-xl">
             <div className="text-xs font-bold text-brand-red tracking-widest uppercase mb-1">
-              {gq.category.replace(/_/g, ' ')}
+              {getCategoryLabel(t, gq.category)}
             </div>
             <h2 className="text-xl font-bold text-brand-dark mb-6 leading-relaxed">{gq.questionText}</h2>
             <div className="space-y-3 mb-6">
@@ -309,11 +318,13 @@ export default function Assessment() {
               onClick={handleGuestAnswer}
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
-              {guestStep < GUEST_QUESTIONS.length - 1 ? 'Next Question →' : 'See My Results 🎯'}
+              {guestStep < guestQuestions.length - 1
+                ? t('assessment.guest.nextQuestion')
+                : t('assessment.guest.seeResults')}
             </button>
           </div>
           <p className="text-center text-xs text-gray-400 mt-6">
-            🔒 Your answers are private and used only for your career report.
+            {t('assessment.privacyNote')}
           </p>
         </div>
       </div>
@@ -326,15 +337,15 @@ export default function Assessment() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center card max-w-md mx-4">
           <div className="text-6xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-brand-dark mb-2">Assessment Complete!</h2>
-          <p className="text-gray-500 mb-2">Your AI career report is being generated...</p>
+          <h2 className="text-2xl font-bold text-brand-dark mb-2">{t('assessment.status.completeTitle')}</h2>
+          <p className="text-gray-500 mb-2">{t('assessment.status.completeBody')}</p>
           <div className="flex justify-center mt-4">
             <svg className="animate-spin w-8 h-8 text-brand-red" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
             </svg>
           </div>
-          <p className="text-xs text-gray-400 mt-3">Redirecting to your report...</p>
+          <p className="text-xs text-gray-400 mt-3">{t('assessment.status.redirecting')}</p>
         </div>
       </div>
     )
@@ -346,21 +357,21 @@ export default function Assessment() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-lg font-bold text-brand-dark">AI Career Assessment</h1>
+            <h1 className="text-lg font-bold text-brand-dark">{t('assessment.title')}</h1>
             <p className="text-xs text-gray-500">
-              {plan === 'PAID' ? '💎 Premium' : '🆓 Free'} Plan ·{' '}
-              {answeredCount}/{assessment?.totalQuestions || 0} answered
+              {plan === 'PAID' ? `💎 ${t('assessment.plan.premium')}` : `🆓 ${t('assessment.plan.free')}`} {t('assessment.plan.label')} ·{' '}
+              {t('assessment.progress.answered', { count: answeredCount, total: assessment?.totalQuestions || 0 })}
             </p>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-brand-red">{progressPercent}%</div>
-            <div className="text-xs text-gray-500">Complete</div>
+            <div className="text-xs text-gray-500">{t('assessment.progress.complete')}</div>
           </div>
         </div>
 
         {intent === 'paid' && (
           <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-            <span className="font-semibold">Premium path selected:</span> complete this assessment first, then unlock your full premium report at checkout.
+            <span className="font-semibold">{t('assessment.premiumPath.title')}</span> {t('assessment.premiumPath.body')}
           </div>
         )}
 
@@ -371,14 +382,14 @@ export default function Assessment() {
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        <p className="text-xs text-brand-red font-medium mb-6">{getMotivationalText(progressPercent)}</p>
+        <p className="text-xs text-brand-red font-medium mb-6">{getMotivationalText(t, progressPercent)}</p>
 
         {/* Question Card */}
         <div className="card shadow-xl">
           {isLoading ? (
             <div className="text-center py-12">
               <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full mx-auto mb-4" />
-              <p className="text-gray-500 text-sm">🤖 AI is generating your next question...</p>
+              <p className="text-gray-500 text-sm">{t('assessment.status.aiGenerating')}</p>
             </div>
           ) : currentQuestion ? (
             <QuestionCard
@@ -388,7 +399,7 @@ export default function Assessment() {
             />
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-400">Loading question...</p>
+              <p className="text-gray-400">{t('assessment.status.loadingQuestion')}</p>
             </div>
           )}
         </div>
@@ -400,13 +411,13 @@ export default function Assessment() {
               onClick={() => dispatch(completeAssessment(assessment.id))}
               className="text-sm text-gray-500 hover:text-brand-red underline transition-colors"
             >
-              Enough answers – Generate my report now
+              {t('assessment.actions.generateReportNow')}
             </button>
           </div>
         )}
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          🔒 Your answers are private and used only for your career report.
+          {t('assessment.privacyNote')}
         </p>
       </div>
     </div>

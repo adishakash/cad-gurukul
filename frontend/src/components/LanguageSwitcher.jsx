@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { LANGUAGE_OPTIONS, getSupportedLanguage } from '../i18n/languages'
+import { useSelector } from 'react-redux'
+import { LANGUAGE_OPTIONS, getLanguageLabel, getSupportedLanguage } from '../i18n/languages'
+import { studentApi } from '../services/api'
+import { selectIsAuthenticated, selectUser } from '../store/slices/authSlice'
 
 export default function LanguageSwitcher({
   className = '',
@@ -8,10 +11,20 @@ export default function LanguageSwitcher({
   showLabel = false,
 }) {
   const { t, i18n } = useTranslation()
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+  const user = useSelector(selectUser)
   const currentLanguage = getSupportedLanguage(i18n.language)
+  const canSyncProfile = isAuthenticated && user && ['STUDENT', 'PARENT'].includes(user.role)
 
-  const handleChange = (event) => {
-    i18n.changeLanguage(event.target.value)
+  const handleChange = async (event) => {
+    const nextLanguage = event.target.value
+    i18n.changeLanguage(nextLanguage)
+    if (!canSyncProfile) return
+    try {
+      await studentApi.updateMe({ languagePreference: getLanguageLabel(nextLanguage) })
+    } catch (_) {
+      // Best-effort update; ignore failures to avoid blocking the UI.
+    }
   }
 
   const selectClasses = selectClassName ||

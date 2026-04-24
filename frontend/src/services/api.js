@@ -77,6 +77,13 @@ export const leadApi = {
   linkUser:    (leadId)        => api.post('/leads/me/link-user', { leadId }),
 }
 
+// ─── Student Profile API ─────────────────────────────────────────────────────
+export const studentApi = {
+  getMe:              ()       => api.get('/students/me'),
+  updateMe:           (data)   => api.put('/students/me', data),
+  completeOnboarding: (data)   => api.post('/students/me/onboarding', data),
+}
+
 // ─── Report API ───────────────────────────────────────────────────────────────
 export const reportApi = {
   getMyReports:   ()         => api.get('/reports/my'),

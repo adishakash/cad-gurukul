@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import api from '../../services/api'
 import toast from 'react-hot-toast'
+import i18n from '../../i18n'
 
 export const startAssessment = createAsyncThunk('assessment/start', async (accessLevel, { rejectWithValue }) => {
   try {
@@ -99,7 +100,7 @@ const assessmentSlice = createSlice({
         state.isLoading = false
         state.isCompleted = true
         state.reportId = action.payload.reportId
-        toast.success('Assessment complete! Your report is being generated...')
+        toast.success(i18n.t('assessment.status.completeToast'))
       })
       .addCase(completeAssessment.rejected, (state, action) => {
         state.isLoading = false

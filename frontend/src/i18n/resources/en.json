@@ -588,5 +588,194 @@
       "missingAssessment": "Assessment details missing. Please open this from your report page."
     },
     "redirecting": "Redirecting…"
+  },
+  "assessment": {
+    "title": "AI Career Assessment",
+    "plan": {
+      "free": "Free",
+      "premium": "Premium",
+      "label": "Plan"
+    },
+    "progress": {
+      "complete": "Complete",
+      "answered": "{{count}}/{{total}} answered",
+      "questionOf": "Question {{current}} of {{total}}"
+    },
+    "motivational": {
+      "start": "Let's discover your ideal career path 🎯",
+      "early": "Great start! Your profile is taking shape...",
+      "mid": "You're {{percent}}% done. Few more questions to unlock your career path 🎯",
+      "late": "Almost there! The AI is learning a lot about you 🧠",
+      "final": "Final stretch! Your personalised report is nearly ready 🚀"
+    },
+    "guest": {
+      "captureTitle": "You're doing great!",
+      "captureSubtitle": "Almost there — enter your details to unlock your personalised career report",
+      "captureProgress": "✅ 3 questions done · 7 more to complete your full report",
+      "nextQuestion": "Next Question →",
+      "seeResults": "See My Results 🎯"
+    },
+    "premiumPath": {
+      "title": "Premium path selected:",
+      "body": "complete this assessment first, then unlock your full premium report at checkout."
+    },
+    "status": {
+      "aiGenerating": "🤖 AI is generating your next question...",
+      "loadingQuestion": "Loading question...",
+      "completeTitle": "Assessment Complete!",
+      "completeBody": "Your AI career report is being generated...",
+      "redirecting": "Redirecting to your report...",
+      "completeToast": "Assessment complete! Your report is being generated..."
+    },
+    "actions": {
+      "saving": "Saving...",
+      "submit": "Submit Answer →",
+      "generateReportNow": "Enough answers – Generate my report now"
+    },
+    "errors": {
+      "selectOption": "Please select an option",
+      "enterAnswer": "Please enter an answer"
+    },
+    "placeholders": {
+      "openText": "Type your answer here..."
+    },
+    "privacyNote": "🔒 Your answers are private and used only for your career report.",
+    "categories": {
+      "APTITUDE": "Aptitude",
+      "PERSONALITY": "Personality",
+      "INTERESTS": "Interests",
+      "INTEREST": "Interest",
+      "ASPIRATION": "Aspiration",
+      "LEARNING_STYLE": "Learning Style",
+      "LOGICAL_REASONING": "Logical Reasoning",
+      "CREATIVE_INCLINATION": "Creative Inclination",
+      "SOCIAL_ORIENTATION": "Social Orientation",
+      "STEM_NON_STEM": "STEM vs Non-STEM",
+      "VOCATIONAL_ACADEMIC": "Vocational vs Academic"
+    },
+    "guestQuestions": {
+      "q1": {
+        "text": "Even after a long day, which activity makes you feel energized?",
+        "options": {
+          "a": "Solving problems or puzzles",
+          "b": "Creating something — art, music, or writing",
+          "c": "Talking to people, leading or making plans",
+          "d": "Learning how things work through experiments"
+        }
+      },
+      "q2": {
+        "text": "When you imagine your future, which dream feels most like yours?",
+        "options": {
+          "a": "Being a top professional (Doctor, Engineer, CA)",
+          "b": "Starting or running my own business",
+          "c": "Serving the nation — government, law, or social work",
+          "d": "Creating impact through design, content, or innovation"
+        }
+      },
+      "q3": {
+        "text": "Which school subject do you secretly enjoy the most?",
+        "options": {
+          "a": "Maths or Science — numbers and logic excite me",
+          "b": "Commerce or Economics — I think about money and business",
+          "c": "History, Civics, or Geography — society fascinates me",
+          "d": "Arts, Literature, or Languages — expression is my thing"
+        }
+      }
+    }
+  },
+  "report": {
+    "labels": {
+      "free": "🆓 Free Preview",
+      "full": "💎 Full Report",
+      "premium": "🚀 Premium AI Report"
+    },
+    "header": {
+      "title": "Your Career Report",
+      "generated": "Generated {{date}}",
+      "recommendedStream": "Recommended Stream: {{stream}}",
+      "download": "⬇ Download PDF Report",
+      "downloading": "Generating PDF…"
+    },
+    "sections": {
+      "aptitudeProfile": "Your Aptitude Profile",
+      "subjectStrategy": "📚 Subject Strategy",
+      "careersPaid": "Top {{count}} Career Paths",
+      "careersFree": "Top 3 Career Suggestions (Preview)",
+      "roadmaps": "Career Roadmaps",
+      "parents": "For Parents 👨‍👩‍👧",
+      "priority": "Your #1 Priority This Month"
+    },
+    "subjectStrategy": {
+      "mustTake": "Must Take",
+      "recommended": "Recommended",
+      "avoid": "Reconsider"
+    },
+    "lockBanner": {
+      "title": "Your strongest career path is locked 🔒",
+      "bodyPrefix": "You've seen 3 careers. Based on your answers, you are",
+      "bodyEmphasis": "NOT suited for random stream selection",
+      "bodySuffix": ". 47 students from your city unlocked clarity this week.",
+      "ctaStandard": "Full Report — {{price}} →",
+      "ctaPremium": "🚀 Premium AI Report — {{price}} ⭐",
+      "lockedCareerTitle": "🔒 Career Match #{{number}}",
+      "lockedCareerDescription": "Unlock to see this high-fit career recommendation",
+      "hiddenStream": "Hidden",
+      "unlockMore": "🔓 Unlock 4 More Career Matches →"
+    },
+    "careerCard": {
+      "fit": "fit",
+      "stream": "Stream: {{stream}}",
+      "fallbackDescription": "Suggested based on your assessment answers."
+    },
+    "generating": {
+      "title": "Generating Your Report",
+      "body": "Our AI is analysing your answers and crafting your personalised career report. This usually takes 30–60 seconds.",
+      "autoRefresh": "Auto-refreshing every {{seconds}} seconds…"
+    },
+    "errors": {
+      "load": "Could not load report.",
+      "download": "PDF download failed. Try again.",
+      "notFound": "Report not found."
+    },
+    "premiumUpsell": {
+      "label": "Level Up Your Report",
+      "headline": "Unlock your Deep AI Career Blueprint",
+      "benefits": [
+        "Year-by-year roadmap from Class 11 → first job",
+        "Subject strategy with must-take vs avoid list",
+        "Competitive exam timeline (JEE/NEET/CAT)",
+        "Scholarship opportunities",
+        "Exhaustive 7+ career matches with salary outlook"
+      ],
+      "cta": "Upgrade to Premium AI Report — {{price}} →",
+      "note": "Your ₹499 plan is already included. Pay only the difference."
+    },
+    "consultation": {
+      "badge": "🔥 Limited — Only 3 slots/day",
+      "title": "1:1 Career Blueprint Session with Adish Gupta",
+      "body": "45-minute personalised session · Parents can join · Session recording included · 30-day email support",
+      "cta": "Upgrade to 1:1 Session — {{price}} →",
+      "note": "Your Premium AI Report is already included. Pay only the difference for the live counselling session."
+    },
+    "sticky": {
+      "title": "Unlock My Career Path 🔓",
+      "subtitle": "Full Report ₹499 · Premium AI ₹1,999",
+      "cta": "Upgrade →"
+    },
+    "scoreLabels": {
+      "stem": "STEM",
+      "creative": "Creative",
+      "social": "Social",
+      "logical": "Logical",
+      "analytical": "Analytical",
+      "leadership": "Leadership",
+      "communication": "Communication",
+      "technical": "Technical",
+      "entrepreneurial": "Entrepreneurial",
+      "research": "Research"
+    },
+    "chart": {
+      "scoreLabel": "Score"
+    }
   }
 }

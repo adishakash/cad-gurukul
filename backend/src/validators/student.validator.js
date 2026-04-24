@@ -23,7 +23,7 @@ const onboarding = Joi.object({
     .messages({ 'string.pattern.base': 'Enter a valid Indian mobile number' }),
   address: Joi.string().max(500).trim().allow('').optional(),
   languagePreference: Joi.string()
-    .valid('English', 'Hindi', 'Tamil', 'Telugu', 'Marathi', 'Bengali', 'Gujarati', 'Kannada')
+    .valid('English', 'Hindi', 'Bengali', 'Telugu', 'Marathi', 'Tamil', 'Urdu', 'Gujarati', 'Kannada', 'Malayalam', 'Odia', 'Punjabi')
     .default('English'),
   academicScores: Joi.object().pattern(Joi.string(), Joi.number().min(0).max(100)).optional(),
   preferredSubjects: Joi.array().items(Joi.string().trim()).max(10).optional(),
@@ -58,6 +58,8 @@ const updateProfile = Joi.object({
   interests: Joi.array().items(Joi.string().trim()).max(15),
   careerAspirations: Joi.string().max(500).trim().allow(''),
   specialNotes: Joi.string().max(1000).trim().allow(''),
+  languagePreference: Joi.string()
+    .valid('English', 'Hindi', 'Bengali', 'Telugu', 'Marathi', 'Tamil', 'Urdu', 'Gujarati', 'Kannada', 'Malayalam', 'Odia', 'Punjabi'),
 }).min(1);
 
 module.exports = { onboarding, updateProfile };

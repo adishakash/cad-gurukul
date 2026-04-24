@@ -20,6 +20,21 @@ export const SUPPORTED_LANGUAGES = LANGUAGE_OPTIONS.map((option) => option.code)
 
 export const RTL_LANGUAGES = ['ur']
 
+export const LANGUAGE_LOCALES = {
+  en: 'en-IN',
+  hi: 'hi-IN',
+  bn: 'bn-IN',
+  te: 'te-IN',
+  mr: 'mr-IN',
+  ta: 'ta-IN',
+  ur: 'ur-IN',
+  gu: 'gu-IN',
+  kn: 'kn-IN',
+  ml: 'ml-IN',
+  or: 'or-IN',
+  pa: 'pa-IN',
+}
+
 export const normalizeLanguageCode = (language) => {
   if (!language || typeof language !== 'string') return ''
   return language.toLowerCase().split('-')[0].split('_')[0]
@@ -33,6 +48,11 @@ export const isSupportedLanguage = (language) => {
 export const getSupportedLanguage = (language) => {
   const normalized = normalizeLanguageCode(language)
   return SUPPORTED_LANGUAGES.includes(normalized) ? normalized : DEFAULT_LANGUAGE
+}
+
+export const getLanguageLocale = (language) => {
+  const normalized = normalizeLanguageCode(language)
+  return LANGUAGE_LOCALES[normalized] || LANGUAGE_LOCALES[DEFAULT_LANGUAGE]
 }
 
 export const getLanguageLabel = (code) => {

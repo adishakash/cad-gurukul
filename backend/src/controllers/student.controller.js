@@ -109,7 +109,7 @@ const updateProfile = async (req, res) => {
     // no accidental fields (e.g. isOnboardingComplete, userId) can ever be patched.
     const {
       fullName, age, schoolName, city, state,
-      hobbies, interests, careerAspirations, specialNotes,
+      hobbies, interests, careerAspirations, specialNotes, languagePreference,
     } = req.body;
 
     const updateData = {};
@@ -122,6 +122,7 @@ const updateProfile = async (req, res) => {
     if (interests         !== undefined) updateData.interests         = interests;
     if (careerAspirations !== undefined) updateData.careerAspirations = careerAspirations;
     if (specialNotes      !== undefined) updateData.specialNotes      = specialNotes;
+    if (languagePreference !== undefined) updateData.languagePreference = languagePreference;
 
     const updated = await prisma.studentProfile.update({
       where: { userId: req.user.id },

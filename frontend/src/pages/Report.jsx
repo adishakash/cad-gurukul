@@ -5,24 +5,27 @@ import { reportApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
 import PremiumUpsell from '../components/PremiumUpsell'
 import { formatRupees, getUpgradePrice } from '../utils/planPricing'
+import { useTranslation } from 'react-i18next'
+import { getLanguageLocale } from '../i18n/languages'
 
 const POLL_INTERVAL = 12000
 
 const ScoreRadar = ({ evaluation }) => {
+  const { t } = useTranslation()
   if (!evaluation?.categoryScores) return null
   const data = Object.entries(evaluation.categoryScores).map(([key, value]) => ({
-    category: key.replace(/_/g, ' ').slice(0, 14),
+    category: t(`report.scoreLabels.${key}`, { defaultValue: key.replace(/_/g, ' ') }),
     score: Math.round(Number(value) * 10) / 10,
   }))
   return (
     <div className="card mb-6">
-      <h3 className="section-title mb-4">Your Aptitude Profile</h3>
+      <h3 className="section-title mb-4">{t('report.sections.aptitudeProfile')}</h3>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data}>
             <PolarGrid />
             <PolarAngleAxis dataKey="category" tick={{ fontSize: 11 }} />
-            <Radar name="Score" dataKey="score" stroke="#e53e3e" fill="#e53e3e" fillOpacity={0.25} />
+            <Radar name={t('report.chart.scoreLabel')} dataKey="score" stroke="#e53e3e" fill="#e53e3e" fillOpacity={0.25} />
             <Tooltip />
           </RadarChart>
         </ResponsiveContainer>
@@ -31,42 +34,49 @@ const ScoreRadar = ({ evaluation }) => {
   )
 }
 
-const CareerCard = ({ career, index }) => (
-  <div className="card border-l-4 border-brand-red mb-4 animate-slide-up" style={{ animationDelay: `${index * 80}ms` }}>
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <h4 className="font-bold text-brand-dark text-lg">{career.name}</h4>
-        <p className="text-gray-600 text-sm mt-1">{career.description || 'Suggested based on your assessment answers.'}</p>
+const CareerCard = ({ career, index }) => {
+  const { t } = useTranslation()
+  const description = career.description || t('report.careerCard.fallbackDescription')
+
+  return (
+    <div className="card border-l-4 border-brand-red mb-4 animate-slide-up" style={{ animationDelay: `${index * 80}ms` }}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h4 className="font-bold text-brand-dark text-lg">{career.name}</h4>
+          <p className="text-gray-600 text-sm mt-1">{description}</p>
+        </div>
+        {career.fitScore != null && Number.isFinite(Number(career.fitScore)) && (
+          <div className="shrink-0 text-right">
+            <div className="text-2xl font-extrabold text-brand-red">{Math.round(Number(career.fitScore))}%</div>
+            <div className="text-xs text-gray-400">{t('report.careerCard.fit')}</div>
+          </div>
+        )}
       </div>
-      {career.fitScore != null && Number.isFinite(Number(career.fitScore)) && (
-        <div className="shrink-0 text-right">
-          <div className="text-2xl font-extrabold text-brand-red">{Math.round(Number(career.fitScore))}%</div>
-          <div className="text-xs text-gray-400">fit</div>
+      {career.stream && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="bg-orange-50 text-brand-red text-xs font-semibold px-3 py-1 rounded-full">
+            {t('report.careerCard.stream', { stream: career.stream })}
+          </span>
+          {career.subjects?.slice(0, 3).map((s) => (
+            <span key={s} className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">{s}</span>
+          ))}
         </div>
       )}
     </div>
-    {career.stream && (
-      <div className="mt-3 flex flex-wrap gap-2">
-        <span className="bg-orange-50 text-brand-red text-xs font-semibold px-3 py-1 rounded-full">
-          Stream: {career.stream}
-        </span>
-        {career.subjects?.slice(0, 3).map((s) => (
-          <span key={s} className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">{s}</span>
-        ))}
-      </div>
-    )}
-  </div>
-)
+  )
+}
 
 export default function Report() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [showUpsell, setShowUpsell] = useState(false)
   const pollRef = useRef(null)
+  const locale = getLanguageLocale(i18n.language)
 
   const fetchReport = async () => {
     try {
@@ -87,7 +97,7 @@ export default function Report() {
         }
       }
     } catch {
-      toast.error('Could not load report.')
+      toast.error(t('report.errors.load'))
     } finally {
       setLoading(false)
     }
@@ -120,7 +130,7 @@ export default function Report() {
       // Guard: if the response is a JSON error blob (not a real PDF), surface the message
       if (blob.size < 500 || response.headers?.['content-type']?.includes('application/json')) {
         const text = await blob.text()
-        let msg = 'PDF download failed. Try again.'
+        let msg = t('report.errors.download')
         try { msg = JSON.parse(text)?.message || msg } catch (_) {}
         toast.error(msg)
         return
@@ -135,7 +145,7 @@ export default function Report() {
       setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a) }, 100)
     } catch (err) {
       // Axios rejects non-2xx — try to extract server message from blob response
-      let msg = 'PDF download failed. Try again.'
+      let msg = t('report.errors.download')
       try {
         const blobData = err?.response?.data
         if (blobData instanceof Blob) {
@@ -163,18 +173,16 @@ export default function Report() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center card max-w-sm mx-4">
           <div className="text-5xl mb-4">🤖</div>
-          <h2 className="text-xl font-bold text-brand-dark mb-2">Generating Your Report</h2>
-          <p className="text-gray-500 text-sm mb-4">
-            Our AI is analysing your answers and crafting your personalised career report. This usually takes 30–60 seconds.
-          </p>
+          <h2 className="text-xl font-bold text-brand-dark mb-2">{t('report.generating.title')}</h2>
+          <p className="text-gray-500 text-sm mb-4">{t('report.generating.body')}</p>
           <div className="animate-spin w-8 h-8 border-4 border-brand-red border-t-transparent rounded-full mx-auto" />
-          <p className="text-xs text-gray-400 mt-4">Auto-refreshing every 12 seconds…</p>
+          <p className="text-xs text-gray-400 mt-4">{t('report.generating.autoRefresh', { seconds: Math.round(POLL_INTERVAL / 1000) })}</p>
         </div>
       </div>
     )
   }
 
-  if (!report) return <div className="text-center py-20 text-gray-400">Report not found.</div>
+  if (!report) return <div className="text-center py-20 text-gray-400">{t('report.errors.notFound')}</div>
 
   const isPaid       = report.accessLevel === 'PAID'
   const reportType   = report.reportType || (isPaid ? 'standard' : 'free')
@@ -195,9 +203,18 @@ export default function Report() {
   const showUpgradeCTA = !isPaid && Boolean(report.upgradeCTA)
   const premiumUpgradePrice = report.premiumUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'premium'))
   const consultationUpgradePrice = report.consultationUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'consultation'))
+  const premiumUpsellCopy = t('report.premiumUpsell', { returnObjects: true })
+  const premiumHeadline = premiumUpsellCopy?.headline || report.premiumUpsell?.headline || ''
+  const premiumBenefits = Array.isArray(premiumUpsellCopy?.benefits)
+    ? premiumUpsellCopy.benefits
+    : (report.premiumUpsell?.benefits || [])
 
   // Header label
-  const reportLabel = isPremium ? '🚀 Premium AI Report' : isPaid ? '💎 Full Report' : '🆓 Free Preview'
+  const reportLabel = isPremium
+    ? t('report.labels.premium')
+    : isPaid
+      ? t('report.labels.full')
+      : t('report.labels.free')
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -205,13 +222,13 @@ export default function Report() {
         {/* Header */}
         <div className="card shadow-xl mb-6 text-center">
           <div className="text-5xl mb-2">📊</div>
-          <h1 className="text-2xl font-extrabold text-brand-dark">Your Career Report</h1>
+          <h1 className="text-2xl font-extrabold text-brand-dark">{t('report.header.title')}</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {reportLabel} · Generated {new Date(report.generatedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
+            {reportLabel} · {t('report.header.generated', { date: new Date(report.generatedAt).toLocaleDateString(locale, { dateStyle: 'medium' }) })}
           </p>
           {streamRec && (
             <div className="mt-4 inline-block bg-red-50 text-brand-red font-bold px-5 py-2 rounded-full text-sm">
-              Recommended Stream: {streamRec}
+              {t('report.header.recommendedStream', { stream: streamRec })}
             </div>
           )}
           {isPaid && (
@@ -221,7 +238,7 @@ export default function Report() {
                 disabled={downloading}
                 className="btn-primary flex items-center gap-2 mx-auto"
               >
-                {downloading ? 'Generating PDF…' : '⬇ Download PDF Report'}
+                {downloading ? t('report.header.downloading') : t('report.header.download')}
               </button>
             </div>
           )}
@@ -233,23 +250,23 @@ export default function Report() {
         {/* Subject Strategy — premium only */}
         {isPremium && subjectStrategy && (
           <div className="card mb-6 border-l-4 border-purple-500 bg-purple-50">
-            <h2 className="section-title mb-3">📚 Subject Strategy</h2>
+            <h2 className="section-title mb-3">{t('report.sections.subjectStrategy')}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {subjectStrategy.mustTake?.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-green-700 uppercase mb-1">Must Take</div>
+                  <div className="text-xs font-bold text-green-700 uppercase mb-1">{t('report.subjectStrategy.mustTake')}</div>
                   {subjectStrategy.mustTake.map((s) => <div key={s} className="text-sm text-gray-700 bg-green-50 px-2 py-1 rounded mb-1">✓ {s}</div>)}
                 </div>
               )}
               {subjectStrategy.recommended?.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-blue-700 uppercase mb-1">Recommended</div>
+                  <div className="text-xs font-bold text-blue-700 uppercase mb-1">{t('report.subjectStrategy.recommended')}</div>
                   {subjectStrategy.recommended.map((s) => <div key={s} className="text-sm text-gray-700 bg-blue-50 px-2 py-1 rounded mb-1">→ {s}</div>)}
                 </div>
               )}
               {subjectStrategy.avoid?.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-red-700 uppercase mb-1">Reconsider</div>
+                  <div className="text-xs font-bold text-red-700 uppercase mb-1">{t('report.subjectStrategy.avoid')}</div>
                   {subjectStrategy.avoid.map((s) => <div key={s} className="text-sm text-gray-500 bg-red-50 px-2 py-1 rounded mb-1">⚠ {s}</div>)}
                 </div>
               )}
@@ -265,23 +282,25 @@ export default function Report() {
               <span className="text-3xl shrink-0">🔐</span>
               <div className="w-full">
                 <p className="font-bold text-base leading-snug">
-                  Your strongest career path is locked 🔒
+                  {t('report.lockBanner.title')}
                 </p>
                 <p className="text-gray-300 text-sm mt-1">
-                  You've seen 3 careers. Based on your answers, you are <strong className="text-yellow-300">NOT suited for random stream selection</strong>. 47 students from your city unlocked clarity this week.
+                  {t('report.lockBanner.bodyPrefix')}{' '}
+                  <strong className="text-yellow-300">{t('report.lockBanner.bodyEmphasis')}</strong>
+                  {t('report.lockBanner.bodySuffix')}
                 </p>
                 <div className="mt-3 flex flex-col sm:flex-row gap-2">
                   <button
                     onClick={() => { trackEvent('premium_clicked', { source: 'lock_banner', plan: 'standard' }); navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`) }}
                     className="bg-white text-brand-dark font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-100 transition"
                   >
-                    Full Report — ₹499 →
+                    {t('report.lockBanner.ctaStandard', { price: '₹499' })}
                   </button>
                   <button
                     onClick={() => { trackEvent('premium_clicked', { source: 'lock_banner', plan: 'premium' }); navigate(`/payment?plan=premium&assessmentId=${report.assessmentId}`) }}
                     className="bg-brand-red text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-red-700 transition border border-red-400"
                   >
-                    🚀 Premium AI Report — ₹1,999 ⭐
+                    {t('report.lockBanner.ctaPremium', { price: '₹1,999' })}
                   </button>
                 </div>
               </div>
@@ -292,7 +311,9 @@ export default function Report() {
         {/* Careers */}
         <div className="mb-6">
           <h2 className="section-title mb-4">
-            {isPaid ? `Top ${careers.length} Career Paths` : 'Top 3 Career Suggestions (Preview)'}
+            {isPaid
+              ? t('report.sections.careersPaid', { count: careers.length })
+              : t('report.sections.careersFree')}
           </h2>
           {careers.slice(0, isPaid ? undefined : 3).map((career, i) => (
             <CareerCard key={career.name || i} career={career} index={i} />
@@ -303,8 +324,18 @@ export default function Report() {
             <div className="relative mt-2">
               <div className="blur-sm pointer-events-none select-none">
                 {[
-                  { name: '🔒 Career Match #4', fitScore: 87, description: 'Unlock to see this high-fit career recommendation', stream: 'Hidden' },
-                  { name: '🔒 Career Match #5', fitScore: 82, description: 'Unlock to see this high-fit career recommendation', stream: 'Hidden' },
+                  {
+                    name: t('report.lockBanner.lockedCareerTitle', { number: 4 }),
+                    fitScore: 87,
+                    description: t('report.lockBanner.lockedCareerDescription'),
+                    stream: t('report.lockBanner.hiddenStream'),
+                  },
+                  {
+                    name: t('report.lockBanner.lockedCareerTitle', { number: 5 }),
+                    fitScore: 82,
+                    description: t('report.lockBanner.lockedCareerDescription'),
+                    stream: t('report.lockBanner.hiddenStream'),
+                  },
                 ].map((c, i) => <CareerCard key={i} career={c} index={i} />)}
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
@@ -312,7 +343,7 @@ export default function Report() {
                   onClick={() => navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`)}
                   className="bg-brand-red text-white font-bold px-6 py-3 rounded-xl shadow-2xl text-sm hover:bg-red-700 transition"
                 >
-                  🔓 Unlock 4 More Career Matches →
+                  {t('report.lockBanner.unlockMore')}
                 </button>
               </div>
             </div>
@@ -322,7 +353,7 @@ export default function Report() {
         {/* Roadmaps (paid only) */}
         {isPaid && roadmaps.length > 0 && (
           <div className="mb-6">
-            <h2 className="section-title mb-4">Career Roadmaps</h2>
+            <h2 className="section-title mb-4">{t('report.sections.roadmaps')}</h2>
             {roadmaps.map((rm, i) => (
               <div key={i} className="card mb-4">
                 <h3 className="font-bold text-brand-dark mb-3">{rm.career}</h3>
@@ -344,7 +375,7 @@ export default function Report() {
         {/* Parent guidance (paid only) */}
         {isPaid && parentGuidance && (
           <div className="card mb-6 border-l-4 border-brand-navy bg-blue-50">
-            <h2 className="section-title mb-2">For Parents 👨‍👩‍👧</h2>
+            <h2 className="section-title mb-2">{t('report.sections.parents')}</h2>
             <p className="text-gray-700 text-sm leading-relaxed">{parentGuidance}</p>
           </div>
         )}
@@ -353,7 +384,7 @@ export default function Report() {
         {isPremium && report.keyActionNextMonth && (
           <div className="card mb-6 border-2 border-brand-red bg-red-50 text-center">
             <div className="text-3xl mb-2">🎯</div>
-            <h3 className="font-bold text-brand-dark mb-1">Your #1 Priority This Month</h3>
+            <h3 className="font-bold text-brand-dark mb-1">{t('report.sections.priority')}</h3>
             <p className="text-gray-700 text-sm">{report.keyActionNextMonth}</p>
           </div>
         )}
@@ -364,10 +395,10 @@ export default function Report() {
             <div className="flex items-start gap-3">
               <span className="text-3xl">🚀</span>
               <div>
-                <div className="text-xs font-bold uppercase tracking-widest text-purple-600 mb-1">Level Up Your Report</div>
-                <h3 className="font-extrabold text-brand-dark text-lg">{report.premiumUpsell.headline}</h3>
+                <div className="text-xs font-bold uppercase tracking-widest text-purple-600 mb-1">{t('report.premiumUpsell.label')}</div>
+                <h3 className="font-extrabold text-brand-dark text-lg">{premiumHeadline}</h3>
                 <ul className="mt-2 space-y-1">
-                  {report.premiumUpsell.benefits.map((b) => (
+                  {premiumBenefits.map((b) => (
                     <li key={b} className="text-sm text-gray-700 flex items-start gap-2">
                       <span className="text-purple-500 mt-0.5 shrink-0">✓</span>{b}
                     </li>
@@ -377,9 +408,9 @@ export default function Report() {
                   onClick={() => { trackEvent('premium_clicked', { source: 'standard_report_upsell' }); navigate(`/payment?plan=premium&assessmentId=${report.assessmentId}`) }}
                   className="mt-4 bg-purple-600 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-purple-700 transition"
                 >
-                  Upgrade to Premium AI Report — {premiumUpgradePrice} →
+                  {t('report.premiumUpsell.cta', { price: premiumUpgradePrice })}
                 </button>
-                <p className="text-xs text-gray-400 mt-2">Your ₹499 plan is already included. Pay only the difference.</p>
+                <p className="text-xs text-gray-400 mt-2">{t('report.premiumUpsell.note')}</p>
               </div>
             </div>
           </div>
@@ -391,16 +422,16 @@ export default function Report() {
             <div className="flex items-start gap-3">
               <span className="text-3xl">📞</span>
               <div>
-                <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">🔥 Limited — Only 3 slots/day</div>
-                <h3 className="font-extrabold text-brand-dark text-lg">1:1 Career Blueprint Session with Adish Gupta</h3>
-                <p className="text-sm text-gray-600 mt-1">45-minute personalised session · Parents can join · Session recording included · 30-day email support</p>
+                <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">{t('report.consultation.badge')}</div>
+                <h3 className="font-extrabold text-brand-dark text-lg">{t('report.consultation.title')}</h3>
+                <p className="text-sm text-gray-600 mt-1">{t('report.consultation.body')}</p>
                 <button
                   onClick={() => { trackEvent('premium_clicked', { source: 'premium_report_consultation' }); navigate(`/payment?plan=consultation${report.assessmentId ? `&assessmentId=${report.assessmentId}` : ''}`) }}
                   className="mt-4 bg-orange-500 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-orange-600 transition"
                 >
-                  Upgrade to 1:1 Session — {consultationUpgradePrice} →
+                  {t('report.consultation.cta', { price: consultationUpgradePrice })}
                 </button>
-                <p className="text-xs text-gray-400 mt-2">Your Premium AI Report is already included. Pay only the difference for the live counselling session.</p>
+                <p className="text-xs text-gray-400 mt-2">{t('report.consultation.note')}</p>
               </div>
             </div>
           </div>
@@ -422,14 +453,14 @@ export default function Report() {
       {showUpgradeCTA && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-brand-red text-white px-4 py-3 flex items-center justify-between shadow-2xl md:hidden">
           <div>
-            <div className="font-bold text-sm">Unlock My Career Path 🔓</div>
-            <div className="text-xs text-red-200">Full Report ₹499 · Premium AI ₹1,999</div>
+            <div className="font-bold text-sm">{t('report.sticky.title')}</div>
+            <div className="text-xs text-red-200">{t('report.sticky.subtitle')}</div>
           </div>
           <button
             onClick={() => { trackEvent('premium_cta_clicked', { source: 'sticky_bar' }); navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`) }}
             className="bg-white text-brand-red font-bold text-sm px-4 py-2 rounded-lg shrink-0"
           >
-            Upgrade →
+            {t('report.sticky.cta')}
           </button>
         </div>
       )}

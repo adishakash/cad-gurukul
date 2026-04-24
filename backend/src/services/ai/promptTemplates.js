@@ -18,6 +18,47 @@ Your task is to generate ONE thoughtful, age-appropriate assessment question to 
 The question must be culturally appropriate for Indian students and easy to understand.
 Always respond in valid JSON only — no markdown, no explanations, just the JSON object.`;
 
+const LANGUAGE_PREFERENCE_MAP = {
+  en: 'English',
+  english: 'English',
+  hi: 'Hindi (Devanagari script)',
+  hindi: 'Hindi (Devanagari script)',
+  bn: 'Bengali (Bangla script)',
+  bengali: 'Bengali (Bangla script)',
+  te: 'Telugu',
+  telugu: 'Telugu',
+  mr: 'Marathi (Devanagari script)',
+  marathi: 'Marathi (Devanagari script)',
+  ta: 'Tamil',
+  tamil: 'Tamil',
+  ur: 'Urdu (Arabic script)',
+  urdu: 'Urdu (Arabic script)',
+  gu: 'Gujarati',
+  gujarati: 'Gujarati',
+  kn: 'Kannada',
+  kannada: 'Kannada',
+  ml: 'Malayalam',
+  malayalam: 'Malayalam',
+  or: 'Odia',
+  odia: 'Odia',
+  pa: 'Punjabi (Gurmukhi script)',
+  punjabi: 'Punjabi (Gurmukhi script)',
+};
+
+const resolveLanguagePreference = (profile) => {
+  const raw = String(profile?.languagePreference || '').trim();
+  if (!raw) return 'English';
+  const normalized = raw.toLowerCase();
+  return LANGUAGE_PREFERENCE_MAP[normalized] || raw;
+};
+
+const buildLanguageInstruction = (profile) => {
+  const language = resolveLanguagePreference(profile);
+  const isEnglish = language.toLowerCase().includes('english');
+  const scriptNote = isEnglish ? '' : ' Use native script (not romanized).';
+  return `Language Preference: ${language}\nIMPORTANT: Write all student-facing text in ${language}.${scriptNote} Keep JSON keys in English.`;
+};
+
 /**
  * Build question generation user prompt
  */
@@ -48,6 +89,8 @@ Student Profile:
 - Career Aspirations: ${profile.careerAspirations || 'Not specified'}
 - Academic Scores: ${profile.academicScores ? JSON.stringify(profile.academicScores) : 'Not provided'}
 
+${buildLanguageInstruction(profile)}
+
 Assessment Info:
 - Question ${questionNumber} of ${totalQuestions}
 - Target Category: ${targetCategory}
@@ -70,6 +113,7 @@ Respond with ONLY this JSON:
 For RATING_SCALE: options = [{"label": "1 - Strongly Disagree", "value": "1"}, ..., {"label": "5 - Strongly Agree", "value": "5"}]
 For YES_NO: options = [{"label": "Yes", "value": "yes"}, {"label": "No", "value": "no"}]
 For OPEN_TEXT: options = null
+Translate the questionText and option labels into the language preference above.
 `;
 };
 
@@ -99,6 +143,8 @@ Student Profile:
 - Interests: ${(profile.interests || []).join(', ')}
 - Career Aspirations: ${profile.careerAspirations || 'None specified'}
 
+${buildLanguageInstruction(profile)}
+
 Assessment Responses (${questionsAndAnswers.length} questions):
 ${qaText}
 
@@ -117,7 +163,7 @@ Evaluate and respond with ONLY this JSON structure:
     "research": 0-100
   },
   "personalityType": "brief personality description",
-  "learningStyle": "visual|auditory|kinesthetic|reading-writing",
+  "learningStyle": "short learning-style label (e.g. visual/auditory/kinesthetic/reading-writing)",
   "strengthAreas": ["area1", "area2", "area3"],
   "improvementAreas": ["area1", "area2"],
   "confidenceScore": 0-100
@@ -143,6 +189,8 @@ Aspirations: ${profile.careerAspirations || 'Not specified'}
 Scores: ${JSON.stringify(scores)}
 Personality: ${personalityType}
 Strengths: ${strengthAreas.join(', ')}
+
+${buildLanguageInstruction(profile)}
 
 IMPORTANT: topCareers must be structured objects with a genuine fitScore computed from the
 provided Scores above. fitScore must reflect how well the student's aptitude and interest
@@ -197,6 +245,8 @@ Student Profile:
 - Interests: ${(profile.interests || []).join(', ')}
 - Career Aspirations: ${profile.careerAspirations || 'Not specified'}
 - Academic Scores: ${JSON.stringify(profile.academicScores || {})}
+
+${buildLanguageInstruction(profile)}
 
 Assessment Results:
 - Personality Type: ${personalityType}
@@ -283,6 +333,8 @@ Student Profile:
 - Interests: ${(profile.interests || []).join(', ')}
 - Career Aspirations: ${profile.careerAspirations || 'Not specified'}
 - Academic Scores: ${JSON.stringify(profile.academicScores || {})}
+
+${buildLanguageInstruction(profile)}
 
 Assessment Results:
 - Personality Type: ${personalityType}
