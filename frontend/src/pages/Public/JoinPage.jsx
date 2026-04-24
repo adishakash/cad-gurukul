@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { joiningApi } from '../../services/api'
+import { splitGstFromInclusive } from '../../utils/gst'
 
 const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js'
 
@@ -159,10 +160,13 @@ export default function JoinPage() {
   }
 
   // status === 'ready'
-  const discountAmount = link
-    ? Math.round((link.feeAmountPaise * (link.effectiveDiscountPct || 0)) / 100)
-    : 0
-  const netPaise = link ? link.feeAmountPaise - discountAmount : 0
+  const discountAmount = link?.discountAmountPaise
+    ?? Math.round((link?.feeAmountPaise || 0) * (link?.discountPct || 0) / 100)
+  const netPaise = link?.netAmountPaise ?? Math.max(0, (link?.feeAmountPaise || 0) - discountAmount)
+  const gstRate = link?.gstRate ?? 18
+  const gstIncluded = link?.gstIncluded ?? true
+  const gstBreakdown = splitGstFromInclusive(netPaise, gstRate)
+  const gstAmount = link?.gstAmountPaise ?? gstBreakdown.gstPaise
   const fmt = (paise) => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
   return (
@@ -185,8 +189,14 @@ export default function JoinPage() {
           </div>
           {discountAmount > 0 && (
             <div className="flex justify-between text-sm text-green-600 mt-1">
-              <span>Discount ({link?.effectiveDiscountPct}%)</span>
+              <span>Discount ({link?.discountPct}%)</span>
               <span>− {fmt(discountAmount)}</span>
+            </div>
+          )}
+          {gstIncluded && gstAmount > 0 && (
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>GST ({gstRate}%) included</span>
+              <span>{fmt(gstAmount)}</span>
             </div>
           )}
           <div className="flex justify-between font-semibold text-gray-800 mt-2 text-base">

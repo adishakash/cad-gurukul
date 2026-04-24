@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { testlinkApi } from '../../services/api'
+import { splitGstFromInclusive } from '../../utils/gst'
 
 const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js'
 
@@ -174,6 +175,10 @@ export default function TestLinkPage() {
   // status === 'ready'
   const discountAmt = link ? link.discountAmountPaise : 0
   const netPaise    = link ? link.netAmountPaise : 0
+  const gstRate = link?.gstRate ?? 18
+  const gstIncluded = link?.gstIncluded ?? true
+  const gstBreakdown = splitGstFromInclusive(netPaise, gstRate)
+  const gstAmount = link?.gstAmountPaise ?? gstBreakdown.gstPaise
 
   return (
     <div className="min-h-screen bg-indigo-50 flex items-center justify-center px-4 py-10">
@@ -202,6 +207,12 @@ export default function TestLinkPage() {
             <div className="flex justify-between text-sm text-green-600 mt-1">
               <span>Discount ({link?.discountPct}%)</span>
               <span>− {fmt(discountAmt)}</span>
+            </div>
+          )}
+          {gstIncluded && gstAmount > 0 && (
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>GST ({gstRate}%) included</span>
+              <span>{fmt(gstAmount)}</span>
             </div>
           )}
           <div className="flex justify-between font-semibold text-gray-800 mt-2 text-base">

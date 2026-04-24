@@ -6,8 +6,33 @@ const { createCcSaleAndCommission } = require('../services/cc/ccPaymentService')
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const config = require('../config');
+const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
 
 const COMMISSION_RATE = 0.70; // 70% on net sale amount
+
+const buildGstFromSubtotal = (subtotalPaise) => {
+  const rate = config.gst?.rate || 0;
+
+  if (config.gst?.included === false) {
+    const { totalPaise, gstPaise } = addGstToExclusive(subtotalPaise, rate);
+    return {
+      gstRate: rate,
+      gstIncluded: false,
+      gstAmountPaise: gstPaise,
+      taxableAmountPaise: subtotalPaise,
+      totalAmountPaise: totalPaise,
+    };
+  }
+
+  const { basePaise, gstPaise } = splitGstFromInclusive(subtotalPaise, rate);
+  return {
+    gstRate: rate,
+    gstIncluded: true,
+    gstAmountPaise: gstPaise,
+    taxableAmountPaise: basePaise,
+    totalAmountPaise: subtotalPaise,
+  };
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -166,7 +191,8 @@ const resolveTestLink = async (req, res) => {
     }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
-    const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
+    const subtotalPaise = link.feeAmountPaise - discountAmountPaise;
+    const gstBreakdown = buildGstFromSubtotal(subtotalPaise);
 
     return successResponse(res, {
       code: link.code,
@@ -177,7 +203,12 @@ const resolveTestLink = async (req, res) => {
       feeAmountPaise: link.feeAmountPaise,
       discountPct: effectiveDiscountPct,
       discountAmountPaise,
-      netAmountPaise,
+      netAmountPaise: gstBreakdown.totalAmountPaise,
+      gstRate: gstBreakdown.gstRate,
+      gstIncluded: gstBreakdown.gstIncluded,
+      gstAmountPaise: gstBreakdown.gstAmountPaise,
+      taxableAmountPaise: gstBreakdown.taxableAmountPaise,
+      totalAmountPaise: gstBreakdown.totalAmountPaise,
       isUsed: link.isUsed,
       isExpired,
       expiresAt: link.expiresAt,
@@ -226,11 +257,13 @@ const createTestOrder = async (req, res) => {
     }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
-    const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
+    const subtotalPaise = link.feeAmountPaise - discountAmountPaise;
+    const gstBreakdown = buildGstFromSubtotal(subtotalPaise);
+    const totalAmountPaise = gstBreakdown.totalAmountPaise;
 
     // ── Free-access fast path (100% discount → net = 0) ──────────────────────
     // Razorpay does not accept ₹0 orders. Skip payment gateway entirely.
-    if (netAmountPaise === 0) {
+    if (totalAmountPaise === 0) {
       const freePaymentId = `free_${link.code}_${Date.now()}`;
 
       await prisma.ccTestLink.update({
@@ -267,7 +300,7 @@ const createTestOrder = async (req, res) => {
     }
 
     const order = await createRazorpayOrder({
-      amount: netAmountPaise,
+      amount: totalAmountPaise,
       currency: 'INR',
       receipt: `tl_${link.code}_${Date.now()}`,
       notes: {
@@ -285,21 +318,26 @@ const createTestOrder = async (req, res) => {
       data: {
         testOrderId:          order.id,
         testPaymentStatus:    'initiated',
-        testNetAmountPaise:   netAmountPaise,
+        testNetAmountPaise:   totalAmountPaise,
         ...(candidateName  && !link.candidateName  ? { candidateName }  : {}),
         ...(candidateEmail && !link.candidateEmail ? { candidateEmail } : {}),
         ...(candidatePhone && !link.candidatePhone ? { candidatePhone } : {}),
       },
     });
 
-    logger.info('[CC] Test order created', { code, orderId: order.id, netAmountPaise });
+    logger.info('[CC] Test order created', { code, orderId: order.id, netAmountPaise: totalAmountPaise });
 
     return successResponse(res, {
       orderId:             order.id,
-      amountPaise:         netAmountPaise,
+      amountPaise:         totalAmountPaise,
       grossAmountPaise:    link.feeAmountPaise,
       discountAmountPaise,
       discountPct:         effectiveDiscountPct,
+      gstRate:             gstBreakdown.gstRate,
+      gstIncluded:         gstBreakdown.gstIncluded,
+      gstAmountPaise:      gstBreakdown.gstAmountPaise,
+      taxableAmountPaise:  gstBreakdown.taxableAmountPaise,
+      totalAmountPaise:    gstBreakdown.totalAmountPaise,
       currency:            'INR',
       keyId:               config.razorpay.keyId,
       ccName:              link.ccUser.name,
@@ -353,8 +391,12 @@ const verifyTestPayment = async (req, res) => {
     }
 
     const grossAmountPaise = link.feeAmountPaise;
-    const netAmountPaise   = link.testNetAmountPaise ?? link.feeAmountPaise;
-    const discountAmountPaise = grossAmountPaise - netAmountPaise;
+    const totalAmountPaise = link.testNetAmountPaise ?? link.feeAmountPaise;
+    const { basePaise: taxableAmountPaise } = splitGstFromInclusive(totalAmountPaise, config.gst?.rate);
+    const discountAmountPaise = config.gst?.included === false
+      ? grossAmountPaise - taxableAmountPaise
+      : grossAmountPaise - totalAmountPaise;
+    const netAmountPaise = taxableAmountPaise;
 
     const { sale, isNew } = await createCcSaleAndCommission({
       ccUserId:          link.ccUserId,

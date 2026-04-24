@@ -10,6 +10,7 @@ const analytics = require('../services/analytics/analyticsService');
 const { sendConsultationSlotEmail } = require('../services/email/emailService');
 const { getEffectiveChargeAmount } = require('../utils/testPricing');
 const { safeLeadUpdate } = require('../utils/leadStatusHelper');
+const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
 const {
   PLAN_PRICES,
   normalizePlanType,
@@ -23,6 +24,30 @@ const {
 const PAID_REPORT_PRICE_RUPEES = PLAN_PRICES.standard;
 
 const getAmountRupeesForPlan = (planType = 'standard') => PLAN_PRICES[planType] || PAID_REPORT_PRICE_RUPEES;
+
+const buildGstBreakdown = (subtotalPaise) => {
+  const rate = config.gst?.rate || 0;
+
+  if (config.gst?.included === false) {
+    const { totalPaise, gstPaise } = addGstToExclusive(subtotalPaise, rate);
+    return {
+      gstRate: rate,
+      gstIncluded: false,
+      gstAmountPaise: gstPaise,
+      taxableAmountPaise: subtotalPaise,
+      totalAmountPaise: totalPaise,
+    };
+  }
+
+  const { basePaise, gstPaise } = splitGstFromInclusive(subtotalPaise, rate);
+  return {
+    gstRate: rate,
+    gstIncluded: true,
+    gstAmountPaise: gstPaise,
+    taxableAmountPaise: basePaise,
+    totalAmountPaise: subtotalPaise,
+  };
+};
 
 const getLeadStatusAfterPayment = (planType, hasQueuedReport) => {
   if (planType === 'consultation') return 'counselling_interested';
@@ -79,6 +104,8 @@ const buildQuote = ({ currentPlan, requestedPlan }) => {
   const effectivePrice = getUpgradePrice(sourcePlan, targetPlan);
   const alreadyIncluded = isPlanIncluded(sourcePlan, targetPlan);
   const alreadyOwned = sourcePlan === targetPlan && sourcePlan !== 'free';
+  const effectivePricePaise = rupeesToPaise(effectivePrice);
+  const gstBreakdown = buildGstBreakdown(effectivePricePaise);
 
   return {
     currentPlan: sourcePlan,
@@ -92,6 +119,13 @@ const buildQuote = ({ currentPlan, requestedPlan }) => {
     alreadyIncluded,
     alreadyOwned,
     canPurchase: !alreadyIncluded && effectivePrice > 0,
+    gstRate: gstBreakdown.gstRate,
+    gstIncluded: gstBreakdown.gstIncluded,
+    gstAmountPaise: gstBreakdown.gstAmountPaise,
+    taxableAmountPaise: gstBreakdown.taxableAmountPaise,
+    totalAmountPaise: gstBreakdown.totalAmountPaise,
+    gstAmountLabel: formatRupees(gstBreakdown.gstAmountPaise / 100),
+    taxableAmountLabel: formatRupees(gstBreakdown.taxableAmountPaise / 100),
   };
 };
 
@@ -164,11 +198,13 @@ const createOrder = async (req, res) => {
 
     const amountRupees = quote.effectivePrice;
     const amountPaise  = rupeesToPaise(amountRupees);
+    const gstBreakdown = buildGstBreakdown(amountPaise);
+    const orderAmountPaise = gstBreakdown.totalAmountPaise;
 
     // ── Test pricing override ─────────────────────────────────────────────────
     // In PAYMENT_TEST_MODE the charge sent to Razorpay is reduced (₹1/₹2/₹3).
     // The DB record always stores the real catalog price (amountPaise).
-    const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(amountPaise);
+    const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(orderAmountPaise);
     if (isTestMode) {
       logger.warn('[Payment] TEST MODE — charging reduced amount', {
         planType, originalPaise: amountPaise, chargePaise: chargeAmountPaise,
@@ -197,6 +233,11 @@ const createOrder = async (req, res) => {
           planType,
           currentPlan,
           effectiveAmountRupees: amountRupees,
+          gstRate: gstBreakdown.gstRate,
+          gstIncluded: gstBreakdown.gstIncluded,
+          gstAmountPaise: gstBreakdown.gstAmountPaise,
+          taxableAmountPaise: gstBreakdown.taxableAmountPaise,
+          totalAmountPaise: gstBreakdown.totalAmountPaise,
           ...(isTestMode ? { testMode: true, chargeAmountPaise } : {}),
         },
       },
@@ -497,8 +538,12 @@ const handleWebhook = async (req, res) => {
         try {
           const { createCcSaleAndCommission } = require('../services/cc/ccPaymentService');
           const grossAmountPaise = testLink.feeAmountPaise;
-          const netAmountPaise   = testLink.testNetAmountPaise ?? testLink.feeAmountPaise;
-          const discountAmountPaise = grossAmountPaise - netAmountPaise;
+          const totalAmountPaise = testLink.testNetAmountPaise ?? testLink.feeAmountPaise;
+          const { basePaise: taxableAmountPaise } = splitGstFromInclusive(totalAmountPaise, config.gst?.rate);
+          const discountAmountPaise = config.gst?.included === false
+            ? grossAmountPaise - taxableAmountPaise
+            : grossAmountPaise - totalAmountPaise;
+          const netAmountPaise = taxableAmountPaise;
 
           await createCcSaleAndCommission({
             ccUserId:          testLink.ccUserId,
@@ -530,8 +575,12 @@ const handleWebhook = async (req, res) => {
       try {
         const { createCclSaleAndCommission } = require('../services/ccl/cclPaymentService');
         const grossAmountPaise = joiningLink.feeAmountPaise;
-        const netAmountPaise   = joiningLink.joiningNetAmountPaise ?? joiningLink.feeAmountPaise;
-        const discountAmountPaise = grossAmountPaise - netAmountPaise;
+        const totalAmountPaise = joiningLink.joiningNetAmountPaise ?? joiningLink.feeAmountPaise;
+        const { basePaise: taxableAmountPaise } = splitGstFromInclusive(totalAmountPaise, config.gst?.rate);
+        const discountAmountPaise = config.gst?.included === false
+          ? grossAmountPaise - taxableAmountPaise
+          : grossAmountPaise - totalAmountPaise;
+        const netAmountPaise = taxableAmountPaise;
 
         await createCclSaleAndCommission({
           cclUserId:         joiningLink.cclUserId,

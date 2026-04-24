@@ -6,10 +6,35 @@ const { createCclSaleAndCommission } = require('../services/ccl/cclPaymentServic
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const config = require('../config');
+const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
 
 const COMMISSION_RATE = 0.10; // 10% on net sale amount
 const MAX_DISCOUNT_PCT = 20;  // hard cap — also validated in Joi schema
 const JOINING_FEE_PAISE = 1200000; // ₹12,000
+
+const buildGstFromSubtotal = (subtotalPaise) => {
+  const rate = config.gst?.rate || 0;
+
+  if (config.gst?.included === false) {
+    const { totalPaise, gstPaise } = addGstToExclusive(subtotalPaise, rate);
+    return {
+      gstRate: rate,
+      gstIncluded: false,
+      gstAmountPaise: gstPaise,
+      taxableAmountPaise: subtotalPaise,
+      totalAmountPaise: totalPaise,
+    };
+  }
+
+  const { basePaise, gstPaise } = splitGstFromInclusive(subtotalPaise, rate);
+  return {
+    gstRate: rate,
+    gstIncluded: true,
+    gstAmountPaise: gstPaise,
+    taxableAmountPaise: basePaise,
+    totalAmountPaise: subtotalPaise,
+  };
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -181,7 +206,8 @@ const resolveJoiningLink = async (req, res) => {
     }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
-    const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
+    const subtotalPaise = link.feeAmountPaise - discountAmountPaise;
+    const gstBreakdown = buildGstFromSubtotal(subtotalPaise);
 
     return successResponse(res, {
       code: link.code,
@@ -191,7 +217,12 @@ const resolveJoiningLink = async (req, res) => {
       feeAmountPaise: link.feeAmountPaise,
       discountPct: effectiveDiscountPct,
       discountAmountPaise,
-      netAmountPaise,
+      netAmountPaise: gstBreakdown.totalAmountPaise,
+      gstRate: gstBreakdown.gstRate,
+      gstIncluded: gstBreakdown.gstIncluded,
+      gstAmountPaise: gstBreakdown.gstAmountPaise,
+      taxableAmountPaise: gstBreakdown.taxableAmountPaise,
+      totalAmountPaise: gstBreakdown.totalAmountPaise,
       isUsed: link.isUsed,
       isExpired,
       expiresAt: link.expiresAt,
@@ -239,10 +270,12 @@ const createJoiningOrder = async (req, res) => {
     }
 
     const discountAmountPaise = Math.round(link.feeAmountPaise * effectiveDiscountPct / 100);
-    const netAmountPaise = link.feeAmountPaise - discountAmountPaise;
+    const subtotalPaise = link.feeAmountPaise - discountAmountPaise;
+    const gstBreakdown = buildGstFromSubtotal(subtotalPaise);
+    const totalAmountPaise = gstBreakdown.totalAmountPaise;
 
     const order = await createRazorpayOrder({
-      amount: netAmountPaise,
+      amount: totalAmountPaise,
       currency: 'INR',
       receipt: `jl_${link.code}_${Date.now()}`,
       notes: {
@@ -260,7 +293,7 @@ const createJoiningOrder = async (req, res) => {
       data: {
         joiningOrderId:        order.id,
         joiningPaymentStatus:  'initiated',
-        joiningNetAmountPaise: netAmountPaise,
+        joiningNetAmountPaise: totalAmountPaise,
         // Pre-fill candidate info if not already set
         ...(candidateName  && !link.candidateName  ? { candidateName }  : {}),
         ...(candidateEmail && !link.candidateEmail ? { candidateEmail } : {}),
@@ -268,14 +301,19 @@ const createJoiningOrder = async (req, res) => {
       },
     });
 
-    logger.info('[CCL] Joining order created', { code, orderId: order.id, netAmountPaise });
+    logger.info('[CCL] Joining order created', { code, orderId: order.id, netAmountPaise: totalAmountPaise });
 
     return successResponse(res, {
       orderId:             order.id,
-      amountPaise:         netAmountPaise,
+      amountPaise:         totalAmountPaise,
       grossAmountPaise:    link.feeAmountPaise,
       discountAmountPaise,
       discountPct:         effectiveDiscountPct,
+      gstRate:             gstBreakdown.gstRate,
+      gstIncluded:         gstBreakdown.gstIncluded,
+      gstAmountPaise:      gstBreakdown.gstAmountPaise,
+      taxableAmountPaise:  gstBreakdown.taxableAmountPaise,
+      totalAmountPaise:    gstBreakdown.totalAmountPaise,
       currency:            'INR',
       keyId:               config.razorpay.keyId,
       cclName:             link.cclUser.name,
@@ -329,8 +367,12 @@ const verifyJoiningPayment = async (req, res) => {
     }
 
     const grossAmountPaise = link.feeAmountPaise;
-    const netAmountPaise   = link.joiningNetAmountPaise ?? link.feeAmountPaise;
-    const discountAmountPaise = grossAmountPaise - netAmountPaise;
+    const totalAmountPaise = link.joiningNetAmountPaise ?? link.feeAmountPaise;
+    const { basePaise: taxableAmountPaise } = splitGstFromInclusive(totalAmountPaise, config.gst?.rate);
+    const discountAmountPaise = config.gst?.included === false
+      ? grossAmountPaise - taxableAmountPaise
+      : grossAmountPaise - totalAmountPaise;
+    const netAmountPaise = taxableAmountPaise;
 
     const { sale, isNew } = await createCclSaleAndCommission({
       cclUserId:            link.cclUserId,

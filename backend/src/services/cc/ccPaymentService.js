@@ -33,7 +33,7 @@ const COMMISSION_RATE = 0.70; // 70% of net sale amount
  * @param {string} params.razorpayPaymentId
  * @param {number} params.grossAmountPaise - fee before discount
  * @param {number} params.discountAmountPaise - discount applied (≥0)
- * @param {number} params.netAmountPaise   - amount actually charged
+ * @param {number} params.netAmountPaise   - pre-tax net amount (GST excluded)
  * @returns {{ sale, commission, isNew }}
  */
 async function createCcSaleAndCommission({

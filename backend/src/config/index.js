@@ -8,6 +8,11 @@ const parseInteger = (value, fallbackValue) => {
   return Number.isFinite(parsedValue) ? parsedValue : fallbackValue;
 };
 
+const parseFloatValue = (value, fallbackValue) => {
+  const parsedValue = parseFloat(value);
+  return Number.isFinite(parsedValue) ? parsedValue : fallbackValue;
+};
+
 const setSearchParamIfMissing = (url, key, value) => {
   if (value === undefined || value === null || value === '') {
     return;
@@ -106,6 +111,11 @@ const config = {
     keyId: process.env.RAZORPAY_KEY_ID,
     keySecret: process.env.RAZORPAY_KEY_SECRET,
     webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
+  },
+
+  gst: {
+    rate: parseFloatValue(process.env.GST_RATE, 18),
+    included: process.env.GST_INCLUDED !== 'false',
   },
 
   email: {

@@ -6,6 +6,7 @@ import { selectUser } from '../store/slices/authSlice'
 import { leadApi, paymentApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
 import { isPlanIncluded, formatRupees } from '../utils/planPricing'
+import { splitGstFromInclusive } from '../utils/gst'
 
 // ── Value ladder plan config ──────────────────────────────────────────────────
 const PLAN_CONFIG = {
@@ -211,6 +212,11 @@ export default function Payment() {
   const isIncluded = Boolean(quote?.alreadyIncluded)
   const isOwned = Boolean(quote?.alreadyOwned)
   const isUpgrade = Boolean(quote?.isUpgrade)
+  const gstRate = quote?.gstRate ?? 18
+  const gstIncluded = quote?.gstIncluded ?? true
+  const displayTotalPaise = Math.round((displayAmount || 0) * 100)
+  const fallbackGst = splitGstFromInclusive(displayTotalPaise, gstRate)
+  const gstAmountPaise = quote?.gstAmountPaise ?? fallbackGst.gstPaise
   const planSwitcherEntries = Object.entries(PLAN_CONFIG).filter(([id]) => (
     id === planId || !isPlanIncluded(currentPlan, id)
   ))
@@ -258,6 +264,11 @@ export default function Payment() {
                     ? `Upgrade from ${currentPlan} by paying only the difference`
                     : 'One-time payment · No subscription · Lifetime access'}
             </p>
+            {gstIncluded && gstAmountPaise > 0 && (
+              <p className="text-[11px] text-gray-400 mt-1">
+                GST ({gstRate}%) included: {formatRupees(gstAmountPaise / 100)}
+              </p>
+            )}
           </div>
 
           <ul className="space-y-2 mb-6">
