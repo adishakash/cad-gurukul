@@ -1,0 +1,591 @@
+{
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "howItWorks": "How It Works",
+    "plansPricing": "Plans & Pricing",
+    "contact": "Contact"
+  },
+  "auth": {
+    "dashboard": "Dashboard",
+    "logout": "Logout",
+    "login": "Login",
+    "getStartedFree": "Get Started Free"
+  },
+  "theme": {
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "toggleTheme": "Toggle theme"
+  },
+  "header": {
+    "toggleMenu": "Toggle menu"
+  },
+  "language": {
+    "label": "Language",
+    "switcherAria": "Select language"
+  },
+  "footer": {
+    "tagline": "AI-powered career guidance platform helping Indian students in Class 10, 11, and 12 discover their ideal career path, stream, and subjects through adaptive assessment.",
+    "madeWithLove": "Made with love for Indian students",
+    "quickLinks": "Quick Links",
+    "students": "Students",
+    "links": {
+      "home": "Home",
+      "about": "About Us",
+      "howItWorks": "How It Works",
+      "pricing": "Pricing",
+      "contact": "Contact"
+    },
+    "studentsLinks": {
+      "freeAssessment": "Free Assessment",
+      "premiumReport": "Premium Report {{price}}",
+      "login": "Login",
+      "adminLogin": "Admin Login",
+      "internalPortal": "Internal Portal"
+    },
+    "policies": {
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "refund": "Refund Policy"
+    },
+    "rights": "All rights reserved."
+  },
+  "home": {
+    "hero": {
+      "badge": "⚡ 127 students got career clarity today — join them",
+      "title": "Don't Let the Wrong Stream",
+      "titleEmphasis": " Cost You 3 Years",
+      "subtitle": "India's AI career test for Class 8–12. Takes 10 minutes. Gives you clarity that counsellors charge ₹5,000+ for.",
+      "quotePrefix": "\"Based on your answers, you are",
+      "quoteEmphasis": "NOT suited for random stream selection",
+      "quoteSuffix": ". Find out your exact path before it's too late.\"",
+      "ctaPrimary": "Start Free Career Test 🎯",
+      "ctaSecondary": "See How It Works",
+      "trust": {
+        "free": "Free — no login needed to start",
+        "time": "Only 10 minutes",
+        "secure": "Your data is safe"
+      }
+    },
+    "floatingCards": {
+      "streamSelection": "Stream Selection",
+      "aptitudeAnalysis": "Aptitude Analysis",
+      "roadmap": "3-Year Roadmap",
+      "collegeGuidance": "College Guidance"
+    },
+    "stats": [
+      { "label": "Students Guided", "value": "10,000+" },
+      { "label": "Careers Mapped", "value": "200+" },
+      { "label": "AI Accuracy", "value": "94%" },
+      { "label": "Happy Families", "value": "8,500+" }
+    ],
+    "howItWorks": {
+      "title": "How CAD Gurukul Works",
+      "subtitle": "From signup to career report in under 30 minutes.",
+      "stepLabel": "STEP {{step}}",
+      "steps": [
+        { "step": "01", "title": "Create Free Account", "desc": "Sign up in 30 seconds — no credit card required.", "emoji": "✍️" },
+        { "step": "02", "title": "Complete Your Profile", "desc": "Tell us about your class, board, interests, and academic background.", "emoji": "👤" },
+        { "step": "03", "title": "Take AI Assessment", "desc": "Answer 10-30 adaptive questions tailored to your age and interests.", "emoji": "🧠" },
+        { "step": "04", "title": "Get Your Report", "desc": "Receive a personalized career guidance report with stream and career recommendations.", "emoji": "📊" }
+      ]
+    },
+    "careers": {
+      "title": "200+ Careers Explored",
+      "subtitle": "Our AI maps your profile to the most relevant careers in India and beyond.",
+      "more": "+ 188 more..."
+    },
+    "plans": {
+      "title": "Start with a Free Report or Get Premium at",
+      "priceHighlight": "₹499",
+      "subtitle": "No hidden charges. One-time payment. Lifetime access to your report.",
+      "cards": [
+        {
+          "plan": "Free",
+          "value": "free",
+          "price": "₹0",
+          "features": ["10 Questions", "Basic Report", "Stream Recommendation", "3 Career Options"],
+          "cta": "Start Free",
+          "outline": true
+        },
+        {
+          "plan": "Premium",
+          "value": "paid",
+          "price": "₹499",
+          "features": ["30 Questions", "Full AI Report", "Subject Recommendations", "7 Career Fits", "3-Year Roadmap", "PDF Download", "Parent Guidance"],
+          "cta": "Get Premium Report",
+          "outline": false
+        }
+      ],
+      "securityNote": "🔒 Secure payment via Razorpay · 💯 Trusted by 8,500+ Indian families"
+    },
+    "testimonials": {
+      "title": "What Students Say",
+      "subtitle": "Real stories from real students across India.",
+      "items": [
+        { "name": "Priya Sharma", "city": "Delhi", "class": "Class 12 • CBSE", "text": "CAD Gurukul helped me realize that I should pursue Psychology, not Engineering. The report was so detailed and accurate about my personality.", "rating": 5 },
+        { "name": "Rohan Patel", "city": "Ahmedabad", "class": "Class 10 • CBSE", "text": "The AI questions were so smart! It understood my interest in computers and correctly suggested Computer Science. The roadmap section was incredibly helpful.", "rating": 5 },
+        { "name": "Ananya Krishnan", "city": "Chennai", "class": "Class 11 • State Board", "text": "My parents were confused about my stream choice. After the paid report, even they were convinced about Commerce for me. Worth every rupee!", "rating": 5 }
+      ]
+    },
+    "finalCta": {
+      "title": "One Wrong Decision Can Cost 3 Years. Get Clarity Now.",
+      "line1": "Join 10,000+ Indian students who've already found clarity with CAD Gurukul.",
+      "line2": "Takes 10 minutes. Free basic report. No login needed to start.",
+      "button": "Start Free Career Test Now 🎯"
+    },
+    "stickyCta": {
+      "title": "Free AI Career Test 🎯",
+      "subtitle": "10 min · No login needed to start",
+      "button": "Start Now →"
+    },
+    "leadModal": {
+      "titlePaid": "Start Premium Career Journey",
+      "titleFree": "Start Your Free Career Assessment"
+    }
+  },
+  "about": {
+    "hero": {
+      "title": "About CAD Gurukul",
+      "subtitle": "We believe every Class 8–12 student in India deserves clarity about their future — not confusion, not peer pressure."
+    },
+    "mission": {
+      "label": "Our Mission",
+      "title": "Turning \"What should I do after 10th?\" into a confident answer.",
+      "body": "CAD Gurukul uses advanced AI assessments to analyse a student's aptitude, personality, interests, and learning style — and matches them to careers that truly fit. We pair AI intelligence with deep knowledge of Indian education systems so students and parents get guidance that actually makes sense."
+    },
+    "values": {
+      "title": "What We Stand For",
+      "items": [
+        { "icon": "🎯", "title": "Student-First", "desc": "Every feature is built around what a student in Class 10–12 actually needs, not what looks impressive." },
+        { "icon": "🤖", "title": "AI with Intent", "desc": "We use AI not to replace human guidance, but to make personalised guidance accessible to every student across India." },
+        { "icon": "🌍", "title": "Made for Bharat", "desc": "Designed for Indian boards, Indian careers, Indian family dynamics. No generic Western templates." },
+        { "icon": "🔐", "title": "Privacy by Default", "desc": "Your answers and profile are never shared. Your career data is yours — always." }
+      ]
+    },
+    "team": {
+      "title": "The Team",
+      "subtitle": "Educators, engineers, and AI researchers — united by one goal.",
+      "members": [
+        { "name": "Akash Sharma", "role": "Founder & Career Counsellor", "emoji": "🎓" },
+        { "name": "Priya Rajan", "role": "AI & Education Lead", "emoji": "🤖" },
+        { "name": "Rohan Mehta", "role": "Platform Engineer", "emoji": "💻" }
+      ]
+    }
+  },
+  "howItWorks": {
+    "hero": {
+      "title": "How CAD Gurukul Works",
+      "subtitle": "From signup to your personalised career report — here's exactly what happens at each step."
+    },
+    "steps": [
+      {
+        "number": "01",
+        "icon": "📝",
+        "title": "Create Your Profile",
+        "desc": "Register and complete a quick 5-step onboarding wizard. Tell us your class, board, interests, subjects, and goals. It takes less than 5 minutes.",
+        "detail": "We collect academic details, hobby tags, preferred learning style, and parental background to give the AI strong context before your assessment even starts."
+      },
+      {
+        "number": "02",
+        "icon": "🤖",
+        "title": "Take the AI Assessment",
+        "desc": "Answer 10–30 adaptive AI-generated questions tailored to your profile. Questions span aptitude, personality, interest, logic, and creativity.",
+        "detail": "Our AI adapts based on your previous answers — if you show strong logical reasoning, it digs deeper. Questions are generated fresh for every student."
+      },
+      {
+        "number": "03",
+        "icon": "📊",
+        "title": "AI Analyses Your Results",
+        "desc": "Once you submit, our AI evaluates all answers across 9 dimensions including STEM vs Non-STEM, Social Orientation, Creative Inclination, and more.",
+        "detail": "We use Google Gemini 1.5 Pro for evaluation and score computation, and GPT-4o for premium report writing — giving you the best of both AI worlds."
+      },
+      {
+        "number": "04",
+        "icon": "🗺️",
+        "title": "Receive Your Career Report",
+        "desc": "Get matched to 3–15+ careers with fit scores. See recommended stream, subjects, exam pathways, and step-by-step roadmaps for each career.",
+        "detail": "Premium users also get parent guidance, college recommendations, entrance exam timelines, and a beautifully formatted downloadable PDF."
+      }
+    ],
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "items": [
+        {
+          "q": "Is this for Class 8, 9, 10, 11, or 12 students?",
+          "a": "Yes — all five. We tailor the report to your stage. Class 8 & 9 students get early interest and aptitude mapping; Class 10 students get stream selection guidance; Class 11/12 get subject and career deepening."
+        },
+        {
+          "q": "How is this different from generic career tests?",
+          "a": "Most tests give you a fixed list of careers without reasoning. CAD Gurukul uses live AI that understands your specific answers and generates a personalised, contextual report — not a template."
+        },
+        {
+          "q": "What does the free report include?",
+          "a": "Top 3 career matches, a stream recommendation, and a personality overview. It's genuinely useful — not a teaser."
+        },
+        {
+          "q": "What does the premium report include?",
+          "a": "15+ careers, full scoring across 9 aptitude categories, roadmap for each career, parent guidance, college suggestions, entrance exam timeline, and a PDF to share."
+        },
+        {
+          "q": "How long does the assessment take?",
+          "a": "Free: 8–12 minutes. Premium: 20–30 minutes. You can pause and resume."
+        },
+        {
+          "q": "Can parents use this too?",
+          "a": "Yes — you can register as a parent and start an assessment on behalf of your child. The onboarding collects child details."
+        }
+      ]
+    }
+  },
+  "contact": {
+    "hero": {
+      "title": "Contact Us",
+      "subtitle": "Have a question or feedback? We'd love to hear from you."
+    },
+    "info": {
+      "title": "Get in Touch",
+      "contacts": {
+        "emailLabel": "Email",
+        "emailValue": "support@cadgurukul.com",
+        "phoneLabel": "Phone",
+        "phoneValue": "+91 98765 43210",
+        "hoursLabel": "Hours",
+        "hoursValue": "Mon–Sat, 9 AM – 7 PM IST"
+      },
+      "studentCardTitle": "For Students & Parents",
+      "studentCardBody": "If you have a question about your report or assessment, mention your registered email so we can look up your account faster."
+    },
+    "form": {
+      "sentTitle": "Message Received!",
+      "sentSubtitle": "We typically reply within 24 hours.",
+      "sendAnother": "Send Another",
+      "labels": {
+        "name": "Your Name",
+        "email": "Email Address",
+        "subject": "Subject",
+        "message": "Message"
+      },
+      "placeholders": {
+        "name": "Rahul Sharma",
+        "email": "rahul@example.com",
+        "subject": "Question about my report",
+        "message": "Tell us how we can help..."
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "emailRequired": "Email is required",
+        "subjectRequired": "Subject is required",
+        "messageRequired": "Message cannot be empty",
+        "messageMin": "Please write at least 20 characters"
+      },
+      "submit": "Send Message",
+      "submitting": "Sending…"
+    },
+    "toast": {
+      "success": "Message sent! We'll reply within 24 hours.",
+      "error": "Failed to send. Please try again."
+    }
+  },
+  "planSelection": {
+    "eyebrow": "Pricing",
+    "title": "Choose Your Path",
+    "subtitle": "Start free or unlock a complete AI-powered career breakdown for your future.",
+    "plans": [
+      {
+        "key": "free",
+        "name": "Free",
+        "price": "₹0",
+        "hint": "Great start",
+        "actionLabel": "Start Free Assessment",
+        "features": [
+          { "text": "10 adaptive AI questions", "ok": true },
+          { "text": "Top 3 career suggestions", "ok": true },
+          { "text": "Stream recommendation", "ok": true },
+          { "text": "Personality overview", "ok": true },
+          { "text": "Detailed career roadmaps", "ok": false },
+          { "text": "PDF report download", "ok": false },
+          { "text": "Parent guidance section", "ok": false },
+          { "text": "College & entrance guide", "ok": false }
+        ]
+      },
+      {
+        "key": "paid",
+        "name": "Premium",
+        "price": "₹499",
+        "hint": "One-time · No subscription",
+        "badge": "MOST POPULAR",
+        "actionLabel": "💎 Choose Premium Path",
+        "features": [
+          { "text": "30 in-depth adaptive questions", "ok": true },
+          { "text": "15+ detailed career paths", "ok": true },
+          { "text": "Full stream & subject mapping", "ok": true },
+          { "text": "In-depth aptitude analysis", "ok": true },
+          { "text": "Career roadmaps for each path", "ok": true },
+          { "text": "Downloadable PDF report", "ok": true },
+          { "text": "Parent guidance section", "ok": true },
+          { "text": "College & entrance exam guide", "ok": true }
+        ]
+      }
+    ],
+    "footerNote": "🔒 Payments secured by Razorpay · UPI, Cards, Net Banking · Trusted by 10,000+ students"
+  },
+  "login": {
+    "title": "Welcome Back",
+    "subtitle": "Continue your career discovery journey",
+    "sessionExpired": "Your session expired. Please log in again.",
+    "resendAction": "Resend verification email →",
+    "resendSent": "Resent! Check your inbox.",
+    "form": {
+      "emailLabel": "Email Address",
+      "emailPlaceholder": "your@email.com",
+      "emailRequired": "Email is required",
+      "emailInvalid": "Invalid email",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Your password",
+      "passwordRequired": "Password is required",
+      "submit": "Sign In →",
+      "submitting": "Signing In..."
+    },
+    "footer": {
+      "prompt": "New here?",
+      "link": "Create a free account"
+    }
+  },
+  "register": {
+    "checkEmail": {
+      "title": "Check your email",
+      "sentTo": "We've sent a verification link to:",
+      "stepsTitle": "What to do next:",
+      "step1": "Open the email from CAD Gurukul",
+      "step2Prefix": "Click the ",
+      "step2Emphasis": "Verify My Email",
+      "step2Suffix": " button in the email",
+      "step3": "You'll be redirected to complete your profile setup",
+      "mobileTitle": "On mobile?",
+      "mobileBody": "If your email app opens the link in its own browser, your session won't carry over. After verifying, open Chrome or Safari and go to",
+      "mobileEmphasis": "cadgurukul.com/login",
+      "mobileSuffix": "to sign in.",
+      "linkExpires": "The link expires in 24 hours. Check your spam folder if you don't see it.",
+      "resend": "Resend verification email",
+      "resendCooldown": "Resent! Wait 30 seconds before trying again",
+      "alreadyVerified": "Already verified?",
+      "signIn": "Sign in",
+      "wrongEmail": "Wrong email?",
+      "startOver": "Start over"
+    },
+    "title": "Create Your Free Account",
+    "subtitle": "Start your career discovery journey today",
+    "form": {
+      "fullNameLabel": "Full Name *",
+      "fullNamePlaceholder": "Your full name",
+      "fullNameRequired": "Name is required",
+      "fullNameMin": "Name must be at least 2 characters",
+      "emailLabel": "Email Address *",
+      "emailPlaceholder": "student@email.com",
+      "emailRequired": "Email is required",
+      "emailInvalid": "Enter a valid email",
+      "passwordLabel": "Password *",
+      "passwordPlaceholder": "Create a strong password",
+      "passwordRequired": "Password is required",
+      "passwordMin": "Minimum 8 characters",
+      "passwordPattern": "Must include uppercase, lowercase, and number",
+      "roleLabel": "I am registering as",
+      "roleStudent": "Student",
+      "roleParent": "Parent (for my child)",
+      "submit": "Create Free Account →",
+      "submitting": "Creating Account...",
+      "terms": "By registering, you agree to our Terms of Service and Privacy Policy"
+    },
+    "footer": {
+      "prompt": "Already have an account?",
+      "link": "Sign In"
+    },
+    "trust": {
+      "ssl": "SSL Secured",
+      "free": "Free to Start",
+      "madeInIndia": "Made in India"
+    }
+  },
+  "verifyEmail": {
+    "verifying": {
+      "title": "Verifying your email…",
+      "subtitle": "Just a moment while we confirm your address."
+    },
+    "success": {
+      "title": "Email Verified!",
+      "inApp": {
+        "subtitle": "Your email is confirmed! You're currently inside your email app's browser.",
+        "warningTitle": "One more step to stay signed in",
+        "warningBody": "Your email app uses an isolated browser that won't keep you logged in once you close it. To continue, open your main browser and sign in:",
+        "step1": "Open Chrome, Safari, or your default browser",
+        "step2": "Go to cadgurukul.com/login",
+        "step3": "Sign in with your email and password",
+        "openSignIn": "Open Sign In Page →",
+        "continueNote": "Or continue in this browser (session will be lost when you close the email app).",
+        "continueAnyway": "Continue anyway →"
+      },
+      "normal": {
+        "subtitle": "Your email has been confirmed. Taking you to your profile setup…",
+        "continue": "Continue to Profile Setup →",
+        "alreadySetup": "Already set up?",
+        "dashboard": "Go to Dashboard →"
+      }
+    },
+    "expired": {
+      "title": "Link Expired",
+      "subtitle": "This verification link has expired (links are valid for 24 hours). Enter your email below to receive a fresh link.",
+      "sent": "A new verification email has been sent. Check your inbox!",
+      "placeholder": "your@email.com",
+      "resend": "Resend Verification Email",
+      "sending": "Sending…",
+      "alreadyVerified": "Already verified?",
+      "signIn": "Sign in"
+    },
+    "invalid": {
+      "title": "Invalid Link",
+      "subtitle": "This verification link is invalid or has already been used.",
+      "noToken": " No verification token was found in the URL.",
+      "createAccount": "Create a new account",
+      "signIn": "Sign in instead"
+    }
+  },
+  "leadCapture": {
+    "mid": {
+      "nameLabel": "Your Name *",
+      "namePlaceholder": "Riya Sharma",
+      "mobileLabel": "Mobile Number (WhatsApp) *",
+      "mobilePlaceholder": "9876543210",
+      "mobileNote": "Your report will be sent on WhatsApp 📲",
+      "classLabel": "Which class are you in? *",
+      "classPlaceholder": "Select class",
+      "classOption": "Class {{class}}",
+      "submit": "Continue & Unlock My Report 🎯",
+      "submitting": "Saving…",
+      "footer": "🔒 No spam. We send only your career report and AI insights."
+    },
+    "full": {
+      "nameLabel": "Full Name *",
+      "namePlaceholder": "Riya Sharma",
+      "emailLabel": "Email *",
+      "emailPlaceholder": "riya@gmail.com",
+      "mobileLabel": "Mobile Number *",
+      "mobilePlaceholder": "9876543210",
+      "classLabel": "Class *",
+      "classPlaceholder": "Select class",
+      "classOption": "Class {{class}}",
+      "streamLabel": "Stream (if applicable)",
+      "streamPlaceholder": "Not decided yet",
+      "streamScience": "Science",
+      "streamCommerce": "Commerce",
+      "streamArts": "Arts / Humanities",
+      "streamNA": "Not Applicable (Class 8-10)",
+      "cityLabel": "City",
+      "cityPlaceholder": "Jaipur",
+      "pincodeLabel": "Pincode",
+      "pincodePlaceholder": "302001",
+      "userTypeLabel": "I am a…",
+      "userTypeStudent": "🎓 Student",
+      "userTypeParent": "👨‍👩‍👧 Parent / Guardian",
+      "consentText": "I agree to receive career guidance information via email and WhatsApp. My data is safe and will not be shared with third parties.",
+      "privacyLink": "Privacy Policy",
+      "submitFree": "Get My Free Career Report →",
+      "submitPaid": "Proceed to Premium Report →",
+      "submitting": "Saving details…",
+      "footer": "🔒 Safe & Secure · ✅ No spam · 🇮🇳 Built for Indian students"
+    },
+    "errors": {
+      "fullName": "Enter your full name",
+      "email": "Enter a valid email address",
+      "mobile": "Enter a valid 10-digit mobile number",
+      "class": "Select your class",
+      "pincode": "Enter a valid 6-digit pincode",
+      "consent": "Please accept the privacy policy to continue"
+    },
+    "toast": {
+      "success": "Details saved! Taking you to your free report →",
+      "error": "Something went wrong. Please try again."
+    }
+  },
+  "premiumUpsell": {
+    "badge": "⚠️ YOUR STRONGEST CAREER PATH IS LOCKED 🔒",
+    "headline": "One Wrong Decision Can Cost",
+    "headlineEmphasis": " 3–5 Years of Your Life",
+    "subtext": "You are NOT suited for random stream selection. Based on your answers, you have a clear aptitude signal — but the exact career path is locked behind your chosen plan.",
+    "urgency": "⏳ 47 students from your city unlocked clarity this week",
+    "plans": [
+      {
+        "id": "standard",
+        "label": "Full Report",
+        "price": "₹499",
+        "priceNum": 499,
+        "badge": null,
+        "highlight": false,
+        "description": "Everything you need to choose the right stream with confidence.",
+        "features": [
+          "30 adaptive AI questions",
+          "Stream recommendation with confidence %",
+          "7 ranked career matches",
+          "Subject recommendations",
+          "3-year career roadmap",
+          "Top college suggestions",
+          "Parent guidance section",
+          "PDF download (lifetime access)"
+        ],
+        "cta": "🔓 Unlock Full Report — ₹499",
+        "ctaSecondary": null
+      },
+      {
+        "id": "premium",
+        "label": "Premium AI Report",
+        "price": "₹1,999",
+        "priceNum": 1999,
+        "badge": "⭐ Most Popular",
+        "highlight": true,
+        "description": "Deep AI analysis + personalised roadmap. Like having a top IIT/IIM counsellor.",
+        "features": [
+          "Everything in Full Report",
+          "Exhaustive AI-powered career blueprint",
+          "Must-take vs avoid subject strategy",
+          "Competitive exam timeline (JEE/NEET/CAT)",
+          "Year-by-year roadmap: Class 11 → first job",
+          "Salary outlook for each career match",
+          "Future-scope analysis (2030–2040)",
+          "Scholarship opportunities list"
+        ],
+        "cta": "🚀 Get Premium AI Report — ₹1,999",
+        "ctaSecondary": "Most students who see this choose Premium"
+      },
+      {
+        "id": "consultation",
+        "label": "1:1 Career Blueprint Session",
+        "price": "₹9,999",
+        "priceNum": 9999,
+        "badge": "🔥 Limited — 3/day",
+        "highlight": false,
+        "description": "Exclusive 45-min session with Adish Gupta. Personalised. Recorded. Life-changing.",
+        "features": [
+          "Everything in Premium AI Report",
+          "45-minute 1:1 with Adish Gupta",
+          "Fully personalised career roadmap",
+          "Live Q&A — parents can join",
+          "Session recording shared within 24h",
+          "Email support for 30 days post-session",
+          "Priority report generation"
+        ],
+        "cta": "📞 Book Session with Adish Gupta — ₹9,999",
+        "ctaSecondary": "Only 3 slots per day — book now"
+      }
+    ],
+    "socialProof": {
+      "quote": "\"Beta ko pehle lagta tha Science lega. Report dekhi toh samjha Commerce aur CA uske liye better hai. Best ₹499 we spent this year!\"",
+      "author": "— Sunita Agarwal, Parent, Jaipur (Class 11 son)"
+    },
+    "footer": "🔒 Secured by Razorpay · 💳 UPI, Cards, Net Banking accepted · ✅ One-time payment",
+    "noThanks": "No thanks, I'll figure it out myself",
+    "errors": {
+      "missingAssessment": "Assessment details missing. Please open this from your report page."
+    },
+    "redirecting": "Redirecting…"
+  }
+}

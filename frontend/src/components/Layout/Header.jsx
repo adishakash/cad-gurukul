@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { logoutUser, selectUser, selectIsAuthenticated } from '../../store/slices/authSlice'
 import { useTheme } from '../../context/ThemeContext'
+import { useTranslation } from 'react-i18next'
+import LanguageSwitcher from '../LanguageSwitcher'
 
 function SunIcon() {
   return (
@@ -27,6 +29,7 @@ export default function Header() {
   const isAuthenticated = useSelector(selectIsAuthenticated)
   const { isDark, toggleTheme } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { t } = useTranslation()
 
   const handleLogout = async () => {
     await dispatch(logoutUser())
@@ -34,11 +37,11 @@ export default function Header() {
   }
 
   const navLinks = [
-    { to: '/', label: 'Home' },
-    { to: '/about', label: 'About' },
-    { to: '/how-it-works', label: 'How It Works' },
-    { to: '/plans', label: 'Plans & Pricing' },
-    { to: '/contact', label: 'Contact' },
+    { to: '/', label: t('nav.home') },
+    { to: '/about', label: t('nav.about') },
+    { to: '/how-it-works', label: t('nav.howItWorks') },
+    { to: '/plans', label: t('nav.plansPricing') },
+    { to: '/contact', label: t('nav.contact') },
   ]
 
   return (
@@ -71,9 +74,10 @@ export default function Header() {
 
           {/* Right side: dark mode toggle + auth buttons */}
           <div className="hidden md:flex items-center space-x-3">
+            <LanguageSwitcher />
             <button
               onClick={toggleTheme}
-              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={isDark ? t('theme.switchToLight') : t('theme.switchToDark')}
               className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               {isDark ? <SunIcon /> : <MoonIcon />}
@@ -85,22 +89,22 @@ export default function Header() {
                   to="/dashboard"
                   className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-brand-red dark:hover:text-brand-red transition-colors"
                 >
-                  Dashboard
+                  {t('auth.dashboard')}
                 </Link>
                 <button
                   onClick={handleLogout}
                   className="btn-outline text-sm px-4 py-2"
                 >
-                  Logout
+                  {t('auth.logout')}
                 </button>
               </>
             ) : (
               <>
                 <Link to="/login" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-brand-red transition-colors">
-                  Login
+                  {t('auth.login')}
                 </Link>
                 <Link to="/register" className="btn-primary text-sm px-5 py-2">
-                  Get Started Free
+                  {t('auth.getStartedFree')}
                 </Link>
               </>
             )}
@@ -110,7 +114,7 @@ export default function Header() {
           <div className="md:hidden flex items-center space-x-2">
             <button
               onClick={toggleTheme}
-              aria-label="Toggle theme"
+              aria-label={t('theme.toggleTheme')}
               className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               {isDark ? <SunIcon /> : <MoonIcon />}
@@ -118,7 +122,7 @@ export default function Header() {
             <button
               className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-brand-red"
               onClick={() => setMenuOpen(!menuOpen)}
-              aria-label="Toggle menu"
+              aria-label={t('header.toggleMenu')}
             >
               {menuOpen ? (
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -133,6 +137,12 @@ export default function Header() {
       {/* Mobile Nav */}
       {menuOpen && (
         <div className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 px-4 py-4 space-y-3 shadow-lg animate-fade-in">
+          <LanguageSwitcher
+            showLabel
+            className="justify-between"
+            labelClassName="text-xs font-medium text-gray-600 dark:text-gray-300"
+            selectClassName="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md px-2 py-1 text-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-red"
+          />
           {navLinks.map((link) => (
             <Link
               key={link.to}
@@ -146,13 +156,13 @@ export default function Header() {
           <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-col space-y-2">
             {isAuthenticated ? (
               <>
-                <Link to="/dashboard" className="btn-secondary text-center text-sm" onClick={() => setMenuOpen(false)}>Dashboard</Link>
-                <button onClick={handleLogout} className="btn-outline text-sm">Logout</button>
+                <Link to="/dashboard" className="btn-secondary text-center text-sm" onClick={() => setMenuOpen(false)}>{t('auth.dashboard')}</Link>
+                <button onClick={handleLogout} className="btn-outline text-sm">{t('auth.logout')}</button>
               </>
             ) : (
               <>
-                <Link to="/login" className="btn-secondary text-center text-sm" onClick={() => setMenuOpen(false)}>Login</Link>
-                <Link to="/register" className="btn-primary text-center text-sm" onClick={() => setMenuOpen(false)}>Get Started Free</Link>
+                <Link to="/login" className="btn-secondary text-center text-sm" onClick={() => setMenuOpen(false)}>{t('auth.login')}</Link>
+                <Link to="/register" className="btn-primary text-center text-sm" onClick={() => setMenuOpen(false)}>{t('auth.getStartedFree')}</Link>
               </>
             )}
           </div>

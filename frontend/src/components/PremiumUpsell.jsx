@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { leadApi, trackEvent } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 /**
  * PremiumUpsell — 3-tier value ladder pricing
@@ -13,83 +14,22 @@ import { leadApi, trackEvent } from '../services/api'
  *   fromPlan      string — "free"|"standard" — determines which plans to highlight
  */
 
-const PLANS = [
-  {
-    id: 'standard',
-    label: 'Full Report',
-    price: '₹499',
-    priceNum: 499,
-    badge: null,
-    highlight: false,
-    description: 'Everything you need to choose the right stream with confidence.',
-    features: [
-      '30 adaptive AI questions',
-      'Stream recommendation with confidence %',
-      '7 ranked career matches',
-      'Subject recommendations',
-      '3-year career roadmap',
-      'Top college suggestions',
-      'Parent guidance section',
-      'PDF download (lifetime access)',
-    ],
-    cta: '🔓 Unlock Full Report — ₹499',
-    ctaSecondary: null,
-  },
-  {
-    id: 'premium',
-    label: 'Premium AI Report',
-    price: '₹1,999',
-    priceNum: 1999,
-    badge: '⭐ Most Popular',
-    highlight: true,
-    description: 'Deep AI analysis + personalised roadmap. Like having a top IIT/IIM counsellor.',
-    features: [
-      'Everything in Full Report',
-      'Exhaustive AI-powered career blueprint',
-      'Must-take vs avoid subject strategy',
-      'Competitive exam timeline (JEE/NEET/CAT)',
-      'Year-by-year roadmap: Class 11 → first job',
-      'Salary outlook for each career match',
-      'Future-scope analysis (2030–2040)',
-      'Scholarship opportunities list',
-    ],
-    cta: '🚀 Get Premium AI Report — ₹1,999',
-    ctaSecondary: 'Most students who see this choose Premium',
-  },
-  {
-    id: 'consultation',
-    label: '1:1 Career Blueprint Session',
-    price: '₹9,999',
-    priceNum: 9999,
-    badge: '🔥 Limited — 3/day',
-    highlight: false,
-    description: 'Exclusive 45-min session with Adish Gupta. Personalised. Recorded. Life-changing.',
-    features: [
-      'Everything in Premium AI Report',
-      '45-minute 1:1 with Adish Gupta',
-      'Fully personalised career roadmap',
-      'Live Q&A — parents can join',
-      'Session recording shared within 24h',
-      'Email support for 30 days post-session',
-      'Priority report generation',
-    ],
-    cta: '📞 Book Session with Adish Gupta — ₹9,999',
-    ctaSecondary: 'Only 3 slots per day — book now',
-  },
-]
 
 export default function PremiumUpsell({ assessmentId, onClose, inline = false, fromPlan = 'free' }) {
   const navigate = useNavigate()
   const [loadingPlan, setLoadingPlan] = useState(null)
+  const { t } = useTranslation()
+
+  const plans = t('premiumUpsell.plans', { returnObjects: true })
 
   // Only show plans above the user's current plan
   const visiblePlans = fromPlan === 'standard'
-    ? PLANS.filter((p) => p.id === 'premium' || p.id === 'consultation')
-    : PLANS
+    ? plans.filter((p) => p.id === 'premium' || p.id === 'consultation')
+    : plans
 
   const handleSelect = (plan) => {
     if (!assessmentId && plan.id !== 'consultation') {
-      toast.error('Assessment details missing. Please open this from your report page.')
+      toast.error(t('premiumUpsell.errors.missingAssessment'))
       navigate('/dashboard')
       return
     }
@@ -110,17 +50,17 @@ export default function PremiumUpsell({ assessmentId, onClose, inline = false, f
       {/* Hook headline */}
       <div className="text-center mb-8">
         <div className="inline-block bg-red-50 text-brand-red text-xs font-bold px-3 py-1 rounded-full mb-3 tracking-wide">
-          ⚠️ YOUR STRONGEST CAREER PATH IS LOCKED 🔒
+          {t('premiumUpsell.badge')}
         </div>
         <h2 className="text-2xl md:text-3xl font-extrabold text-brand-dark leading-tight">
-          One Wrong Decision Can Cost
-          <span className="text-brand-red"> 3–5 Years of Your Life</span>
+          {t('premiumUpsell.headline')}
+          <span className="text-brand-red">{t('premiumUpsell.headlineEmphasis')}</span>
         </h2>
         <p className="text-gray-600 mt-3 text-sm max-w-lg mx-auto leading-relaxed">
-          You are <strong>NOT suited for random stream selection</strong>. Based on your answers, you have a clear aptitude signal — but the exact career path is locked behind your chosen plan.
+          {t('premiumUpsell.subtext')}
         </p>
         <div className="mt-3 inline-flex items-center gap-2 bg-orange-50 text-orange-700 text-xs font-semibold px-4 py-2 rounded-full border border-orange-200">
-          ⏳ 47 students from your city unlocked clarity this week
+          {t('premiumUpsell.urgency')}
         </div>
       </div>
 
@@ -164,7 +104,7 @@ export default function PremiumUpsell({ assessmentId, onClose, inline = false, f
                   : 'bg-gray-900 text-white hover:bg-gray-700'
               }`}
             >
-              {loadingPlan === plan.id ? 'Redirecting…' : plan.cta}
+              {loadingPlan === plan.id ? t('premiumUpsell.redirecting') : plan.cta}
             </button>
             {plan.ctaSecondary && (
               <p className="text-center text-xs text-gray-400 mt-2">{plan.ctaSecondary}</p>
@@ -177,18 +117,18 @@ export default function PremiumUpsell({ assessmentId, onClose, inline = false, f
       <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-4 mb-4">
         <div className="flex items-center gap-1 text-yellow-500 mb-1">{'★'.repeat(5)}</div>
         <p className="text-sm text-gray-700 italic">
-          "Beta ko pehle lagta tha Science lega. Report dekhi toh samjha Commerce aur CA uske liye better hai. Best ₹499 we spent this year!"
+          {t('premiumUpsell.socialProof.quote')}
         </p>
-        <p className="text-xs text-gray-500 mt-2">— Sunita Agarwal, Parent, Jaipur (Class 11 son)</p>
+        <p className="text-xs text-gray-500 mt-2">{t('premiumUpsell.socialProof.author')}</p>
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        🔒 Secured by Razorpay &nbsp;|&nbsp; 💳 UPI, Cards, Net Banking accepted &nbsp;|&nbsp; ✅ One-time payment
+        {t('premiumUpsell.footer')}
       </p>
       {onClose && (
         <div className="text-center mt-3">
           <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600 underline">
-            No thanks, I'll figure it out myself
+            {t('premiumUpsell.noThanks')}
           </button>
         </div>
       )}

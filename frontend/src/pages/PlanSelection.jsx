@@ -2,54 +2,31 @@ import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { setPlan } from '../store/slices/leadSlice'
 import { leadApi } from '../services/api'
-
-const plans = [
-  {
-    key: 'free',
-    name: 'Free',
-    price: '₹0',
-    hint: 'Great start',
-    color: 'border-gray-200',
-    action: '/assessment?plan=FREE',
-    actionLabel: 'Start Free Assessment',
-    actionClass: 'btn-outline',
-    features: [
-      { text: '10 adaptive AI questions', ok: true },
-      { text: 'Top 3 career suggestions', ok: true },
-      { text: 'Stream recommendation', ok: true },
-      { text: 'Personality overview', ok: true },
-      { text: 'Detailed career roadmaps', ok: false },
-      { text: 'PDF report download', ok: false },
-      { text: 'Parent guidance section', ok: false },
-      { text: 'College & entrance guide', ok: false },
-    ],
-  },
-  {
-    key: 'paid',
-    name: 'Premium',
-    price: '₹499',
-    hint: 'One-time · No subscription',
-    color: 'border-brand-red',
-    badge: 'MOST POPULAR',
-    action: '/assessment?plan=FREE&intent=paid',
-    actionLabel: '💎 Choose Premium Path',
-    actionClass: 'btn-primary',
-    features: [
-      { text: '30 in-depth adaptive questions', ok: true },
-      { text: '15+ detailed career paths', ok: true },
-      { text: 'Full stream & subject mapping', ok: true },
-      { text: 'In-depth aptitude analysis', ok: true },
-      { text: 'Career roadmaps for each path', ok: true },
-      { text: 'Downloadable PDF report', ok: true },
-      { text: 'Parent guidance section', ok: true },
-      { text: 'College & entrance exam guide', ok: true },
-    ],
-  },
-]
+import { useTranslation } from 'react-i18next'
 
 export default function PlanSelection() {
   const navigate = useNavigate()
   const dispatch = useDispatch()
+  const { t } = useTranslation()
+
+  const planCopy = t('planSelection.plans', { returnObjects: true })
+  const plans = [
+    {
+      key: 'free',
+      color: 'border-gray-200',
+      action: '/assessment?plan=FREE',
+      actionClass: 'btn-outline',
+    },
+    {
+      key: 'paid',
+      color: 'border-brand-red',
+      action: '/assessment?plan=FREE&intent=paid',
+      actionClass: 'btn-primary',
+    },
+  ].map((plan) => {
+    const copy = Array.isArray(planCopy) ? planCopy.find((item) => item.key === plan.key) : null
+    return { ...plan, ...(copy || {}) }
+  })
 
   const handlePlanSelect = async (plan) => {
     const planKey = plan.key
@@ -62,12 +39,12 @@ export default function PlanSelection() {
   return (
     <div className="min-h-screen bg-gray-50 py-16 px-4">
       <div className="max-w-4xl mx-auto text-center mb-12">
-        <span className="text-xs font-bold uppercase tracking-widest text-brand-red">Pricing</span>
+        <span className="text-xs font-bold uppercase tracking-widest text-brand-red">{t('planSelection.eyebrow')}</span>
         <h1 className="text-4xl font-extrabold text-brand-dark mt-2 mb-3">
-          Choose Your Path
+          {t('planSelection.title')}
         </h1>
         <p className="text-gray-500 text-lg">
-          Start free or unlock a complete AI-powered career breakdown for your future.
+          {t('planSelection.subtitle')}
         </p>
       </div>
 
@@ -108,7 +85,7 @@ export default function PlanSelection() {
       </div>
 
       <div className="text-center mt-10 text-sm text-gray-400">
-        🔒 Payments secured by Razorpay · UPI, Cards, Net Banking · Trusted by 10,000+ students
+        {t('planSelection.footerNote')}
       </div>
     </div>
   )

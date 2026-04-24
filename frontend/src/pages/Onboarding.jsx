@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import api, { leadApi } from '../services/api'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
+import { LANGUAGE_OPTIONS, getLanguageCodeFromLabel, getLanguageLabel, getSupportedLanguage } from '../i18n/languages'
 
 const STEPS = [
   { id: 0, title: 'Personal Info', icon: '👤' },
@@ -93,10 +95,15 @@ export default function Onboarding() {
   const [selectedLocationPref, setSelectedLocationPref] = useState([])
   const [leadStatus, setLeadStatus] = useState(null)
   const navigate = useNavigate()
+  const { i18n } = useTranslation()
+  const defaultLanguageLabel = getLanguageLabel(getSupportedLanguage(i18n.language))
 
   const { register, handleSubmit, getValues, setError, setFocus, getFieldState, reset, formState: { errors }, trigger } = useForm({
     mode: 'onBlur',
     reValidateMode: 'onChange', // clear errors in real-time as user corrects fields
+    defaultValues: {
+      languagePreference: defaultLanguageLabel,
+    },
   })
 
   useEffect(() => {
@@ -124,7 +131,7 @@ export default function Onboarding() {
             state:              profile.state               || '',
             mobileNumber:       profile.mobileNumber        || '',
             pinCode:            profile.pinCode             || '',
-            languagePreference: profile.languagePreference  || 'English',
+            languagePreference: profile.languagePreference  || defaultLanguageLabel,
             classStandard:      profile.classStandard       || '',
             board:              profile.board               || '',
             careerAspirations:  profile.careerAspirations   || '',
@@ -310,9 +317,17 @@ export default function Onboarding() {
                 </div>
                 <div>
                   <label className="input-label">Language Preference</label>
-                  <select {...register('languagePreference')} className="input-field">
-                    {['English', 'Hindi', 'Tamil', 'Telugu', 'Marathi', 'Bengali', 'Gujarati', 'Kannada'].map((l) => (
-                      <option key={l} value={l}>{l}</option>
+                  <select
+                    {...register('languagePreference', {
+                      onChange: (event) => {
+                        const languageCode = getLanguageCodeFromLabel(event.target.value)
+                        i18n.changeLanguage(languageCode)
+                      },
+                    })}
+                    className="input-field"
+                  >
+                    {LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.code} value={option.label}>{option.label}</option>
                     ))}
                   </select>
                 </div>

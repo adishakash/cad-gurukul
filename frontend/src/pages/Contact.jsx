@@ -2,27 +2,29 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import api from '../services/api'
 import toast from 'react-hot-toast'
-
-const contacts = [
-  { icon: '📧', label: 'Email', value: 'support@cadgurukul.com' },
-  { icon: '📞', label: 'Phone', value: '+91 98765 43210' },
-  { icon: '🕐', label: 'Hours', value: 'Mon–Sat, 9 AM – 7 PM IST' },
-]
+import { useTranslation } from 'react-i18next'
 
 export default function Contact() {
   const [sent, setSent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const { register, handleSubmit, formState: { errors }, reset } = useForm()
+  const { t } = useTranslation()
+
+  const contacts = [
+    { icon: '📧', label: t('contact.info.contacts.emailLabel'), value: t('contact.info.contacts.emailValue') },
+    { icon: '📞', label: t('contact.info.contacts.phoneLabel'), value: t('contact.info.contacts.phoneValue') },
+    { icon: '🕐', label: t('contact.info.contacts.hoursLabel'), value: t('contact.info.contacts.hoursValue') },
+  ]
 
   const onSubmit = async (data) => {
     setSubmitting(true)
     try {
       await api.post('/contact', data)
-      toast.success('Message sent! We\'ll reply within 24 hours.')
+      toast.success(t('contact.toast.success'))
       setSent(true)
       reset()
     } catch {
-      toast.error('Failed to send. Please try again.')
+      toast.error(t('contact.toast.error'))
     } finally {
       setSubmitting(false)
     }
@@ -32,14 +34,14 @@ export default function Contact() {
     <div className="min-h-screen bg-white">
       {/* Hero */}
       <section className="bg-brand-dark text-white py-16 px-4 text-center">
-        <h1 className="text-4xl font-extrabold mb-3">Contact Us</h1>
-        <p className="text-gray-300 max-w-md mx-auto">Have a question or feedback? We'd love to hear from you.</p>
+        <h1 className="text-4xl font-extrabold mb-3">{t('contact.hero.title')}</h1>
+        <p className="text-gray-300 max-w-md mx-auto">{t('contact.hero.subtitle')}</p>
       </section>
 
       <section className="py-16 px-4 max-w-5xl mx-auto grid md:grid-cols-2 gap-10">
         {/* Info */}
         <div>
-          <h2 className="text-xl font-bold text-brand-dark mb-6">Get in Touch</h2>
+          <h2 className="text-xl font-bold text-brand-dark mb-6">{t('contact.info.title')}</h2>
           <div className="space-y-4 mb-8">
             {contacts.map((c) => (
               <div key={c.label} className="flex items-center gap-4">
@@ -52,9 +54,9 @@ export default function Contact() {
             ))}
           </div>
           <div className="card bg-orange-50 border border-brand-red/20">
-            <h3 className="font-bold text-brand-dark mb-1">For Students & Parents</h3>
+            <h3 className="font-bold text-brand-dark mb-1">{t('contact.info.studentCardTitle')}</h3>
             <p className="text-sm text-gray-600">
-              If you have a question about your report or assessment, mention your registered email so we can look up your account faster.
+              {t('contact.info.studentCardBody')}
             </p>
           </div>
         </div>
@@ -64,52 +66,55 @@ export default function Contact() {
           {sent ? (
             <div className="text-center py-10">
               <div className="text-5xl mb-4">✅</div>
-              <h3 className="text-xl font-bold text-brand-dark mb-2">Message Received!</h3>
-              <p className="text-gray-500 text-sm">We typically reply within 24 hours.</p>
-              <button onClick={() => setSent(false)} className="btn-outline mt-6">Send Another</button>
+              <h3 className="text-xl font-bold text-brand-dark mb-2">{t('contact.form.sentTitle')}</h3>
+              <p className="text-gray-500 text-sm">{t('contact.form.sentSubtitle')}</p>
+              <button onClick={() => setSent(false)} className="btn-outline mt-6">{t('contact.form.sendAnother')}</button>
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
-                <label className="input-label">Your Name</label>
+                <label className="input-label">{t('contact.form.labels.name')}</label>
                 <input
-                  {...register('name', { required: 'Name is required' })}
+                  {...register('name', { required: t('contact.form.errors.nameRequired') })}
                   className="input-field"
-                  placeholder="Rahul Sharma"
+                  placeholder={t('contact.form.placeholders.name')}
                 />
                 {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
               </div>
               <div>
-                <label className="input-label">Email Address</label>
+                <label className="input-label">{t('contact.form.labels.email')}</label>
                 <input
                   type="email"
-                  {...register('email', { required: 'Email is required' })}
+                  {...register('email', { required: t('contact.form.errors.emailRequired') })}
                   className="input-field"
-                  placeholder="rahul@example.com"
+                  placeholder={t('contact.form.placeholders.email')}
                 />
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
               </div>
               <div>
-                <label className="input-label">Subject</label>
+                <label className="input-label">{t('contact.form.labels.subject')}</label>
                 <input
-                  {...register('subject', { required: 'Subject is required' })}
+                  {...register('subject', { required: t('contact.form.errors.subjectRequired') })}
                   className="input-field"
-                  placeholder="Question about my report"
+                  placeholder={t('contact.form.placeholders.subject')}
                 />
                 {errors.subject && <p className="text-red-500 text-xs mt-1">{errors.subject.message}</p>}
               </div>
               <div>
-                <label className="input-label">Message</label>
+                <label className="input-label">{t('contact.form.labels.message')}</label>
                 <textarea
-                  {...register('message', { required: 'Message cannot be empty', minLength: { value: 20, message: 'Please write at least 20 characters' } })}
+                  {...register('message', {
+                    required: t('contact.form.errors.messageRequired'),
+                    minLength: { value: 20, message: t('contact.form.errors.messageMin') },
+                  })}
                   className="input-field"
                   rows={5}
-                  placeholder="Tell us how we can help..."
+                  placeholder={t('contact.form.placeholders.message')}
                 />
                 {errors.message && <p className="text-red-500 text-xs mt-1">{errors.message.message}</p>}
               </div>
               <button type="submit" disabled={submitting} className="btn-primary w-full">
-                {submitting ? 'Sending…' : 'Send Message'}
+                {submitting ? t('contact.form.submitting') : t('contact.form.submit')}
               </button>
             </form>
           )}

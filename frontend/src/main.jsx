@@ -7,6 +7,7 @@ import { store } from './store'
 import { injectStore } from './services/api'
 import { ThemeProvider } from './context/ThemeContext'
 import './index.css'
+import './i18n'
 
 // Break circular dependency: api.js cannot import store at module level
 injectStore(store)

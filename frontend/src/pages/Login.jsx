@@ -9,6 +9,7 @@ import {
   selectAuthError,
   clearError,
 } from '../store/slices/authSlice'
+import { useTranslation } from 'react-i18next'
 
 export default function Login() {
   const dispatch = useDispatch()
@@ -19,6 +20,7 @@ export default function Login() {
   const sessionExpired = searchParams.get('session') === 'expired'
   const [resendEmail, setResendEmail] = useState(null)
   const [resendCooldown, setResendCooldown] = useState(false)
+  const { t } = useTranslation()
 
   const { register, handleSubmit, formState: { errors }, getValues } = useForm()
 
@@ -72,13 +74,13 @@ export default function Login() {
             </div>
             <span className="font-bold text-xl text-brand-dark">CAD Gurukul</span>
           </Link>
-          <h1 className="text-2xl font-bold text-brand-dark">Welcome Back</h1>
-          <p className="text-gray-500 mt-2 text-sm">Continue your career discovery journey</p>
+          <h1 className="text-2xl font-bold text-brand-dark">{t('login.title')}</h1>
+          <p className="text-gray-500 mt-2 text-sm">{t('login.subtitle')}</p>
         </div>
 
         {sessionExpired && (
           <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm text-center">
-            ⚠️ Your session expired. Please log in again.
+            ⚠️ {t('login.sessionExpired')}
           </div>
         )}
 
@@ -93,7 +95,7 @@ export default function Login() {
                   disabled={isLoading || resendCooldown}
                   className="text-brand-red font-semibold text-xs hover:underline disabled:opacity-50"
                 >
-                  {resendCooldown ? 'Resent! Check your inbox.' : 'Resend verification email →'}
+                  {resendCooldown ? t('login.resendSent') : t('login.resendAction')}
                 </button>
               </div>
             )}
@@ -103,23 +105,26 @@ export default function Login() {
         <div className="card shadow-xl">
           <form onSubmit={handleSubmit(onSubmit)} onChange={() => { if (authError) dispatch(clearError()) }} className="space-y-4">
             <div>
-              <label className="input-label">Email Address</label>
+              <label className="input-label">{t('login.form.emailLabel')}</label>
               <input
-                {...register('email', { required: 'Email is required', pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' } })}
+                {...register('email', {
+                  required: t('login.form.emailRequired'),
+                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: t('login.form.emailInvalid') },
+                })}
                 type="email"
                 className="input-field"
-                placeholder="your@email.com"
+                placeholder={t('login.form.emailPlaceholder')}
               />
               {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
             </div>
 
             <div>
-              <label className="input-label">Password</label>
+              <label className="input-label">{t('login.form.passwordLabel')}</label>
               <input
-                {...register('password', { required: 'Password is required' })}
+                {...register('password', { required: t('login.form.passwordRequired') })}
                 type="password"
                 className="input-field"
-                placeholder="Your password"
+                placeholder={t('login.form.passwordPlaceholder')}
               />
               {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
             </div>
@@ -135,16 +140,16 @@ export default function Login() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                   </svg>
-                  Signing In...
+                  {t('login.form.submitting')}
                 </>
-              ) : 'Sign In →'}
+              ) : t('login.form.submit')}
             </button>
           </form>
         </div>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          New here?{' '}
-          <Link to={registerHref} className="text-brand-red font-semibold hover:underline">Create a free account</Link>
+          {t('login.footer.prompt')}{' '}
+          <Link to={registerHref} className="text-brand-red font-semibold hover:underline">{t('login.footer.link')}</Link>
         </p>
       </div>
     </div>

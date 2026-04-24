@@ -6,6 +6,7 @@ import {
   resendVerificationEmail,
   selectAuthLoading,
 } from '../store/slices/authSlice'
+import { useTranslation } from 'react-i18next'
 
 const STATUS = {
   VERIFYING: 'verifying',
@@ -40,6 +41,7 @@ export default function VerifyEmail() {
   const [resendCooldown, setResendCooldown] = useState(false)
   const [resendSent, setResendSent] = useState(false)
   const [inAppBrowser, setInAppBrowser] = useState(false)
+  const { t } = useTranslation()
   const token = searchParams.get('token')
 
   useEffect(() => {
@@ -101,8 +103,8 @@ export default function VerifyEmail() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-brand-dark mb-2">Verifying your email…</h2>
-            <p className="text-gray-500 text-sm">Just a moment while we confirm your address.</p>
+            <h2 className="text-xl font-bold text-brand-dark mb-2">{t('verifyEmail.verifying.title')}</h2>
+            <p className="text-gray-500 text-sm">{t('verifyEmail.verifying.subtitle')}</p>
           </div>
         )}
 
@@ -110,24 +112,23 @@ export default function VerifyEmail() {
         {status === STATUS.SUCCESS && (
           <div className="card shadow-xl text-center">
             <div className="text-5xl mb-4">🎉</div>
-            <h2 className="text-2xl font-bold text-brand-dark mb-2">Email Verified!</h2>
+            <h2 className="text-2xl font-bold text-brand-dark mb-2">{t('verifyEmail.success.title')}</h2>
 
             {inAppBrowser ? (
               /* ── In-app browser (Outlook, Yahoo, etc.) warning ── */
               <>
                 <p className="text-gray-600 text-sm mb-4">
-                  Your email is confirmed! You're currently inside your email app's browser.
+                  {t('verifyEmail.success.inApp.subtitle')}
                 </p>
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-left text-sm text-amber-800 mb-5">
-                  <p className="font-semibold mb-2">⚠️ One more step to stay signed in</p>
+                  <p className="font-semibold mb-2">⚠️ {t('verifyEmail.success.inApp.warningTitle')}</p>
                   <p className="mb-3">
-                    Your email app uses an isolated browser that won't keep you logged in
-                    once you close it. To continue, open your main browser and sign in:
+                    {t('verifyEmail.success.inApp.warningBody')}
                   </p>
                   <ol className="list-decimal list-inside space-y-1 text-amber-700">
-                    <li>Open <strong>Chrome</strong>, <strong>Safari</strong>, or your default browser</li>
-                    <li>Go to <strong>cadgurukul.com/login</strong></li>
-                    <li>Sign in with your email and password</li>
+                    <li>{t('verifyEmail.success.inApp.step1')}</li>
+                    <li>{t('verifyEmail.success.inApp.step2')}</li>
+                    <li>{t('verifyEmail.success.inApp.step3')}</li>
                   </ol>
                 </div>
                 <a
@@ -136,12 +137,12 @@ export default function VerifyEmail() {
                   rel="noopener noreferrer"
                   className="inline-block btn-primary w-full text-center mb-3"
                 >
-                  Open Sign In Page →
+                  {t('verifyEmail.success.inApp.openSignIn')}
                 </a>
                 <p className="text-xs text-gray-400">
-                  Or continue in this browser (session will be lost when you close the email app).{' '}
+                  {t('verifyEmail.success.inApp.continueNote')}{' '}
                   <Link to="/onboarding" className="text-brand-red font-semibold hover:underline">
-                    Continue anyway →
+                    {t('verifyEmail.success.inApp.continueAnyway')}
                   </Link>
                 </p>
               </>
@@ -149,7 +150,7 @@ export default function VerifyEmail() {
               /* ── Normal browser ── */
               <>
                 <p className="text-gray-600 text-sm mb-4">
-                  Your email has been confirmed. Taking you to your profile setup…
+                  {t('verifyEmail.success.normal.subtitle')}
                 </p>
                 <div className="flex justify-center mb-4">
                   <svg className="animate-spin w-5 h-5 text-brand-red" viewBox="0 0 24 24" fill="none">
@@ -161,12 +162,12 @@ export default function VerifyEmail() {
                   to="/onboarding"
                   className="inline-block btn-primary w-full text-center mb-3"
                 >
-                  Continue to Profile Setup →
+                  {t('verifyEmail.success.normal.continue')}
                 </Link>
                 <p className="text-xs text-gray-400">
-                  Already set up?{' '}
+                  {t('verifyEmail.success.normal.alreadySetup')}{' '}
                   <Link to="/dashboard" className="text-brand-red font-semibold hover:underline">
-                    Go to Dashboard →
+                    {t('verifyEmail.success.normal.dashboard')}
                   </Link>
                 </p>
               </>
@@ -178,14 +179,13 @@ export default function VerifyEmail() {
         {status === STATUS.EXPIRED && (
           <div className="card shadow-xl text-center">
             <div className="text-5xl mb-4">⏰</div>
-            <h2 className="text-2xl font-bold text-brand-dark mb-2">Link Expired</h2>
+            <h2 className="text-2xl font-bold text-brand-dark mb-2">{t('verifyEmail.expired.title')}</h2>
             <p className="text-gray-600 text-sm leading-relaxed mb-6">
-              This verification link has expired (links are valid for 24 hours).
-              Enter your email below to receive a fresh link.
+              {t('verifyEmail.expired.subtitle')}
             </p>
             {resendSent ? (
               <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-green-700 text-sm">
-                ✅ A new verification email has been sent. Check your inbox!
+                ✅ {t('verifyEmail.expired.sent')}
               </div>
             ) : (
               <div className="space-y-3">
@@ -193,7 +193,7 @@ export default function VerifyEmail() {
                   type="email"
                   value={resendEmail}
                   onChange={(e) => setResendEmail(e.target.value)}
-                  placeholder="your@email.com"
+                  placeholder={t('verifyEmail.expired.placeholder')}
                   className="input-field w-full"
                 />
                 <button
@@ -201,13 +201,13 @@ export default function VerifyEmail() {
                   disabled={!resendEmail || resendCooldown || isLoading}
                   className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isLoading ? 'Sending…' : 'Resend Verification Email'}
+                  {isLoading ? t('verifyEmail.expired.sending') : t('verifyEmail.expired.resend')}
                 </button>
               </div>
             )}
             <p className="text-center text-sm text-gray-500 mt-4">
-              Already verified?{' '}
-              <Link to="/login" className="text-brand-red font-semibold hover:underline">Sign in</Link>
+              {t('verifyEmail.expired.alreadyVerified')}{' '}
+              <Link to="/login" className="text-brand-red font-semibold hover:underline">{t('verifyEmail.expired.signIn')}</Link>
             </p>
           </div>
         )}
@@ -216,23 +216,23 @@ export default function VerifyEmail() {
         {status === STATUS.INVALID && (
           <div className="card shadow-xl text-center">
             <div className="text-5xl mb-4">❌</div>
-            <h2 className="text-2xl font-bold text-brand-dark mb-2">Invalid Link</h2>
+            <h2 className="text-2xl font-bold text-brand-dark mb-2">{t('verifyEmail.invalid.title')}</h2>
             <p className="text-gray-600 text-sm leading-relaxed mb-6">
-              This verification link is invalid or has already been used.
-              {!token && ' No verification token was found in the URL.'}
+              {t('verifyEmail.invalid.subtitle')}
+              {!token && t('verifyEmail.invalid.noToken')}
             </p>
             <div className="flex flex-col gap-3">
               <Link
                 to="/register"
                 className="btn-primary w-full text-center"
               >
-                Create a new account
+                {t('verifyEmail.invalid.createAccount')}
               </Link>
               <Link
                 to="/login"
                 className="py-2 px-4 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 text-center"
               >
-                Sign in instead
+                {t('verifyEmail.invalid.signIn')}
               </Link>
             </div>
           </div>
