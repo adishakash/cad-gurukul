@@ -7,6 +7,7 @@ const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
+const { IS_TEST_MODE, TEST_JOINING_FEE_PAISE } = require('../utils/testPricing');
 
 const COMMISSION_RATE = 0.10; // 10% on net sale amount
 const MAX_DISCOUNT_PCT = 20;  // hard cap — also validated in Joi schema
@@ -209,6 +210,9 @@ const resolveJoiningLink = async (req, res) => {
     const subtotalPaise = link.feeAmountPaise - discountAmountPaise;
     const gstBreakdown = buildGstFromSubtotal(subtotalPaise);
 
+    // In test mode the candidate is charged a symbolic ₹0.10 regardless of the catalog fee.
+    const displayNetAmountPaise = IS_TEST_MODE ? TEST_JOINING_FEE_PAISE : gstBreakdown.totalAmountPaise;
+
     return successResponse(res, {
       code: link.code,
       cclName: link.cclUser.name,
@@ -217,12 +221,13 @@ const resolveJoiningLink = async (req, res) => {
       feeAmountPaise: link.feeAmountPaise,
       discountPct: effectiveDiscountPct,
       discountAmountPaise,
-      netAmountPaise: gstBreakdown.totalAmountPaise,
+      netAmountPaise: displayNetAmountPaise,
       gstRate: gstBreakdown.gstRate,
       gstIncluded: gstBreakdown.gstIncluded,
       gstAmountPaise: gstBreakdown.gstAmountPaise,
       taxableAmountPaise: gstBreakdown.taxableAmountPaise,
       totalAmountPaise: gstBreakdown.totalAmountPaise,
+      isTestMode: IS_TEST_MODE,
       isUsed: link.isUsed,
       isExpired,
       expiresAt: link.expiresAt,
@@ -274,8 +279,21 @@ const createJoiningOrder = async (req, res) => {
     const gstBreakdown = buildGstFromSubtotal(subtotalPaise);
     const totalAmountPaise = gstBreakdown.totalAmountPaise;
 
+    // In test mode, charge the symbolic ₹0.10 to Razorpay regardless of the catalog fee.
+    // The link still stores the real net amount for audit/commission calculations.
+    const chargeAmountPaise = IS_TEST_MODE ? TEST_JOINING_FEE_PAISE : totalAmountPaise;
+
+    if (IS_TEST_MODE) {
+      logger.warn('[CCL] TEST MODE — joining fee overridden to symbolic amount', {
+        code,
+        realNetPaise: totalAmountPaise,
+        chargePaise: chargeAmountPaise,
+      });
+    }
+
     const order = await createRazorpayOrder({
-      amount: totalAmountPaise,
+      amount: chargeAmountPaise,
+      amount: chargeAmountPaise,
       currency: 'INR',
       receipt: `jl_${link.code}_${Date.now()}`,
       notes: {
@@ -287,13 +305,14 @@ const createJoiningOrder = async (req, res) => {
       },
     });
 
-    // Store orderId and net amount on the link (overwrites any previous failed attempt)
+    // Store orderId on the link. In test mode, persist the symbolic charge amount
+    // so that verifyJoiningPayment also resolves the correct (test) net amount.
     await prisma.cclJoiningLink.update({
       where: { id: link.id },
       data: {
         joiningOrderId:        order.id,
         joiningPaymentStatus:  'initiated',
-        joiningNetAmountPaise: totalAmountPaise,
+joiningNetAmountPaise: chargeAmountPaise,
         // Pre-fill candidate info if not already set
         ...(candidateName  && !link.candidateName  ? { candidateName }  : {}),
         ...(candidateEmail && !link.candidateEmail ? { candidateEmail } : {}),
@@ -301,11 +320,11 @@ const createJoiningOrder = async (req, res) => {
       },
     });
 
-    logger.info('[CCL] Joining order created', { code, orderId: order.id, netAmountPaise: totalAmountPaise });
+    logger.info('[CCL] Joining order created', { code, orderId: order.id, chargeAmountPaise });
 
     return successResponse(res, {
       orderId:             order.id,
-      amountPaise:         totalAmountPaise,
+      amountPaise:         chargeAmountPaise,
       grossAmountPaise:    link.feeAmountPaise,
       discountAmountPaise,
       discountPct:         effectiveDiscountPct,
@@ -317,6 +336,7 @@ const createJoiningOrder = async (req, res) => {
       currency:            'INR',
       keyId:               config.razorpay.keyId,
       cclName:             link.cclUser.name,
+      isTestMode:          IS_TEST_MODE,
     }, 'Order created', 201);
   } catch (err) {
     logger.error('[CCL] createJoiningOrder error', { error: err.message });
@@ -738,4 +758,5 @@ module.exports = {
   listTraining,
   serveTrainingFile,
 };
+
 

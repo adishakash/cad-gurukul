@@ -160,7 +160,7 @@ export default function JoinPage() {
   }
 
   // status === 'ready'
-  const discountAmount = link?.discountAmountPaise
+const discountAmount = link?.discountAmountPaise
     ?? Math.round((link?.feeAmountPaise || 0) * (link?.discountPct || 0) / 100)
   const netPaise = link?.netAmountPaise ?? Math.max(0, (link?.feeAmountPaise || 0) - discountAmount)
   const gstRate = link?.gstRate ?? 18
@@ -168,10 +168,21 @@ export default function JoinPage() {
   const gstBreakdown = splitGstFromInclusive(netPaise, gstRate)
   const gstAmount = link?.gstAmountPaise ?? gstBreakdown.gstPaise
   const fmt = (paise) => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  const isTestMode = Boolean(link?.isTestMode)
 
   return (
     <div className="min-h-screen bg-indigo-50 flex items-center justify-center px-4 py-10">
       <div className="bg-white rounded-2xl shadow-lg max-w-md w-full overflow-hidden">
+        {/* Test mode banner */}
+        {isTestMode && (
+          <div className="bg-yellow-50 border-b-2 border-yellow-400 px-5 py-3 flex items-center gap-2">
+            <span className="text-yellow-600 text-lg">🧪</span>
+            <div>
+              <p className="text-xs font-bold text-yellow-800">TEST MODE — Symbolic fee (₹0.10)</p>
+              <p className="text-xs text-yellow-700">No real joining fee will be charged.</p>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="bg-indigo-600 px-6 py-5 text-white">
           <p className="text-xs uppercase tracking-widest opacity-75">CAD Gurukul</p>
@@ -183,14 +194,16 @@ export default function JoinPage() {
 
         {/* Fee summary */}
         <div className="px-6 py-4 border-b border-gray-100 bg-indigo-50">
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>Course Fee</span>
-            <span>{fmt(link?.feeAmountPaise)}</span>
-          </div>
-          {discountAmount > 0 && (
+          {!isTestMode && (
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Course Fee</span>
+              <span>{fmt(link?.feeAmountPaise)}</span>
+            </div>
+          )}
+          {!isTestMode && link?.discountAmountPaise > 0 && (
             <div className="flex justify-between text-sm text-green-600 mt-1">
               <span>Discount ({link?.discountPct}%)</span>
-              <span>− {fmt(discountAmount)}</span>
+<span>− {fmt(discountAmount)}</span>
             </div>
           )}
           {gstIncluded && gstAmount > 0 && (
@@ -247,3 +260,5 @@ export default function JoinPage() {
     </div>
   )
 }
+
+

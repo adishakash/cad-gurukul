@@ -24,7 +24,14 @@ const getUpgradePrice = (currentPlanType = 'free', targetPlanType = 'free') => {
   return Math.max(0, targetPrice - currentPrice);
 };
 
-const formatRupees = (amount) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+const formatRupees = (amount) => {
+  const num = Number(amount || 0);
+  // For fractional amounts < 1, always show 2 decimals (e.g. ₹0.10 not ₹0.1)
+  if (num > 0 && num < 1) {
+    return `₹${num.toFixed(2)}`;
+  }
+  return `₹${num.toLocaleString('en-IN')}`;
+};
 
 module.exports = {
   PLAN_PRICES,
