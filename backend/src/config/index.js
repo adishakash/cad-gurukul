@@ -118,6 +118,10 @@ const config = {
     included: process.env.GST_INCLUDED !== 'false',
   },
 
+  counsellorJoin: {
+    feeRupees: parseFloatValue(process.env.COUNSELLOR_JOIN_FEE_RUPEES, 49999),
+  },
+
   email: {
     host: (process.env.SMTP_HOST || '').trim(),
     port: parseInt(process.env.SMTP_PORT, 10) || 587,

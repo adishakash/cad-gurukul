@@ -7,6 +7,7 @@
 
 const prisma = require('../../config/database');
 const logger = require('../../utils/logger');
+const whatsappService = require('../whatsapp/whatsappService');
 
 // Optional integrations — may not exist in all deploys
 let sendEmail;
@@ -27,6 +28,11 @@ const TEMPLATES = {
     emailSubject: '🎉 Your Partner Application Is Approved!',
     emailBody: (p) => `Hi ${p.name},\n\nCongratulations! Your partner account has been approved.\nYou can now log in and start earning commissions.\n\nCAD Gurukul Team`,
     waKey: 'partner_approved',
+  },
+  partner_welcome_credentials: {
+    emailSubject: 'Welcome to CAD Gurukul — Your Login Credentials',
+    emailBody: (p) => `Hi ${p.name},\n\nWelcome to CAD Gurukul! Your counsellor account is now active.\n\nLogin ID: ${p.loginId}\nPassword: ${p.password}\n\nPlease log in and change your password after first sign-in.\n\nCAD Gurukul Team`,
+    waKey: 'partner_welcome_credentials',
   },
   partner_rejected: {
     emailSubject: 'Application Status Update',
@@ -81,16 +87,35 @@ const notifyPartner = async (userId, key, payload = {}) => {
 
   try {
     if (userId) {
-      user  = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, phone: true } });
+      user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          partnerApplication: { select: { phone: true, fullName: true } },
+        },
+      });
       email = user?.email || email;
-      phone = user?.phone || phone;
-      name  = user?.name  || name;
+      phone = user?.partnerApplication?.phone || phone;
+      name  = user?.partnerApplication?.fullName || user?.name || name;
     }
 
     const templatePayload = { name, ...payload };
 
     // ── WhatsApp ──────────────────────────────────────────────────────────────
-    if (phone && automationService?.triggerAutomation) {
+    if (phone && whatsappService?.sendTemplateMessage) {
+      try {
+        await whatsappService.sendTemplateMessage({
+          toNumber: phone,
+          templateName: template.waKey,
+          variables: templatePayload,
+          userId: userId || null,
+        });
+      } catch (waErr) {
+        logger.warn('[PartnerNotify] WA send failed', { key, error: waErr.message });
+      }
+    } else if (phone && automationService?.triggerAutomation) {
       try {
         await automationService.triggerAutomation(template.waKey, { phone, ...templatePayload });
       } catch (waErr) {
@@ -112,12 +137,10 @@ const notifyPartner = async (userId, key, payload = {}) => {
       await prisma.notificationLog.create({
         data: {
           userId:  userId || null,
-          channel: email ? 'EMAIL' : 'WHATSAPP',
+          channel: email ? 'email' : 'whatsapp',
           templateKey: key,
-          recipientEmail: email,
-          recipientPhone: phone,
-          status: 'SENT',
-          payload: JSON.stringify(templatePayload),
+          status: 'sent',
+          payload: templatePayload,
         },
       });
     } catch (logErr) {

@@ -302,6 +302,15 @@ export const partnerAuthApi = {
   login:    (data) => api.post('/auth/partner/login', data),
 }
 
+// ─── Partner Join API (public) ───────────────────────────────────────────────
+export const partnerJoinApi = {
+  quote:      (data) => api.post('/partner/join/quote', data),
+  createOrder: (data) => api.post('/partner/join/create-order', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  verify:     (data) => api.post('/partner/join/verify', data),
+}
+
 // ─── Partner Admin API ────────────────────────────────────────────────────────
 export const partnerAdminApi = {
   list:              (params)   => adminApiClient.get('/admin/partners', { params }),

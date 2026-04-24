@@ -18,6 +18,7 @@ const staffRoutes = require('./staff.routes');
 const counsellorRoutes = require('./counsellor.routes');
 const joiningRoutes = require('./joining.routes');
 const partnerAuthRoutes = require('./partner.auth.routes');
+const partnerJoinRoutes = require('./partner.join.routes');
 
 // Health check
 router.get('/health', async (req, res) => {
@@ -65,6 +66,7 @@ router.use('/counsellor', counsellorRoutes);
 router.use('/join', joiningRoutes);
 router.use('/testlink', testlinkRoutes);
 router.use('/auth/partner', partnerAuthRoutes);
+router.use('/partner/join', partnerJoinRoutes);
 router.use('/consultation', consultationRoutes);
 router.use('/scheduling', schedulingRoutes);
 

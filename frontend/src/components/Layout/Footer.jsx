@@ -32,6 +32,7 @@ export default function Footer() {
                 ['/how-it-works', t('footer.links.howItWorks')],
                 ['/plans', t('footer.links.pricing')],
                 ['/contact', t('footer.links.contact')],
+                ['/partner/register', t('footer.links.joinCounsellor')],
               ].map(([to, label]) => (
                 <li key={to}><Link to={to} className="hover:text-brand-red transition-colors">{label}</Link></li>
               ))}

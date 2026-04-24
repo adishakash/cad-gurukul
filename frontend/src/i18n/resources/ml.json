@@ -29,12 +29,13 @@
     "madeWithLove": "ഇന്ത്യൻ വിദ്യാർത്ഥികൾക്കായി സ്‌നേഹത്തോടെ നിർമ്മിച്ചത്",
     "quickLinks": "വേഗത്തിലുള്ള ലിങ്കുകൾ",
     "students": "വിദ്യാർത്ഥികൾ",
-    "links": {
-      "home": "ഹോം",
-      "about": "ഞങ്ങളേക്കുറിച്ച്",
-      "howItWorks": "എങ്ങനെ പ്രവർത്തിക്കുന്നു",
-      "pricing": "വില",
-      "contact": "ബന്ധപ്പെടുക"
+     "links": {
+       "home": "ഹോം",
+       "about": "ഞങ്ങളേക്കുറിച്ച്",
+       "howItWorks": "എങ്ങനെ പ്രവർത്തിക്കുന്നു",
+       "pricing": "വില",
+       "contact": "ബന്ധപ്പെടുക",
+       "joinCounsellor": "Join as a Counsellor"
     },
     "studentsLinks": {
       "freeAssessment": "സൗജന്യ വിലയിരുത്തൽ",

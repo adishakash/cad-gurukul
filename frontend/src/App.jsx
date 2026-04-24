@@ -161,7 +161,7 @@ export default function App() {
         <Route path="/admin/staff" element={<AdminRoute><StaffManagement /></AdminRoute>} />
 
         {/* Partner registration (public) */}
-        <Route path="/partner/register" element={<PartnerRegister />} />
+        <Route path="/partner/register" element={<PublicLayout><PartnerRegister /></PublicLayout>} />
         <Route path="/partner/pending-approval" element={<PendingApproval />} />
 
         {/* Staff (Career Counsellor Lead) routes */}

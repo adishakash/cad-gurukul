@@ -1074,7 +1074,29 @@ model PartnerApplication {
   city          String?
   qualification String?
   experience    String?
+  addressLine   String?
+  pincode       String?
   referredBy    String? // cclUserId who referred this CC candidate
+  graduationDocPath String?
+  graduationDocName String?
+  graduationDocMime String?
+  graduationDocSize Int?
+  idDocPath     String?
+  idDocName     String?
+  idDocMime     String?
+  idDocSize     Int?
+  paymentStatus String           @default("created")
+  razorpayOrderId   String?      @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  paymentAmountPaise Int?
+  discountPct   Float?
+  couponCode    String?
+  gstRate       Float?
+  gstAmountPaise Int?
+  taxableAmountPaise Int?
+  totalAmountPaise Int?
+  paidAt        DateTime?
   adminNotes    String?
   reviewedBy    String? // adminUserId
   reviewedAt    DateTime?
@@ -1086,6 +1108,27 @@ model PartnerApplication {
   @@index([status])
   @@index([role])
   @@map("partner_applications")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNSELLOR COUPONS (Join fee discounts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CounsellorCoupon {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  discountPct Float   @default(0)
+  isActive   Boolean  @default(true)
+  maxUses    Int?
+  usedCount  Int      @default(0)
+  startsAt   DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("counsellor_coupons")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
