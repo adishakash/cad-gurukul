@@ -691,6 +691,8 @@ const buildTranslator = (langCode) => {
   };
 };
 
+const buildReportTranslator = (profile) => buildTranslator(resolveLanguageCode(profile));
+
 /**
  * Resolve the Chromium/Chrome executable path.
  *
@@ -962,4 +964,4 @@ const buildReportHtml = (report, profile) => {
 </html>`;
 };
 
-module.exports = { generatePdf };
+module.exports = { generatePdf, buildReportTranslator };

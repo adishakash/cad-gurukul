@@ -11,6 +11,35 @@ const formatRoadmapLabel = (key) => key
   .replace(/^./, (char) => char.toUpperCase())
   .trim();
 
+const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
+
+const interpolateTemplate = (template, values = {}) =>
+  String(template || '').replace(/{{\s*(\w+)\s*}}/g, (_, key) => (values[key] !== undefined ? values[key] : ''));
+
+const buildRoadmapText = (t, key, fallback, vars) => {
+  if (typeof t === 'function') {
+    const translated = t(`roadmap.${key}`, vars);
+    if (translated) return translated;
+  }
+  return interpolateTemplate(fallback, vars);
+};
+
+const resolveLeadEntitlement = async (userId) => {
+  const lead = await prisma.lead.findFirst({
+    where: { userId },
+    select: { planType: true, status: true },
+  });
+
+  const userHasPaid = PAID_STATUSES.includes(lead?.status);
+  const planType = userHasPaid ? (lead?.planType || 'standard') : 'free';
+
+  return {
+    userHasPaid,
+    planType,
+    consultationPurchased: planType === 'consultation',
+  };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Career affinity: maps keyword fragments → { dimensionName: weight }
 // Weights sum to 1.0 per career. Dimensions correspond to the scores object
@@ -137,7 +166,16 @@ const normalizeEvaluation = (reportData) => {
   };
 };
 
-const normalizeRoadmaps = (reportData) => {
+const normalizeRoadmaps = (reportData, options = {}) => {
+  const t = options.t;
+  const labels = {
+    oneYear: buildRoadmapText(t, 'oneYear', '1-Year Action Plan'),
+    threeYear: buildRoadmapText(t, 'threeYear', '3-Year Career Roadmap'),
+    goal: buildRoadmapText(t, 'goal', 'Goal'),
+    action: buildRoadmapText(t, 'action', 'Action'),
+    milestone: buildRoadmapText(t, 'milestone', 'Milestone'),
+  };
+
   if (Array.isArray(reportData?.roadmaps) && reportData.roadmaps.length > 0) {
     return reportData.roadmaps;
   }
@@ -146,9 +184,9 @@ const normalizeRoadmaps = (reportData) => {
     return reportData.yearWiseRoadmap.map((entry, index) => ({
       career: entry.year || `Roadmap ${index + 1}`,
       steps: [
-        ...(Array.isArray(entry.goals) ? entry.goals.map((item) => `Goal: ${item}`) : []),
-        ...(Array.isArray(entry.actions) ? entry.actions.map((item) => `Action: ${item}`) : []),
-        ...(Array.isArray(entry.milestones) ? entry.milestones.map((item) => `Milestone: ${item}`) : []),
+        ...(Array.isArray(entry.goals) ? entry.goals.map((item) => `${labels.goal}: ${item}`) : []),
+        ...(Array.isArray(entry.actions) ? entry.actions.map((item) => `${labels.action}: ${item}`) : []),
+        ...(Array.isArray(entry.milestones) ? entry.milestones.map((item) => `${labels.milestone}: ${item}`) : []),
       ],
     }));
   }
@@ -157,26 +195,35 @@ const normalizeRoadmaps = (reportData) => {
 
   if (reportData?.oneYearRoadmap && typeof reportData.oneYearRoadmap === 'object') {
     sections.push({
-      career: '1-Year Action Plan',
-      steps: Object.entries(reportData.oneYearRoadmap).map(([key, value]) => `${formatRoadmapLabel(key)}: ${value}`),
+      career: labels.oneYear,
+      steps: [
+        buildRoadmapText(t, 'quarter', 'Q{{quarter}} (Months {{range}}): {{text}}', { quarter: 1, range: '1-3', text: reportData.oneYearRoadmap.quarter1 || '' }),
+        buildRoadmapText(t, 'quarter', 'Q{{quarter}} (Months {{range}}): {{text}}', { quarter: 2, range: '4-6', text: reportData.oneYearRoadmap.quarter2 || '' }),
+        buildRoadmapText(t, 'quarter', 'Q{{quarter}} (Months {{range}}): {{text}}', { quarter: 3, range: '7-9', text: reportData.oneYearRoadmap.quarter3 || '' }),
+        buildRoadmapText(t, 'quarter', 'Q{{quarter}} (Months {{range}}): {{text}}', { quarter: 4, range: '10-12', text: reportData.oneYearRoadmap.quarter4 || '' }),
+      ],
     });
   }
 
   if (reportData?.threeYearRoadmap && typeof reportData.threeYearRoadmap === 'object') {
     sections.push({
-      career: '3-Year Career Roadmap',
-      steps: Object.entries(reportData.threeYearRoadmap).map(([key, value]) => `${formatRoadmapLabel(key)}: ${value}`),
+      career: labels.threeYear,
+      steps: [
+        buildRoadmapText(t, 'year', 'Year {{year}}: {{text}}', { year: 1, text: reportData.threeYearRoadmap.year1 || '' }),
+        buildRoadmapText(t, 'year', 'Year {{year}}: {{text}}', { year: 2, text: reportData.threeYearRoadmap.year2 || '' }),
+        buildRoadmapText(t, 'year', 'Year {{year}}: {{text}}', { year: 3, text: reportData.threeYearRoadmap.year3 || '' }),
+      ],
     });
   }
 
   return sections;
 };
 
-const normalizeReportData = (reportData) => ({
+const normalizeReportData = (reportData, options = {}) => ({
   ...(reportData || {}),
   topCareers: normalizeTopCareers(reportData),
   evaluation: normalizeEvaluation(reportData),
-  roadmaps: normalizeRoadmaps(reportData),
+  roadmaps: normalizeRoadmaps(reportData, options),
 });
 
 /**
@@ -204,8 +251,28 @@ const getMyReports = async (req, res) => {
         createdAt: true,
       },
     });
+    let outputReports = reports;
+    try {
+      const entitlement = await resolveLeadEntitlement(req.user.id);
+      if (entitlement.userHasPaid) {
+        const healedReportType = entitlement.planType === 'consultation'
+          ? 'standard'
+          : (entitlement.planType || 'standard');
 
-    return successResponse(res, reports);
+        await prisma.careerReport.updateMany({
+          where: { userId: req.user.id, accessLevel: 'FREE', status: 'COMPLETED' },
+          data: { accessLevel: 'PAID', reportType: healedReportType },
+        }).catch(() => {});
+
+        outputReports = reports.map((report) => (
+          report.accessLevel === 'FREE' && report.status === 'COMPLETED'
+            ? { ...report, accessLevel: 'PAID', reportType: healedReportType }
+            : report
+        ));
+      }
+    } catch (_) { /* non-fatal */ }
+
+    return successResponse(res, outputReports);
   } catch (err) {
     logger.error('[Report] getMyReports error', { error: err.message });
     throw err;
@@ -235,7 +302,18 @@ const getReport = async (req, res) => {
     }
 
     const reportData = report.reportData;
-    const normalizedReportData = normalizeReportData(reportData);
+    let roadmapTranslator = null;
+    try {
+      const profileForLanguage = await prisma.studentProfile.findUnique({
+        where: { userId: req.user.id },
+        select: { languagePreference: true },
+      });
+      if (profileForLanguage) {
+        roadmapTranslator = pdfGenerator.buildReportTranslator(profileForLanguage);
+      }
+    } catch (_) { /* non-fatal */ }
+
+    const normalizedReportData = normalizeReportData(reportData, { t: roadmapTranslator });
 
     // For free reports — return a limited subset + trigger re-engagement automation
     if (report.accessLevel === 'FREE') {
@@ -252,7 +330,6 @@ const getReport = async (req, res) => {
       // (including free users who never paid) have planType = 'standard'.
       // We must use lead.status as the primary payment indicator, and planType only
       // to distinguish *which* plan was purchased for users who have actually paid.
-      const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
       let userPlanType = 'free';
       let consultationPurchased = false;
       let hasPaidPlan = false;
@@ -343,7 +420,6 @@ const getReport = async (req, res) => {
     // Fetch the user's current plan type to suppress inappropriate upsells.
     // IMPORTANT: Lead.planType defaults to 'standard' in DB for all rows — must
     // check lead.status to confirm the user actually paid before trusting planType.
-    const PAID_STATUSES_PAID = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
     let userPlanType = reportType; // safe default: at minimum they paid for this report tier
     let consultationPurchased = false;
     try {
@@ -351,7 +427,7 @@ const getReport = async (req, res) => {
         where: { userId: req.user.id },
         select: { planType: true, status: true },
       });
-      const userHasPaid = PAID_STATUSES_PAID.includes(leadForPlan?.status);
+      const userHasPaid = PAID_STATUSES.includes(leadForPlan?.status);
       // Use planType to detect tier upgrades (e.g. standard report holder who later
       // bought consultation) — but only if lead.status confirms payment.
       userPlanType = userHasPaid ? (leadForPlan?.planType || reportType) : reportType;
@@ -423,7 +499,6 @@ const downloadReportPdf = async (req, res) => {
         where: { id: req.params.id, userId: req.user.id, status: 'COMPLETED' },
       });
       if (candidateReport) {
-        const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
         const lead = await prisma.lead.findFirst({
           where: { userId: req.user.id },
           select: { status: true },
@@ -450,7 +525,8 @@ const downloadReportPdf = async (req, res) => {
     }
 
     // Normalize before PDF generation so legacy free-report data structures are handled
-    const normalizedForPdf = normalizeReportData(report.reportData);
+    const roadmapTranslator = pdfGenerator.buildReportTranslator(profile);
+    const normalizedForPdf = normalizeReportData(report.reportData, { t: roadmapTranslator });
     let pdfBuffer;
     try {
       pdfBuffer = await pdfGenerator.generatePdf(normalizedForPdf, profile);
@@ -488,12 +564,30 @@ const downloadReportPdf = async (req, res) => {
  */
 const getReportStatus = async (req, res) => {
   try {
-    const report = await prisma.careerReport.findFirst({
+    let report = await prisma.careerReport.findFirst({
       where: { id: req.params.id, userId: req.user.id },
       select: { id: true, status: true, accessLevel: true, generatedAt: true },
     });
 
     if (!report) return errorResponse(res, 'Report not found', 404, 'NOT_FOUND');
+
+    if (report.accessLevel === 'FREE') {
+      try {
+        const entitlement = await resolveLeadEntitlement(req.user.id);
+        if (entitlement.userHasPaid) {
+          const healedReportType = entitlement.planType === 'consultation'
+            ? 'standard'
+            : (entitlement.planType || 'standard');
+
+          await prisma.careerReport.update({
+            where: { id: report.id },
+            data: { accessLevel: 'PAID', reportType: healedReportType },
+          }).catch(() => {});
+
+          report = { ...report, accessLevel: 'PAID' };
+        }
+      } catch (_) { /* non-fatal */ }
+    }
 
     return successResponse(res, report);
   } catch (err) {
