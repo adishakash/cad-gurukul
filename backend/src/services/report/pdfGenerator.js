@@ -767,6 +767,17 @@ const buildReportHtml = (report, profile) => {
   const t = buildTranslator(langCode);
   const locale = LANGUAGE_LOCALE_MAP[langCode] || LANGUAGE_LOCALE_MAP.en;
   const isRtl = langCode === 'ur';
+  const classStandard = profile.classStandard?.replace('_', ' ') || '';
+  const classAndBoard = [classStandard, profile.board].filter(Boolean).join(' | ');
+  const location = [profile.city, profile.state].filter(Boolean).join(', ');
+  const studentMeta = [classAndBoard, location].filter(Boolean).join(' | ');
+  const confidenceScore = report.confidenceScore || 80;
+  const generatedDate = new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+  const reportYear = new Date().getFullYear();
+  const topCareerNames = (report.topCareers || [])
+    .map((career) => (typeof career === 'string' ? career : (career.name || career.title || '')))
+    .filter(Boolean);
+  const topCareerPreview = topCareerNames.slice(0, 3).join(', ');
   const topCareers = (report.topCareers || [])
     .map((career) => {
       if (typeof career === 'string') {
@@ -806,12 +817,34 @@ const buildReportHtml = (report, profile) => {
       : [];
 
   const roadmapHtml = roadmapsArray.length > 0
-    ? `<div class="section"><h2>${t('sections.roadmap')}</h2>${roadmapsArray.map((rm) => `
-      <div style="margin-bottom:14px">
-        <strong style="color:#0f3460">${rm.career || ''}</strong>
-        <ul style="margin-top:6px">${(rm.steps || []).map((s) => `<li>${s}</li>`).join('')}</ul>
-      </div>`).join('')}</div>`
+    ? `
+    <div class="section-block">
+      <div class="section-title">${t('sections.roadmap')}</div>
+      <div class="roadmap">
+        ${roadmapsArray.map((rm) => `
+        <div class="roadmap-card">
+          <div class="roadmap-title">${rm.career || ''}</div>
+          <ul class="roadmap-list">${(rm.steps || []).map((s) => `<li>${s}</li>`).join('')}</ul>
+        </div>`).join('')}
+      </div>
+    </div>`
     : '';
+
+  const tocItems = [
+    t('sections.studentSummary'),
+    t('sections.interestAnalysis'),
+    report.aptitudeAnalysis ? t('sections.aptitudeAnalysis') : null,
+    report.personalityInsights ? t('sections.personalityInsights') : null,
+    report.scores ? t('sections.scores') : null,
+    t('sections.recommendedStream'),
+    t('sections.topCareers'),
+    report.higherEducationDirection ? t('sections.higherEducation') : null,
+    report.skillGaps?.length ? t('sections.skillGaps') : null,
+    roadmapsArray.length ? t('sections.roadmap') : null,
+    report.actionableNextSteps?.length ? t('sections.nextSteps') : null,
+    report.parentGuidance ? t('sections.parentGuidance') : null,
+    report.motivationalMessage ? t('sections.messageForYou') : null,
+  ].filter(Boolean);
 
   return `<!DOCTYPE html>
 <html lang="${langCode}" dir="${isRtl ? 'rtl' : 'ltr'}">
@@ -819,145 +852,357 @@ const buildReportHtml = (report, profile) => {
   <meta charset="UTF-8" />
   <title>${t('title')}</title>
   <style>
+    :root {
+      --ink: #1d1b16;
+      --forest: #0f4c5c;
+      --sage: #2a9d8f;
+      --orange: #f28c38;
+      --gold: #f4c24d;
+      --cream: #f7f1e6;
+      --paper: #fffaf2;
+      --muted: #6b635a;
+      --line: #e3d6c2;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; background: #fff; font-size: 13px; line-height: 1.6; }
-    .cover { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: #fff; padding: 60px 40px; text-align: center; }
-    .cover h1 { font-size: 32px; color: #e94560; margin-bottom: 8px; }
-    .cover .subtitle { font-size: 16px; color: #a8b2d8; margin-bottom: 30px; }
-    .cover .student-name { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-    .cover .student-meta { font-size: 14px; color: #ccd6f6; }
-    .cover .report-badge { display: inline-block; background: #e94560; color: #fff; padding: 6px 20px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-top: 20px; letter-spacing: 2px; }
-    .content { padding: 30px 40px; }
-    .section { margin-bottom: 28px; border-left: 4px solid #e94560; padding-left: 16px; }
-    .section h2 { font-size: 18px; color: #0f3460; margin-bottom: 10px; }
-    .section p { margin-bottom: 8px; color: #333; }
-    .score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-    .score-card { background: #f0f4ff; border-radius: 8px; padding: 12px; text-align: center; }
-    .score-card .label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-    .score-card .value { font-size: 22px; font-weight: 700; color: #0f3460; }
-    .highlight-box { background: #fff8f0; border: 1px solid #ffd0a0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-    .career-list { list-style: none; }
-    .career-item { background: #f8f9ff; border: 1px solid #e0e7ff; border-radius: 8px; padding: 14px; margin-bottom: 10px; }
-    .career-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .fit-score { background: #0f3460; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 11px; }
-    ul.action-list li { margin-bottom: 6px; padding-left: 8px; }
-    .parent-section { background: #f0fff4; border: 1px solid #b7dfc3; border-radius: 8px; padding: 16px; }
-    .footer { background: #1a1a2e; color: #a8b2d8; text-align: center; padding: 20px; font-size: 11px; }
-    .confidence-badge { display: inline-block; background: #22c55e; color: #fff; padding: 4px 16px; border-radius: 20px; font-weight: 700; font-size: 14px; }
+    @page { margin: 0; }
+    body { font-family: 'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif; color: var(--ink); background: var(--paper); font-size: 13px; line-height: 1.6; }
+    h1, h2, h3 { font-family: 'Georgia', 'Times New Roman', serif; font-weight: 700; }
+    p { margin-bottom: 8px; }
     .page-break { page-break-before: always; }
-    .tag { display: inline-block; background: #e0e7ff; color: #4338ca; padding: 2px 10px; border-radius: 10px; font-size: 11px; margin: 2px; }
+
+    .cover {
+      position: relative;
+      background: var(--cream);
+      border: 2px solid var(--ink);
+      border-radius: 18px;
+      padding: 48px 44px 60px;
+      overflow: hidden;
+      page-break-after: always;
+    }
+    .cover .shape { position: absolute; border-radius: 50%; opacity: 0.9; }
+    .cover .shape.one { width: 130px; height: 130px; background: var(--orange); top: -36px; right: -36px; }
+    .cover .shape.two { width: 90px; height: 90px; background: var(--gold); top: 36px; right: 72px; }
+    .cover .shape.three { width: 70px; height: 70px; background: var(--sage); bottom: -20px; right: 36px; }
+    .cover .shape.four { width: 90px; height: 90px; background: #f1b24a; bottom: 10px; left: -20px; }
+    html[dir="rtl"] .cover .shape.one { right: auto; left: -36px; }
+    html[dir="rtl"] .cover .shape.two { right: auto; left: 72px; }
+    html[dir="rtl"] .cover .shape.three { right: auto; left: 36px; }
+    html[dir="rtl"] .cover .shape.four { left: auto; right: -20px; }
+    .cover .brand { font-size: 12px; text-transform: uppercase; letter-spacing: 3px; color: var(--forest); font-weight: 700; }
+    .cover .year { font-size: 40px; color: var(--forest); margin-top: 6px; }
+    .cover .title { font-size: 32px; margin-top: 8px; }
+    .cover .subtitle { font-size: 15px; color: var(--muted); margin-top: 6px; max-width: 520px; }
+    .cover .student { font-size: 26px; font-weight: 700; margin-top: 18px; }
+    .cover .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .cover .badge {
+      display: inline-block;
+      margin-top: 14px;
+      background: var(--orange);
+      color: var(--ink);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      font-weight: 700;
+    }
+    .cover .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+      max-width: 420px;
+    }
+    .cover .stat { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .cover .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .cover .stat-value { font-size: 18px; font-weight: 700; color: var(--forest); margin-top: 4px; }
+
+    .toc {
+      background: #fff;
+      border: 2px solid var(--ink);
+      border-radius: 16px;
+      padding: 24px 22px;
+      page-break-after: always;
+    }
+    .toc-title {
+      display: inline-block;
+      background: var(--orange);
+      color: var(--ink);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      font-size: 18px;
+    }
+    .toc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin-top: 14px; }
+    .toc-item { display: flex; align-items: center; gap: 10px; font-size: 12px; padding-bottom: 6px; border-bottom: 1px dashed var(--line); }
+    .toc-num { background: var(--forest); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 999px; letter-spacing: 1px; }
+
+    .content { padding: 6px 2px 0; }
+    .summary-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+    }
+    .summary-item .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .summary-item .value { font-size: 13px; font-weight: 700; color: var(--ink); margin-top: 4px; }
+
+    .highlight-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .highlight-card {
+      background: var(--cream);
+      border: 2px solid var(--ink);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .highlight-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--forest); }
+    .highlight-card .value { font-size: 16px; font-weight: 700; margin-top: 6px; }
+    .highlight-card .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    .section-block {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+    }
+    .section-title {
+      display: inline-block;
+      background: var(--orange);
+      color: var(--ink);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: 'Georgia', 'Times New Roman', serif;
+      margin-bottom: 10px;
+    }
+
+    .score-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    .score-card { background: #fdf7ee; border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; }
+    .score-card .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .score-card .value { font-size: 20px; font-weight: 700; color: var(--forest); }
+
+    .callout { background: #fff7e6; border: 1px solid #f1d2a8; border-radius: 12px; padding: 14px; }
+    .callout-main { font-size: 18px; font-weight: 700; color: var(--forest); }
+    .callout-text { margin-top: 6px; color: #2b2b2b; }
+
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .pill { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 11px; }
+
+    .tag { display: inline-block; background: var(--gold); color: var(--ink); padding: 2px 10px; border-radius: 10px; font-size: 11px; margin: 2px; }
+
+    .career-list { list-style: none; }
+    .career-item {
+      position: relative;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px 14px 22px;
+      margin-bottom: 12px;
+    }
+    .career-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 6px;
+      height: 100%;
+      background: var(--orange);
+      border-radius: 12px 0 0 12px;
+    }
+    html[dir="rtl"] .career-item { padding: 14px 22px 14px 16px; }
+    html[dir="rtl"] .career-item::before { left: auto; right: 0; border-radius: 0 12px 12px 0; }
+    .career-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px; }
+    .fit-score { background: var(--forest); color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 11px; }
+
+    ul.action-list { padding-left: 16px; }
+    html[dir="rtl"] ul.action-list { padding-left: 0; padding-right: 16px; }
+    ul.action-list li { margin-bottom: 6px; }
+
+    .parent-section { background: #edf8f0; border: 1px solid #b7dfc3; border-radius: 12px; padding: 14px; }
+
+    .roadmap { display: grid; gap: 12px; }
+    .roadmap-card { background: #fdf7ee; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+    .roadmap-title { font-weight: 700; color: var(--forest); margin-bottom: 6px; }
+    .roadmap-list { padding-left: 16px; }
+    html[dir="rtl"] .roadmap-list { padding-left: 0; padding-right: 16px; }
+
+    blockquote { border-left: 4px solid var(--orange); padding-left: 14px; font-style: italic; color: #444; }
+    html[dir="rtl"] blockquote { border-left: 0; border-right: 4px solid var(--orange); padding-left: 0; padding-right: 14px; }
+
+    .footer {
+      background: var(--forest);
+      color: #f2ede3;
+      text-align: center;
+      padding: 16px;
+      font-size: 11px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
-
-<!-- Cover Page -->
-<div class="cover">
-  <h1>CAD Gurukul</h1>
+<section class="cover">
+  <div class="shape one"></div>
+  <div class="shape two"></div>
+  <div class="shape three"></div>
+  <div class="shape four"></div>
+  <div class="brand">CAD Gurukul</div>
+  <div class="year">${reportYear}</div>
+  <h1 class="title">${t('title')}</h1>
   <p class="subtitle">${t('subtitle')}</p>
-  <div class="student-name">${profile.fullName}</div>
-  <div class="student-meta">
-    ${profile.classStandard?.replace('_', ' ') || ''} &bull; ${profile.board || ''} &bull; ${profile.city || ''}, ${profile.state || ''}
+  <div class="student">${profile.fullName || 'Student'}</div>
+  ${studentMeta ? `<div class="meta">${studentMeta}</div>` : ''}
+  <div class="badge">${t('badge')}</div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">${t('confidenceScore')}</div>
+      <div class="stat-value">${confidenceScore}%</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">${t('generatedOn', { date: generatedDate })}</div>
+      <div class="stat-value">${reportYear}</div>
+    </div>
   </div>
-  <div class="report-badge">${t('badge')}</div>
-  <p style="margin-top:20px; font-size:12px; color:#8892b0;">${t('generatedOn', { date: new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' }) })}</p>
-  <div style="margin-top:16px;">
-    ${t('confidenceScore')}: <span class="confidence-badge">${report.confidenceScore || 80}%</span>
+</section>
+
+<section class="toc">
+  <div class="toc-title">What's Inside</div>
+  <div class="toc-grid">
+    ${tocItems.map((item, index) => `<div class="toc-item"><span class="toc-num">${String(index + 1).padStart(2, '0')}</span><span>${item}</span></div>`).join('')}
   </div>
-</div>
+</section>
 
 <div class="content">
+  <div class="summary-strip">
+    <div class="summary-item">
+      <div class="label">Student</div>
+      <div class="value">${profile.fullName || '-'}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Class and Board</div>
+      <div class="value">${classAndBoard || '-'}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Location</div>
+      <div class="value">${location || '-'}</div>
+    </div>
+  </div>
 
-  <!-- Student Summary -->
-  <div class="section">
-    <h2>${t('sections.studentSummary')}</h2>
+  <div class="highlight-grid">
+    <div class="highlight-card">
+      <div class="label">${t('sections.recommendedStream')}</div>
+      <div class="value">${report.recommendedStream || '-'}</div>
+      ${report.streamReason ? `<div class="meta">${report.streamReason}</div>` : ''}
+    </div>
+    <div class="highlight-card">
+      <div class="label">${t('sections.topCareers')}</div>
+      <div class="value">${topCareerPreview || '-'}</div>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <div class="section-title">${t('sections.studentSummary')}</div>
     <p>${report.studentSummary || ''}</p>
   </div>
 
-  <!-- Interest Analysis -->
-  <div class="section">
-    <h2>${t('sections.interestAnalysis')}</h2>
+  <div class="section-block">
+    <div class="section-title">${t('sections.interestAnalysis')}</div>
     <p>${report.interestAnalysis || ''}</p>
   </div>
 
-  <!-- Aptitude Analysis -->
-  ${report.aptitudeAnalysis ? `<div class="section"><h2>${t('sections.aptitudeAnalysis')}</h2><p>${report.aptitudeAnalysis}</p></div>` : ''}
+  ${report.aptitudeAnalysis ? `
+  <div class="section-block">
+    <div class="section-title">${t('sections.aptitudeAnalysis')}</div>
+    <p>${report.aptitudeAnalysis}</p>
+  </div>` : ''}
 
-  <!-- Personality Insights -->
-  ${report.personalityInsights ? `<div class="section"><h2>${t('sections.personalityInsights')}</h2><p>${report.personalityInsights}</p><p><strong>${t('labels.type')}:</strong> ${report.personalityType || ''} &bull; <strong>${t('labels.learningStyle')}:</strong> ${report.learningStyle || ''}</p></div>` : ''}
+  ${report.personalityInsights ? `
+  <div class="section-block">
+    <div class="section-title">${t('sections.personalityInsights')}</div>
+    <p>${report.personalityInsights}</p>
+    ${(report.personalityType || report.learningStyle) ? `
+    <div class="pill-row">
+      ${report.personalityType ? `<span class="pill"><strong>${t('labels.type')}:</strong> ${report.personalityType}</span>` : ''}
+      ${report.learningStyle ? `<span class="pill"><strong>${t('labels.learningStyle')}:</strong> ${report.learningStyle}</span>` : ''}
+    </div>` : ''}
+  </div>` : ''}
 
-  <!-- Scores -->
   ${report.scores ? `
-  <div class="section">
-    <h2>${t('sections.scores')}</h2>
+  <div class="section-block">
+    <div class="section-title">${t('sections.scores')}</div>
     <div class="score-grid">
       ${Object.entries(report.scores).map(([k, v]) => `<div class="score-card"><div class="label">${t(`scoreLabels.${k}`) || k}</div><div class="value">${v}</div></div>`).join('')}
     </div>
   </div>` : ''}
 
-  <!-- Recommended Stream -->
-  <div class="section">
-    <h2>${t('sections.recommendedStream')}</h2>
-    <div class="highlight-box">
-      <strong style="font-size:18px; color:#0f3460;">${report.recommendedStream || ''}</strong>
-      <p style="margin-top:8px;">${report.streamReason || ''}</p>
+  <div class="section-block">
+    <div class="section-title">${t('sections.recommendedStream')}</div>
+    <div class="callout">
+      <div class="callout-main">${report.recommendedStream || ''}</div>
+      <div class="callout-text">${report.streamReason || ''}</div>
     </div>
     ${report.recommendedSubjects?.length ? `
-    <p><strong>${t('labels.recommendedSubjects')}:</strong></p>
+    <p style="margin-top:10px;"><strong>${t('labels.recommendedSubjects')}:</strong></p>
     <div>${(report.recommendedSubjects || []).map((s) => `<span class="tag">${s}</span>`).join('')}</div>
     <p style="margin-top:8px;">${report.subjectReason || ''}</p>` : ''}
   </div>
 
   <div class="page-break"></div>
 
-  <!-- Top Careers -->
-  <div class="section">
-    <h2>${t('sections.topCareers')}</h2>
+  <div class="section-block">
+    <div class="section-title">${t('sections.topCareers')}</div>
     <ul class="career-list">${topCareers}</ul>
   </div>
 
-  <!-- Higher Education -->
-  ${report.higherEducationDirection ? `<div class="section"><h2>${t('sections.higherEducation')}</h2><p>${report.higherEducationDirection}</p></div>` : ''}
+  ${report.higherEducationDirection ? `
+  <div class="section-block">
+    <div class="section-title">${t('sections.higherEducation')}</div>
+    <p>${report.higherEducationDirection}</p>
+  </div>` : ''}
 
-  <!-- Skill Gaps -->
   ${report.skillGaps?.length ? `
-  <div class="section">
-    <h2>${t('sections.skillGaps')}</h2>
+  <div class="section-block">
+    <div class="section-title">${t('sections.skillGaps')}</div>
     <div>${(report.skillGaps || []).map((s) => `<span class="tag">⚠ ${s}</span>`).join('')}</div>
     ${report.skillDevelopmentPlan ? `<p style="margin-top:10px;">${report.skillDevelopmentPlan}</p>` : ''}
   </div>` : ''}
 
-  <!-- Roadmaps -->
   ${roadmapHtml}
 
-  <!-- Action Steps -->
   ${report.actionableNextSteps?.length ? `
-  <div class="section">
-    <h2>${t('sections.nextSteps')}</h2>
+  <div class="section-block">
+    <div class="section-title">${t('sections.nextSteps')}</div>
     <ul class="action-list">
       ${(report.actionableNextSteps || []).map((s, i) => `<li>${i + 1}. ${s}</li>`).join('')}
     </ul>
   </div>` : ''}
 
-  <!-- Parent Guidance -->
   ${report.parentGuidance ? `
-  <div class="section">
-    <h2>${t('sections.parentGuidance')}</h2>
+  <div class="section-block">
+    <div class="section-title">${t('sections.parentGuidance')}</div>
     <div class="parent-section">${report.parentGuidance}</div>
   </div>` : ''}
 
-  <!-- Motivational Message -->
   ${report.motivationalMessage ? `
-  <div class="section">
-    <h2>${t('sections.messageForYou')}</h2>
-    <blockquote style="border-left:4px solid #e94560; padding-left:16px; font-style:italic; color:#444;">${report.motivationalMessage}</blockquote>
+  <div class="section-block">
+    <div class="section-title">${t('sections.messageForYou')}</div>
+    <blockquote>${report.motivationalMessage}</blockquote>
   </div>` : ''}
 
-</div>
-
-<div class="footer">
-  <p>CAD Gurukul | AI Career Guidance for Indian Students</p>
-  <p>This report is generated by AI and should be used as a guidance tool alongside professional counselling.</p>
-  <p>© ${new Date().getFullYear()} CAD Gurukul. All rights reserved.</p>
+  <div class="footer">
+    <p>CAD Gurukul | AI Career Guidance for Indian Students</p>
+    <p>This report is generated by AI and should be used as a guidance tool alongside professional counselling.</p>
+    <p>© ${reportYear} CAD Gurukul. All rights reserved.</p>
+  </div>
 </div>
 
 </body>
