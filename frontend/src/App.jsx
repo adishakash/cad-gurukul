@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectIsAuthenticated, selectUser } from './store/slices/authSlice'
+import { initReferralFromUrl } from './utils/referral'
 
 // Roles that belong to the student portal (mirrored from backend USER_PORTAL_ROLES)
 const USER_PORTAL_ROLES = ['STUDENT', 'PARENT']
@@ -115,6 +117,10 @@ const PublicLayout = ({ children }) => (
 )
 
 export default function App() {
+  useEffect(() => {
+    initReferralFromUrl()
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>

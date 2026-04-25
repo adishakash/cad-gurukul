@@ -50,6 +50,7 @@ const listPartners = async (req, res) => {
         select: {
           id: true, email: true, name: true, role: true,
           isApproved: true, approvedAt: true, suspendedAt: true,
+          isConsultationAuthorized: true,
           createdAt: true,
           partnerApplication: {
             select: { fullName: true, phone: true, city: true, status: true, createdAt: true },
@@ -270,6 +271,98 @@ const listAdjustments = async (req, res) => {
   }
 };
 
+// ─── Partner Performance ────────────────────────────────────────────────────
+
+const listPartnerPerformance = async (req, res) => {
+  try {
+    const role = req.query.role;
+    if (!['CAREER_COUNSELLOR', 'CAREER_COUNSELLOR_LEAD'].includes(role)) {
+      return errorResponse(res, 'role must be CAREER_COUNSELLOR or CAREER_COUNSELLOR_LEAD', 400, 'INVALID_ROLE');
+    }
+
+    const partners = await prisma.user.findMany({
+      where: { role, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        isApproved: true,
+        suspendedAt: true,
+        isConsultationAuthorized: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const isCC = role === 'CAREER_COUNSELLOR';
+    const salesRows = isCC
+      ? await prisma.ccAttributedSale.groupBy({
+          by: ['ccUserId'],
+          where: { status: 'confirmed' },
+          _sum: { grossAmountPaise: true, netAmountPaise: true, commissionPaise: true },
+          _count: { _all: true },
+        })
+      : await prisma.cclAttributedSale.groupBy({
+          by: ['cclUserId'],
+          where: { status: 'confirmed' },
+          _sum: { grossAmountPaise: true, netAmountPaise: true, commissionPaise: true },
+          _count: { _all: true },
+        });
+
+    const salesMap = new Map(
+      salesRows.map((row) => [isCC ? row.ccUserId : row.cclUserId, row]),
+    );
+
+    const performance = partners.map((partner) => {
+      const row = salesMap.get(partner.id);
+      return {
+        ...partner,
+        totalSalesPaise: row?._sum?.grossAmountPaise || 0,
+        totalNetPaise: row?._sum?.netAmountPaise || 0,
+        totalCommissionPaise: row?._sum?.commissionPaise || 0,
+        totalSalesCount: row?._count?._all || 0,
+      };
+    });
+
+    return successResponse(res, { performance, role });
+  } catch (err) {
+    logger.error('[PartnerAdmin] listPartnerPerformance error', { error: err.message });
+    return errorResponse(res, 'Failed to load performance data', 500);
+  }
+};
+
+// ─── Consultation Authorization ─────────────────────────────────────────────
+
+const toggleConsultationAuthorization = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { authorized } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'CAREER_COUNSELLOR') {
+      return errorResponse(res, 'Counsellor not found', 404, 'NOT_FOUND');
+    }
+
+    const nextValue = authorized !== undefined ? Boolean(authorized) : !user.isConsultationAuthorized;
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        isConsultationAuthorized: nextValue,
+        consultationAuthorizedAt: nextValue ? new Date() : null,
+      },
+      select: { id: true, isConsultationAuthorized: true },
+    });
+
+    logger.info('[PartnerAdmin] Consultation authorization updated', { userId, authorized: nextValue });
+    return successResponse(res, updated, 'Consultation authorization updated');
+  } catch (err) {
+    logger.error('[PartnerAdmin] toggleConsultationAuthorization error', { error: err.message });
+    return errorResponse(res, 'Failed to update authorization', 500);
+  }
+};
+
 module.exports = {
   listPartners,
   getPartner,
@@ -279,4 +372,6 @@ module.exports = {
   verifyBankAccount,
   createAdjustment,
   listAdjustments,
+  listPartnerPerformance,
+  toggleConsultationAuthorization,
 };

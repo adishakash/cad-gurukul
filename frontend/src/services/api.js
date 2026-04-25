@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { apiBaseUrl } from '../config/apiBaseUrl'
+import { getStoredReferralCode, getStoredCouponCode } from '../utils/referral'
 
 // Injected lazily to break circular dependency:
 // store → authSlice → api → store
@@ -69,7 +70,13 @@ api.interceptors.response.use(
 
 // ─── Lead API ─────────────────────────────────────────────────────────────────
 export const leadApi = {
-  create:      (data)          => api.post('/leads', data),
+  create:      (data)          => {
+    const referralCode = getStoredReferralCode()
+    const payload = referralCode && !data?.referralCode
+      ? { ...data, referralCode }
+      : data
+    return api.post('/leads', payload)
+  },
   getMe:       ()              => api.get('/leads/me'),
   update:      (data)          => api.patch('/leads/me', data),
   updateMe:    (data)          => api.patch('/leads/me', data),
@@ -94,8 +101,16 @@ export const reportApi = {
 
 // ─── Payment API ──────────────────────────────────────────────────────────────
 export const paymentApi = {
-  getQuote:     (planType, assessmentId) => api.get('/payments/quote', { params: { planType, assessmentId } }),
-  createOrder:  (assessmentId, planType = 'standard') => api.post('/payments/create-order', { assessmentId, planType }),
+  getQuote:     (planType, assessmentId, options = {}) => {
+    const referralCode = options.referralCode || getStoredReferralCode()
+    const couponCode = options.couponCode || getStoredCouponCode()
+    return api.get('/payments/quote', { params: { planType, assessmentId, referralCode, couponCode } })
+  },
+  createOrder:  (assessmentId, planType = 'standard', options = {}) => {
+    const referralCode = options.referralCode || getStoredReferralCode()
+    const couponCode = options.couponCode || getStoredCouponCode()
+    return api.post('/payments/create-order', { assessmentId, planType, referralCode, couponCode })
+  },
   verify:       (data)         => api.post('/payments/verify', data),
   getHistory:   ()             => api.get('/payments/history'),
   getStatus:    (orderId)      => api.get(`/payments/status/${orderId}`),
@@ -138,6 +153,7 @@ export const adminLeadApi = {
   },
   getFunnel:     (days = 30)     => adminApiClient.get('/admin/funnel', { params: { days } }),
   getAnalytics:  (days)          => adminApiClient.get('/admin/analytics', { params: days ? { days } : {} }),
+  getRevenueSummary: ()          => adminApiClient.get('/admin/revenue/summary'),
   exportCsv:     ()              => adminApiClient.get('/admin/export/leads', { responseType: 'blob' }),
   assign:        (id, staffId)   => adminApiClient.put(`/admin/leads/${id}/assign`, { staffId }),
   listStaffForAssign: ()         => adminApiClient.get('/admin/staff'),
@@ -262,6 +278,13 @@ export const counsellorApi = {
 export const counsellorBizApi = {
   getAccount:       ()                  => staffApiClient.get('/counsellor/account'),
   getTransactions:  (page = 1, limit = 20) => staffApiClient.get(`/counsellor/account/transactions?page=${page}&limit=${limit}`),
+  getReferralLink:  ()                  => staffApiClient.get('/counsellor/referral-link'),
+  getReferralStats: ()                  => staffApiClient.get('/counsellor/referral-stats'),
+  listCoupons:      ()                  => staffApiClient.get('/counsellor/coupons'),
+  createCoupon:     (data)              => staffApiClient.post('/counsellor/coupons', data),
+  updateCoupon:     (id, data)          => staffApiClient.patch(`/counsellor/coupons/${id}`, data),
+  deleteCoupon:     (id)                => staffApiClient.delete(`/counsellor/coupons/${id}`),
+  getUpcomingConsultations: ()          => staffApiClient.get('/counsellor/consultations/upcoming'),
   getTestLinks:     (page = 1, limit = 20) => staffApiClient.get(`/counsellor/test-links?page=${page}&limit=${limit}`),
   createTestLink:   (data)              => staffApiClient.post('/counsellor/test-links', data),
   // Discount policy (Phase 6)
@@ -325,6 +348,8 @@ export const partnerAdminApi = {
   approve:           (id)       => adminApiClient.patch(`/admin/partners/${id}/approve`),
   reject:            (id, data) => adminApiClient.patch(`/admin/partners/${id}/reject`, data),
   suspend:           (id, data) => adminApiClient.patch(`/admin/partners/${id}/suspend`, data),
+  performance:       (role)     => adminApiClient.get('/admin/partners/performance', { params: { role } }),
+  toggleConsultation: (id, data) => adminApiClient.patch(`/admin/partners/${id}/consultation-auth`, data),
   verifyBank:        (id)       => adminApiClient.patch(`/admin/partners/${id}/bank-account/verify`),
   createAdjustment:  (id, data) => adminApiClient.post(`/admin/partners/${id}/adjustments`, data),
   listAdjustments:   (id)       => adminApiClient.get(`/admin/partners/${id}/adjustments`),

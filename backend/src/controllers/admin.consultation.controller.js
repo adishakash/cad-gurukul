@@ -41,6 +41,9 @@ async function loadBookingWithContacts(bookingId) {
       lead: {
         select: { reportId: true },
       },
+      counsellorUser: {
+        select: { id: true, name: true, email: true, isConsultationAuthorized: true, role: true },
+      },
     },
   });
 }
@@ -140,6 +143,7 @@ async function updateBooking(req, res) {
       counsellorName,
       counsellorContact,
       counsellorExpertise,
+      counsellorUserId,
       action,
     } = req.body;
 
@@ -157,6 +161,26 @@ async function updateBooking(req, res) {
     }
     if (typeof counsellorExpertise === 'string' && counsellorExpertise.trim()) {
       updateData.counsellorExpertise = counsellorExpertise.trim();
+    }
+
+    if (counsellorUserId !== undefined) {
+      if (!counsellorUserId) {
+        updateData.counsellorUserId = null;
+      } else {
+        const counsellorUser = await prisma.user.findUnique({
+          where: { id: counsellorUserId },
+          select: { id: true, name: true, email: true, role: true, isConsultationAuthorized: true },
+        });
+        if (!counsellorUser || counsellorUser.role !== 'CAREER_COUNSELLOR') {
+          return errorResponse(res, 'Invalid counsellor assignment.', 400, 'INVALID_COUNSELLOR');
+        }
+        if (!counsellorUser.isConsultationAuthorized) {
+          return errorResponse(res, 'Counsellor is not authorized for consultations.', 400, 'NOT_AUTHORIZED');
+        }
+        updateData.counsellorUserId = counsellorUser.id;
+        if (!counsellorName) updateData.counsellorName = counsellorUser.name || counsellorUser.email;
+        if (!counsellorContact) updateData.counsellorContact = counsellorUser.email;
+      }
     }
 
     let selectedSlot;
@@ -223,6 +247,9 @@ async function updateBooking(req, res) {
         },
         lead: {
           select: { reportId: true },
+        },
+        counsellorUser: {
+          select: { id: true, name: true, email: true },
         },
       },
     });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi, adminUserApi, adminEmailApi } from '../../services/api'
+import { adminLeadApi, adminApiClient as adminApi, adminDiscountApi, adminTrainingApi, adminUserApi, adminEmailApi, partnerAdminApi } from '../../services/api'
 import ThemeToggle from '../../components/ThemeToggle'
 
 const StatCard = ({ icon, label, value, sub, highlight }) => (
@@ -38,9 +38,12 @@ const Table = ({ headers, rows, emptyText = 'No data.' }) => (
   </div>
 )
 
+const formatRupees = (paise) => `₹${((paise || 0) / 100).toLocaleString('en-IN')}`
+
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const [analytics, setAnalytics] = useState(null)
+  const [revenueSummary, setRevenueSummary] = useState(null)
   const [users, setUsers]         = useState([])
   const [payments, setPayments]   = useState([])
   const [aiStats, setAiStats]     = useState(null)
@@ -50,6 +53,11 @@ export default function AdminDashboard() {
   const [loading, setLoading]     = useState(true)
   const [emailRefreshing, setEmailRefreshing] = useState(false)
   const [testEmailSending, setTestEmailSending] = useState(false)
+  const [performanceLoading, setPerformanceLoading] = useState(false)
+  const [performanceLoaded, setPerformanceLoaded] = useState(false)
+  const [ccPerformance, setCcPerformance] = useState([])
+  const [cclPerformance, setCclPerformance] = useState([])
+  const [authorizingCcId, setAuthorizingCcId] = useState(null)
 
   // Phase 6: Discount policy state
   const [policies, setPolicies]               = useState([])
@@ -87,15 +95,17 @@ export default function AdminDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [analyticsRes, usersRes, paymentsRes, aiStatsRes, funnelRes, emailStatusRes] = await Promise.all([
+      const [analyticsRes, usersRes, paymentsRes, aiStatsRes, funnelRes, emailStatusRes, revenueRes] = await Promise.all([
         adminLeadApi.getAnalytics(30),
         adminApi.get('/admin/users?limit=50'),
         adminApi.get('/admin/payments?limit=50'),
         adminApi.get('/admin/ai-usage').catch(() => ({ data: { data: null } })),
         adminLeadApi.getFunnel(30).catch(() => ({ data: { data: null } })),
         adminEmailApi.status().catch(() => ({ data: { data: null } })),
+        adminLeadApi.getRevenueSummary().catch(() => ({ data: { data: null } })),
       ])
       setAnalytics(analyticsRes.data.data)
+      setRevenueSummary(revenueRes.data.data)
       setUsers(usersRes.data.data?.users || [])
       setPayments(paymentsRes.data.data?.payments || [])
       setAiStats(aiStatsRes.data.data)
@@ -111,6 +121,55 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadPerformance = async () => {
+    setPerformanceLoading(true)
+    try {
+      const [ccRes, cclRes] = await Promise.all([
+        partnerAdminApi.performance('CAREER_COUNSELLOR'),
+        partnerAdminApi.performance('CAREER_COUNSELLOR_LEAD'),
+      ])
+      setCcPerformance(ccRes.data.data?.performance || [])
+      setCclPerformance(cclRes.data.data?.performance || [])
+      setPerformanceLoaded(true)
+    } catch (err) {
+      const msg = err?.response?.data?.error?.message || 'Failed to load performance data.'
+      toast.error(msg)
+    } finally {
+      setPerformanceLoading(false)
+    }
+  }
+
+  const handleToggleConsultationAuth = async (user) => {
+    const nextValue = !user.isConsultationAuthorized
+    if (!window.confirm(`Set consultation authorization to ${nextValue ? 'enabled' : 'disabled'} for ${user.name || user.email}?`)) return
+    setAuthorizingCcId(user.id)
+    try {
+      await partnerAdminApi.toggleConsultation(user.id, { authorized: nextValue })
+      setCcPerformance((prev) => prev.map((item) => (
+        item.id === user.id ? { ...item, isConsultationAuthorized: nextValue } : item
+      )))
+      toast.success(`Consultation authorization ${nextValue ? 'enabled' : 'disabled'}.`)
+    } catch (err) {
+      const msg = err?.response?.data?.error?.message || 'Failed to update authorization.'
+      toast.error(msg)
+    } finally {
+      setAuthorizingCcId(null)
+    }
+  }
+
+  const renderPartnerStatus = (partner) => {
+    if (partner.suspendedAt) {
+      return <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">Suspended</span>
+    }
+    if (!partner.isActive) {
+      return <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-600">Inactive</span>
+    }
+    if (partner.isApproved) {
+      return <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">Approved</span>
+    }
+    return <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700">Pending</span>
   }
 
   const handleExport = async (type) => {
@@ -361,13 +420,46 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab === 'discounts' && !discountLoaded) loadDiscountPolicies()
     if (activeTab === 'training' && !trainingLoaded) loadTraining()
+    if (activeTab === 'performance' && !performanceLoaded && !performanceLoading) loadPerformance()
   }, [activeTab])
 
   useEffect(() => {
     if (usersSubTab === 'deleted' && !deletedUsersLoaded) loadDeletedUsers()
   }, [usersSubTab])
 
-  const tabs = ['overview', 'leads', 'users', 'payments', 'ai-usage', 'discounts', 'training']
+  const tabs = ['overview', 'leads', 'users', 'payments', 'performance', 'ai-usage', 'discounts', 'training']
+
+  const ccRows = ccPerformance.map((partner) => ([
+    partner.name || '—',
+    partner.email || '—',
+    renderPartnerStatus(partner),
+    formatRupees(partner.totalSalesPaise),
+    formatRupees(partner.totalNetPaise),
+    formatRupees(partner.totalCommissionPaise),
+    partner.totalSalesCount || 0,
+    <div key="auth" className="flex items-center gap-2">
+      <span className={`text-xs font-semibold ${partner.isConsultationAuthorized ? 'text-green-600' : 'text-gray-500'}`}>
+        {partner.isConsultationAuthorized ? 'Authorized' : 'Not authorized'}
+      </span>
+      <button
+        onClick={() => handleToggleConsultationAuth(partner)}
+        disabled={authorizingCcId === partner.id}
+        className="btn-outline text-xs"
+      >
+        {authorizingCcId === partner.id ? 'Updating…' : (partner.isConsultationAuthorized ? 'Disable' : 'Enable')}
+      </button>
+    </div>,
+  ]))
+
+  const cclRows = cclPerformance.map((partner) => ([
+    partner.name || '—',
+    partner.email || '—',
+    renderPartnerStatus(partner),
+    formatRupees(partner.totalSalesPaise),
+    formatRupees(partner.totalNetPaise),
+    formatRupees(partner.totalCommissionPaise),
+    partner.totalSalesCount || 0,
+  ]))
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
@@ -463,6 +555,20 @@ export default function AdminDashboard() {
                     <StatCard icon="📋" label="Total Assessments"  value={analytics.totalAssessments} />
                     <StatCard icon="💰" label="All-time Revenue"   value={`₹${Number(analytics.totalRevenueRupees || 0).toLocaleString('en-IN')}`} />
                     <StatCard icon="📄" label="Reports Generated"  value={analytics.totalCompletedReports} />
+                  </div>
+                )}
+
+                {revenueSummary && (
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-gray-900 dark:text-gray-100">Revenue Snapshot</h3>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Captured payments only</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <StatCard icon="🏁" label="All-time" value={formatRupees(revenueSummary.allTimePaise)} highlight />
+                      <StatCard icon="🗓️" label="This Month" value={formatRupees(revenueSummary.monthPaise)} />
+                      <StatCard icon="📆" label="This Week" value={formatRupees(revenueSummary.weekPaise)} />
+                    </div>
                   </div>
                 )}
 
@@ -693,6 +799,45 @@ export default function AdminDashboard() {
                   ])}
                   emptyText="No payments yet."
                 />
+              </div>
+            )}
+
+            {activeTab === 'performance' && (
+              <div className="space-y-6">
+                <div className="card">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">Counsellor Performance</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Lifetime totals from confirmed sales.</p>
+                    </div>
+                    <button
+                      onClick={loadPerformance}
+                      disabled={performanceLoading}
+                      className="btn-outline text-sm"
+                    >
+                      {performanceLoading ? 'Refreshing…' : '↻ Refresh'}
+                    </button>
+                  </div>
+                  <Table
+                    headers={['Name', 'Email', 'Status', 'Gross Sales', 'Net Sales', 'Commission', 'Sales', 'Consultation']}
+                    rows={ccRows}
+                    emptyText={performanceLoading ? 'Loading performance…' : 'No counsellors found.'}
+                  />
+                </div>
+
+                <div className="card">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-brand-dark dark:text-gray-100 text-lg">CCL Performance</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Lifetime totals from confirmed sales.</p>
+                    </div>
+                  </div>
+                  <Table
+                    headers={['Name', 'Email', 'Status', 'Gross Sales', 'Net Sales', 'Commission', 'Sales']}
+                    rows={cclRows}
+                    emptyText={performanceLoading ? 'Loading performance…' : 'No CCL partners found.'}
+                  />
+                </div>
               </div>
             )}
 

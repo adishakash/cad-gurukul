@@ -2,6 +2,7 @@
 const crypto = require('crypto');
 const prisma = require('../config/database');
 const razorpayService = require('../services/payment/razorpayService');
+const { createCcSaleAndCommission } = require('../services/cc/ccPaymentService');
 const { successResponse, errorResponse, rupeesToPaise } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const config = require('../config');
@@ -48,6 +49,266 @@ const buildGstBreakdown = (subtotalPaise) => {
     taxableAmountPaise: basePaise,
     totalAmountPaise: subtotalPaise,
   };
+};
+
+const normalizeCode = (value) => (value ? String(value).trim().toUpperCase() : '');
+
+const buildAttributionError = (message, code) => {
+  const err = new Error(message);
+  err.statusCode = 400;
+  err.errorCode = code || 'ATTRIBUTION_ERROR';
+  return err;
+};
+
+const resolveCcAttribution = async ({ couponCode, referralCode, planType }) => {
+  const normalizedCoupon = normalizeCode(couponCode);
+  const normalizedReferral = normalizeCode(referralCode);
+
+  let coupon = null;
+  let ccUser = null;
+
+  if (normalizedCoupon) {
+    coupon = await prisma.ccCoupon.findUnique({ where: { code: normalizedCoupon } });
+    if (!coupon || !coupon.isActive) {
+      throw buildAttributionError('Coupon code is invalid or inactive.', 'INVALID_COUPON');
+    }
+    if (coupon.planType !== planType) {
+      throw buildAttributionError('Coupon is not valid for this plan.', 'COUPON_PLAN_MISMATCH');
+    }
+    if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
+      throw buildAttributionError('Coupon has expired.', 'COUPON_EXPIRED');
+    }
+    if (coupon.maxRedemptions && coupon.usageCount >= coupon.maxRedemptions) {
+      throw buildAttributionError('Coupon usage limit reached.', 'COUPON_LIMIT_REACHED');
+    }
+
+    ccUser = await prisma.user.findUnique({
+      where: { id: coupon.ccUserId },
+      select: { id: true, role: true, isActive: true, deletedAt: true, suspendedAt: true },
+    });
+
+    if (!ccUser || ccUser.role !== 'CAREER_COUNSELLOR' || !ccUser.isActive || ccUser.deletedAt || ccUser.suspendedAt) {
+      throw buildAttributionError('Coupon owner is not eligible for attribution.', 'COUPON_OWNER_INVALID');
+    }
+  }
+
+  let referralUser = null;
+  if (normalizedReferral) {
+    referralUser = await prisma.user.findFirst({
+      where: {
+        ccReferralCode: normalizedReferral,
+        role: 'CAREER_COUNSELLOR',
+        isActive: true,
+        deletedAt: null,
+        suspendedAt: null,
+      },
+      select: { id: true },
+    });
+  }
+
+  if (coupon && normalizedReferral && (!referralUser || referralUser.id !== coupon.ccUserId)) {
+    throw buildAttributionError('Coupon does not match referral link.', 'COUPON_REFERRAL_MISMATCH');
+  }
+
+  const resolvedUserId = ccUser?.id || referralUser?.id || null;
+  if (!resolvedUserId && !coupon) return null;
+
+  const policy = await prisma.discountPolicy.findUnique({
+    where: { role_planType: { role: 'CAREER_COUNSELLOR', planType } },
+  });
+  const defaultMax = planType === 'standard' ? 100 : 20;
+  const cappedDiscountPct = coupon
+    ? Math.min(coupon.discountPct, policy ? policy.maxPct : defaultMax)
+    : 0;
+
+  return {
+    ccUserId: resolvedUserId,
+    ccCouponId: coupon?.id || null,
+    couponCode: coupon?.code || null,
+    referralCode: normalizedReferral || null,
+    discountPct: cappedDiscountPct,
+  };
+};
+
+const resolveCcUserByReferral = async (referralCode) => {
+  const normalized = normalizeCode(referralCode);
+  if (!normalized) return null;
+  return prisma.user.findFirst({
+    where: {
+      ccReferralCode: normalized,
+      role: 'CAREER_COUNSELLOR',
+      isActive: true,
+      deletedAt: null,
+      suspendedAt: null,
+    },
+    select: { id: true, isConsultationAuthorized: true },
+  });
+};
+
+const createCcSaleFromPayment = async ({ payment, planType, lead }) => {
+  const metadata = payment.metadata || {};
+  let ccUserId = metadata.ccUserId || null;
+  const ccCouponId = metadata.ccCouponId || null;
+  const couponCode = metadata.ccCouponCode || null;
+  let referralCode = metadata.ccReferralCode || null;
+
+  if (!ccUserId && !referralCode && lead?.referralCode) {
+    referralCode = lead.referralCode;
+  }
+
+  let ccUser = null;
+  if (!ccUserId && referralCode) {
+    ccUser = await resolveCcUserByReferral(referralCode);
+    ccUserId = ccUser?.id || null;
+  } else if (ccUserId) {
+    ccUser = await prisma.user.findUnique({
+      where: { id: ccUserId },
+      select: { id: true, isConsultationAuthorized: true, isActive: true, deletedAt: true, suspendedAt: true },
+    });
+    if (!ccUser || !ccUser.isActive || ccUser.deletedAt || ccUser.suspendedAt) {
+      ccUserId = null;
+    }
+  }
+
+  if (!ccUserId) return null;
+
+  const commissionRate = planType === 'consultation'
+    ? (ccUser?.isConsultationAuthorized ? 0.5 : 0.1)
+    : 0.7;
+
+  const grossAmountPaise = metadata.catalogAmountPaise || payment.amountPaise;
+  const discountAmountPaise = metadata.discountAmountPaise || 0;
+  const netAmountPaise = metadata.taxableAmountPaise ?? Math.max(0, grossAmountPaise - discountAmountPaise);
+
+  const paymentId = payment.razorpayPaymentId || payment.id;
+
+  return createCcSaleAndCommission({
+    ccUserId,
+    testLinkId: null,
+    paymentId,
+    razorpayPaymentId: paymentId,
+    grossAmountPaise,
+    discountAmountPaise,
+    netAmountPaise,
+    saleType: 'referral',
+    planType,
+    commissionRate,
+    ccCouponId,
+    couponCode,
+  });
+};
+
+const finalizeCapturedPayment = async ({ payment, planType, assessmentId, userId, req, source }) => {
+  const amountRupees = getAmountRupeesForPlan(planType);
+
+  let reportIdForGeneration = null;
+  let assessmentForGeneration = null;
+  let profileForGeneration = null;
+  let assessmentSnapshot = null;
+  let hasRemainingQuestions = false;
+
+  if (planType !== 'consultation' && assessmentId) {
+    assessmentSnapshot = await prisma.assessment.findFirst({
+      where: { id: assessmentId, userId },
+      include: { answers: true },
+    });
+
+    if (assessmentSnapshot) {
+      const answeredCount = assessmentSnapshot.answers.length;
+      hasRemainingQuestions = answeredCount < PAID_QUESTION_LIMIT;
+      const shouldResume = assessmentSnapshot.status === 'COMPLETED' && hasRemainingQuestions;
+
+      await prisma.assessment.update({
+        where: { id: assessmentId },
+        data: {
+          accessLevel: 'PAID',
+          totalQuestions: PAID_QUESTION_LIMIT,
+          ...(shouldResume ? { status: 'IN_PROGRESS', completedAt: null, currentStep: answeredCount } : {}),
+        },
+      });
+    }
+
+    const existingReport = await prisma.careerReport.findFirst({ where: { assessmentId } });
+    if (existingReport) {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: { reportId: existingReport.id },
+      });
+
+      const canGenerate = Boolean(assessmentSnapshot)
+        && !hasRemainingQuestions
+        && assessmentSnapshot.status === 'COMPLETED';
+
+      if (canGenerate) {
+        await prisma.careerReport.update({
+          where: { id: existingReport.id },
+          data: { accessLevel: 'PAID', status: 'GENERATING', reportType: planType },
+        });
+
+        reportIdForGeneration = existingReport.id;
+
+        [assessmentForGeneration, profileForGeneration] = await Promise.all([
+          prisma.assessment.findUnique({
+            where: { id: assessmentId },
+            include: { questions: true, answers: true },
+          }),
+          prisma.studentProfile.findUnique({
+            where: { userId },
+            include: { parentDetail: true },
+          }),
+        ]);
+      }
+    }
+  }
+
+  const lead = await prisma.lead.findFirst({ where: { userId } });
+  if (lead) {
+    const nextStatus = getLeadStatusAfterPayment(planType, Boolean(reportIdForGeneration));
+
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        paymentId: payment.id,
+        planType,
+        status: nextStatus,
+        ...(planType === 'consultation' ? { counsellingInterested: true } : {}),
+      },
+    });
+
+    await triggerAutomation(getAutomationEventForPlan(planType), {
+      leadId:   lead.id,
+      userId,
+      planType,
+      amountRupees,
+      paymentId: payment.id,
+    });
+  }
+
+  analytics.track('payment_success', req || null, {
+    userId,
+    planType,
+    amountRupees,
+    ...(source ? { source } : {}),
+  });
+
+  if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
+    const { generateReportAsync } = require('./assessment.controller');
+    generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
+  }
+
+  if (planType === 'consultation') {
+    _createConsultationBookingAndSendEmail({
+      userId,
+      paymentId: payment.id,
+      leadId: lead?.id || null,
+    }).catch((err) =>
+      logger.error('[Payment] Consultation booking creation failed', { error: err.message }),
+    );
+  }
+
+  await createCcSaleFromPayment({ payment, planType, lead });
+
+  return { resumeAssessment: planType !== 'consultation' && hasRemainingQuestions };
 };
 
 const getLeadStatusAfterPayment = (planType, hasQueuedReport) => {
@@ -98,7 +359,7 @@ const resolveCurrentPlanForUser = async (userId) => {
   return 'free';
 };
 
-const buildQuote = ({ currentPlan, requestedPlan }) => {
+const buildQuote = ({ currentPlan, requestedPlan, discountPct = 0 }) => {
   const targetPlan = normalizePlanType(requestedPlan);
   const sourcePlan = normalizePlanType(currentPlan);
   const basePrice = PLAN_PRICES[targetPlan];
@@ -106,7 +367,10 @@ const buildQuote = ({ currentPlan, requestedPlan }) => {
   const alreadyIncluded = isPlanIncluded(sourcePlan, targetPlan);
   const alreadyOwned = sourcePlan === targetPlan && sourcePlan !== 'free';
   const effectivePricePaise = rupeesToPaise(effectivePrice);
-  const gstBreakdown = buildGstBreakdown(effectivePricePaise);
+  const discountAmountPaise = Math.round(effectivePricePaise * (Number(discountPct) || 0) / 100);
+  const discountedSubtotalPaise = Math.max(0, effectivePricePaise - discountAmountPaise);
+  const gstBreakdown = buildGstBreakdown(discountedSubtotalPaise);
+  const discountedTotalRupees = gstBreakdown.totalAmountPaise / 100;
 
   return {
     currentPlan: sourcePlan,
@@ -119,7 +383,11 @@ const buildQuote = ({ currentPlan, requestedPlan }) => {
     upgradeFrom: sourcePlan !== 'free' && !alreadyIncluded ? sourcePlan : null,
     alreadyIncluded,
     alreadyOwned,
-    canPurchase: !alreadyIncluded && effectivePrice > 0,
+    canPurchase: !alreadyIncluded && !alreadyOwned,
+    discountPct: Number(discountPct) || 0,
+    discountAmountPaise,
+    discountedTotalRupees,
+    discountedTotalLabel: formatRupees(discountedTotalRupees),
     gstRate: gstBreakdown.gstRate,
     gstIncluded: gstBreakdown.gstIncluded,
     gstAmountPaise: gstBreakdown.gstAmountPaise,
@@ -137,8 +405,20 @@ const getQuote = async (req, res) => {
       return errorResponse(res, 'Invalid plan type', 400, 'INVALID_PLAN');
     }
 
+    let discountPct = 0;
+    try {
+      const attribution = await resolveCcAttribution({
+        couponCode: req.query.couponCode,
+        referralCode: req.query.referralCode,
+        planType: requestedPlan,
+      });
+      discountPct = attribution?.discountPct || 0;
+    } catch (err) {
+      return errorResponse(res, err.message || 'Invalid coupon', err.statusCode || 400, err.errorCode || 'INVALID_COUPON');
+    }
+
     const currentPlan = await resolveCurrentPlanForUser(req.user.id);
-    return successResponse(res, buildQuote({ currentPlan, requestedPlan }));
+    return successResponse(res, buildQuote({ currentPlan, requestedPlan, discountPct }));
   } catch (err) {
     logger.error('[Payment] getQuote error', { error: err.message });
     throw err;
@@ -152,15 +432,22 @@ const getQuote = async (req, res) => {
  */
 const createOrder = async (req, res) => {
   try {
-    const { assessmentId, planType = 'standard' } = req.body;
+    const { assessmentId, planType = 'standard', couponCode, referralCode } = req.body;
 
     // Validate planType
     if (!PLAN_PRICES[planType]) {
       return errorResponse(res, 'Invalid plan type', 400, 'INVALID_PLAN');
     }
 
+    let attribution = null;
+    try {
+      attribution = await resolveCcAttribution({ couponCode, referralCode, planType });
+    } catch (err) {
+      return errorResponse(res, err.message || 'Invalid coupon', err.statusCode || 400, err.errorCode || 'INVALID_COUPON');
+    }
+
     const currentPlan = await resolveCurrentPlanForUser(req.user.id);
-    const quote = buildQuote({ currentPlan, requestedPlan: planType });
+    const quote = buildQuote({ currentPlan, requestedPlan: planType, discountPct: attribution?.discountPct || 0 });
     if (quote.alreadyOwned) {
       return errorResponse(res, `You already have the ${planType} plan on your account.`, 409, 'ALREADY_OWNED');
     }
@@ -199,8 +486,69 @@ const createOrder = async (req, res) => {
 
     const amountRupees = quote.effectivePrice;
     const amountPaise  = rupeesToPaise(amountRupees);
-    const gstBreakdown = buildGstBreakdown(amountPaise);
+    const discountPct = attribution?.discountPct || 0;
+    const discountAmountPaise = Math.round(amountPaise * discountPct / 100);
+    const discountedSubtotalPaise = Math.max(0, amountPaise - discountAmountPaise);
+    const gstBreakdown = buildGstBreakdown(discountedSubtotalPaise);
     const orderAmountPaise = gstBreakdown.totalAmountPaise;
+
+    const ccMetadata = attribution
+      ? {
+          ccUserId: attribution.ccUserId,
+          ccCouponId: attribution.ccCouponId,
+          ccCouponCode: attribution.couponCode,
+          ccReferralCode: attribution.referralCode,
+        }
+      : {};
+
+    const baseMetadata = {
+      assessmentId: assessmentId || null,
+      planType,
+      currentPlan,
+      effectiveAmountRupees: amountRupees,
+      catalogAmountPaise: amountPaise,
+      discountPct,
+      discountAmountPaise,
+      gstRate: gstBreakdown.gstRate,
+      gstIncluded: gstBreakdown.gstIncluded,
+      gstAmountPaise: gstBreakdown.gstAmountPaise,
+      taxableAmountPaise: gstBreakdown.taxableAmountPaise,
+      totalAmountPaise: gstBreakdown.totalAmountPaise,
+      ...ccMetadata,
+    };
+
+    if (orderAmountPaise === 0) {
+      const freeOrderId = `free_${crypto.randomUUID()}`;
+      const payment = await prisma.payment.create({
+        data: {
+          userId: req.user.id,
+          amountPaise,
+          currency: 'INR',
+          status: 'CAPTURED',
+          razorpayOrderId: freeOrderId,
+          razorpayPaymentId: freeOrderId,
+          paidAt: new Date(),
+          metadata: baseMetadata,
+        },
+      });
+
+      const { resumeAssessment } = await finalizeCapturedPayment({
+        payment,
+        planType,
+        assessmentId,
+        userId: req.user.id,
+        req,
+        source: 'free',
+      });
+
+      return successResponse(res, {
+        free: true,
+        paymentId: payment.id,
+        planType,
+        resumeAssessment,
+        quote,
+      }, 'Free purchase recorded', 201);
+    }
 
     // ── Test pricing override ─────────────────────────────────────────────────
     // In PAYMENT_TEST_MODE the charge sent to Razorpay is reduced (₹1/₹2/₹3).
@@ -230,15 +578,7 @@ const createOrder = async (req, res) => {
         status: 'CREATED',
         razorpayOrderId: order.id,
         metadata: {
-          assessmentId: assessmentId || null,
-          planType,
-          currentPlan,
-          effectiveAmountRupees: amountRupees,
-          gstRate: gstBreakdown.gstRate,
-          gstIncluded: gstBreakdown.gstIncluded,
-          gstAmountPaise: gstBreakdown.gstAmountPaise,
-          taxableAmountPaise: gstBreakdown.taxableAmountPaise,
-          totalAmountPaise: gstBreakdown.totalAmountPaise,
+          ...baseMetadata,
           ...(isTestMode ? { testMode: true, chargeAmountPaise } : {}),
         },
       },
@@ -316,133 +656,24 @@ const verifyPayment = async (req, res) => {
     });
 
     // ─── Determine plan type from metadata ────────────────────────────────────
-    const planType    = payment.metadata?.planType || 'standard';
+    const planType = payment.metadata?.planType || 'standard';
     const assessmentId = payment.metadata?.assessmentId;
-    const amountRupees = getAmountRupeesForPlan(planType);
-
-    let reportIdForGeneration = null;
-    let assessmentForGeneration = null;
-    let profileForGeneration = null;
-
-    let assessmentSnapshot = null;
-    let hasRemainingQuestions = false;
-
-    // CONSULTATION: no report generation — just flag the lead
-    if (planType !== 'consultation' && assessmentId) {
-      assessmentSnapshot = await prisma.assessment.findFirst({
-        where: { id: assessmentId, userId: req.user.id },
-        include: { answers: true },
-      });
-
-      if (assessmentSnapshot) {
-        const answeredCount = assessmentSnapshot.answers.length;
-        hasRemainingQuestions = answeredCount < PAID_QUESTION_LIMIT;
-        const shouldResume = assessmentSnapshot.status === 'COMPLETED' && hasRemainingQuestions;
-
-        await prisma.assessment.update({
-          where: { id: assessmentId },
-          data: {
-            accessLevel: 'PAID',
-            totalQuestions: PAID_QUESTION_LIMIT,
-            ...(shouldResume ? { status: 'IN_PROGRESS', completedAt: null, currentStep: answeredCount } : {}),
-          },
-        });
-      }
-
-      const existingReport = await prisma.careerReport.findFirst({
-        where: { assessmentId },
-      });
-
-      if (existingReport) {
-        await prisma.payment.update({
-          where: { id: updatedPayment.id },
-          data: { reportId: existingReport.id },
-        });
-
-        const canGenerate = Boolean(assessmentSnapshot)
-          && !hasRemainingQuestions
-          && assessmentSnapshot.status === 'COMPLETED';
-
-        if (canGenerate) {
-          await prisma.careerReport.update({
-            where: { id: existingReport.id },
-            data: {
-              accessLevel: 'PAID',
-              status: 'GENERATING',
-              reportType: planType, // "standard" | "premium"
-            },
-          });
-
-          reportIdForGeneration = existingReport.id;
-
-          [assessmentForGeneration, profileForGeneration] = await Promise.all([
-            prisma.assessment.findUnique({
-              where: { id: assessmentId },
-              include: { questions: true, answers: true },
-            }),
-            prisma.studentProfile.findUnique({
-              where: { userId: req.user.id },
-              include: { parentDetail: true },
-            }),
-          ]);
-        }
-      }
-    }
 
     logger.info('[Payment] Payment verified', { paymentId: payment.id, razorpayPaymentId, planType });
 
-    // ─── Automation hooks post-payment ────────────────────────────────────────
-    analytics.track('payment_success', req, { userId: req.user.id, planType, amountRupees });
-
-    const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
-    if (lead) {
-      const nextStatus = getLeadStatusAfterPayment(planType, Boolean(reportIdForGeneration));
-
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: {
-          paymentId: updatedPayment.id,
-          planType,
-          status: nextStatus,
-          ...(planType === 'consultation' ? { counsellingInterested: true } : {}),
-        },
-      });
-
-      // Per-tier automation event
-      const automationEvent = getAutomationEventForPlan(planType);
-
-      await triggerAutomation(automationEvent, {
-        leadId:      lead.id,
-        userId:      req.user.id,
-        planType,
-        amountRupees,
-        paymentId:   updatedPayment.id,
-      });
-    }
-
-    // Fire-and-forget report generation
-    if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
-      const { generateReportAsync } = require('./assessment.controller');
-      generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
-    }
-
-    // ─── Consultation: create booking + send slot-selection email ─────────────
-    if (planType === 'consultation') {
-      // Run async so we don't block the response — errors are caught internally
-      _createConsultationBookingAndSendEmail({
-        userId:    req.user.id,
-        paymentId: updatedPayment.id,
-        leadId:    lead?.id || null,
-      }).catch((err) =>
-        logger.error('[Payment] Consultation booking creation failed', { error: err.message }),
-      );
-    }
+    const { resumeAssessment } = await finalizeCapturedPayment({
+      payment: updatedPayment,
+      planType,
+      assessmentId,
+      userId: req.user.id,
+      req,
+      source: 'verify',
+    });
 
     const successMsg = planType === 'consultation'
       ? 'Booking confirmed! Your scheduling email is being prepared now.'
       : 'Payment successful! Your report is being generated.';
 
-    const resumeAssessment = planType !== 'consultation' && hasRemainingQuestions;
     return successResponse(
       res,
       {
@@ -588,6 +819,8 @@ const handleWebhook = async (req, res) => {
             grossAmountPaise,
             discountAmountPaise,
             netAmountPaise,
+            planType:          testLink.planType,
+            commissionRate:    0.70,
           });
 
           logger.info('[Payment] CC test link payment processed via webhook', {
@@ -650,114 +883,15 @@ const handleWebhook = async (req, res) => {
 
       const assessmentId = payment.metadata?.assessmentId;
       const planType = payment.metadata?.planType || 'standard';
-      const amountRupees = getAmountRupeesForPlan(planType);
-      let reportIdForGeneration = null;
-      let assessmentForGeneration = null;
-      let profileForGeneration = null;
-      let assessmentSnapshot = null;
-      let hasRemainingQuestions = false;
 
-      if (planType !== 'consultation' && assessmentId) {
-        assessmentSnapshot = await prisma.assessment.findFirst({
-          where: { id: assessmentId, userId: payment.userId },
-          include: { answers: true },
-        });
-
-        if (assessmentSnapshot) {
-          const answeredCount = assessmentSnapshot.answers.length;
-          hasRemainingQuestions = answeredCount < PAID_QUESTION_LIMIT;
-          const shouldResume = assessmentSnapshot.status === 'COMPLETED' && hasRemainingQuestions;
-
-          await prisma.assessment.update({
-            where: { id: assessmentId },
-            data: {
-              accessLevel: 'PAID',
-              totalQuestions: PAID_QUESTION_LIMIT,
-              ...(shouldResume ? { status: 'IN_PROGRESS', completedAt: null, currentStep: answeredCount } : {}),
-            },
-          });
-        }
-
-        const existingReport = await prisma.careerReport.findFirst({ where: { assessmentId } });
-        if (existingReport) {
-          await prisma.payment.update({
-            where: { id: updatedPayment.id },
-            data: { reportId: existingReport.id },
-          });
-
-          const canGenerate = Boolean(assessmentSnapshot)
-            && !hasRemainingQuestions
-            && assessmentSnapshot.status === 'COMPLETED';
-
-          if (canGenerate) {
-            await prisma.careerReport.update({
-              where: { id: existingReport.id },
-              data: { accessLevel: 'PAID', status: 'GENERATING', reportType: planType },
-            });
-
-            reportIdForGeneration = existingReport.id;
-
-            [assessmentForGeneration, profileForGeneration] = await Promise.all([
-              prisma.assessment.findUnique({
-                where: { id: assessmentId },
-                include: { questions: true, answers: true },
-              }),
-              prisma.studentProfile.findUnique({
-                where: { userId: payment.userId },
-                include: { parentDetail: true },
-              }),
-            ]);
-          }
-        }
-      }
-
-      const lead = await prisma.lead.findFirst({ where: { userId: payment.userId } });
-      if (lead) {
-        const nextStatus = getLeadStatusAfterPayment(planType, Boolean(reportIdForGeneration));
-
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: {
-            paymentId: updatedPayment.id,
-            planType,
-            status: nextStatus,
-            ...(planType === 'consultation' ? { counsellingInterested: true } : {}),
-          },
-        });
-
-        await triggerAutomation(getAutomationEventForPlan(planType), {
-          leadId:       lead.id,
-          userId:       payment.userId,
-          planType,
-          amountRupees,
-          paymentId:    updatedPayment.id,
-        });
-      }
-
-      analytics.track('payment_success', null, {
-        userId: payment.userId,
+      await finalizeCapturedPayment({
+        payment: updatedPayment,
         planType,
-        amountRupees,
+        assessmentId,
+        userId: payment.userId,
+        req: null,
         source: 'webhook',
       });
-
-      if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
-        const { generateReportAsync } = require('./assessment.controller');
-        generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
-      }
-
-      // ─── Consultation: create booking + send slot-selection email ───────────
-      // This mirrors the verifyPayment path.  The idempotency guard inside the
-      // helper ensures it's safe even if both paths fire for the same payment.
-      if (planType === 'consultation') {
-        _createConsultationBookingAndSendEmail({
-          userId:    payment.userId,
-          paymentId: updatedPayment.id,
-          leadId:    lead?.id || null,
-        }).catch((err) =>
-          logger.error('[Payment] Webhook: Consultation booking creation failed', { error: err.message }),
-        );
-      }
     }
 
     return successResponse(res, { received: true }, 'Webhook processed');

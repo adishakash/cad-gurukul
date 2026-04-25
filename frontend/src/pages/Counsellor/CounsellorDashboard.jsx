@@ -76,6 +76,7 @@ export default function CounsellorDashboard() {
   const [stats, setStats]       = useState({ leads: 0, students: 0, reports: 0 })
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
+  const [profile, setProfile]   = useState(null)
 
   // CC business data
   const [account, setAccount]         = useState(null)
@@ -84,6 +85,15 @@ export default function CounsellorDashboard() {
   const [payouts, setPayouts]         = useState([])
   const [training, setTraining]       = useState([])
   const [bizLoading, setBizLoading]   = useState(false)
+  const [referralLink, setReferralLink] = useState(null)
+  const [referralStats, setReferralStats] = useState(null)
+  const [referralLoading, setReferralLoading] = useState(false)
+  const [coupons, setCoupons] = useState([])
+  const [couponsLoading, setCouponsLoading] = useState(false)
+  const [couponSaving, setCouponSaving] = useState(false)
+  const [couponForm, setCouponForm] = useState({ code: '', planType: 'standard', discountPct: 0, maxRedemptions: '', expiresAt: '', isActive: true })
+  const [consultations, setConsultations] = useState([])
+  const [consultationsLoading, setConsultationsLoading] = useState(false)
   // Assigned Prospects
   const [prospects, setProspects]     = useState([])
   const [prospectsLoading, setProspectsLoading] = useState(false)
@@ -114,10 +124,11 @@ export default function CounsellorDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const [leadsRes, studentsRes, reportsRes] = await Promise.all([
+      const [leadsRes, studentsRes, reportsRes, profileRes] = await Promise.all([
         counsellorApi.leads({ limit: 50 }),
         counsellorApi.students({ limit: 20 }),
         counsellorApi.reports({ limit: 20 }),
+        counsellorApi.getProfile(),
       ])
 
       const leadsData    = leadsRes.data.data
@@ -127,6 +138,7 @@ export default function CounsellorDashboard() {
       setLeads(leadsData?.leads       || [])
       setStudents(studentsData?.users || [])
       setReports(reportsData?.reports || [])
+      setProfile(profileRes.data.data?.user || null)
       setStats({
         leads:    leadsData?.total    ?? 0,
         students: studentsData?.total ?? 0,
@@ -167,6 +179,50 @@ export default function CounsellorDashboard() {
     }
   }
 
+  const loadReferralData = async () => {
+    setReferralLoading(true)
+    try {
+      const [linkRes, statsRes] = await Promise.all([
+        counsellorBizApi.getReferralLink(),
+        counsellorBizApi.getReferralStats(),
+      ])
+      setReferralLink(linkRes.data.data)
+      setReferralStats(statsRes.data.data)
+    } catch {
+      toast.error('Failed to load referral data.')
+    } finally {
+      setReferralLoading(false)
+    }
+  }
+
+  const loadCoupons = async () => {
+    setCouponsLoading(true)
+    try {
+      const res = await counsellorBizApi.listCoupons()
+      setCoupons(res.data.data || [])
+    } catch {
+      toast.error('Failed to load coupons.')
+    } finally {
+      setCouponsLoading(false)
+    }
+  }
+
+  const loadConsultations = async () => {
+    setConsultationsLoading(true)
+    try {
+      const res = await counsellorBizApi.getUpcomingConsultations()
+      setConsultations(res.data.data || [])
+    } catch (err) {
+      if (err?.response?.status === 403) {
+        setConsultations([])
+      } else {
+        toast.error('Failed to load consultations.')
+      }
+    } finally {
+      setConsultationsLoading(false)
+    }
+  }
+
   // Fetch discount policy for given planType (Phase 6)
   const loadDiscountPolicy = async (planType) => {
     try {
@@ -193,6 +249,9 @@ export default function CounsellorDashboard() {
       loadBizData()
       if (activeTab === 'test-links') loadDiscountPolicy(linkForm.planType)
     }
+    if (activeTab === 'referral') loadReferralData()
+    if (activeTab === 'coupons') loadCoupons()
+    if (activeTab === 'consultations') loadConsultations()
     // Re-fetch assigned prospects on tab switch, with 30-second cache to avoid
     // unnecessary API calls when quickly switching between tabs
     if (activeTab === 'assigned-prospects') fetchProspects()
@@ -233,6 +292,48 @@ export default function CounsellorDashboard() {
     }
   }
 
+  const handleCreateCoupon = async (e) => {
+    e.preventDefault()
+    setCouponSaving(true)
+    try {
+      const payload = {
+        planType: couponForm.planType,
+        discountPct: Number(couponForm.discountPct) || 0,
+        isActive: couponForm.isActive,
+      }
+      if (couponForm.code.trim()) payload.code = couponForm.code.trim().toUpperCase()
+      if (couponForm.maxRedemptions) payload.maxRedemptions = Number(couponForm.maxRedemptions)
+      if (couponForm.expiresAt) payload.expiresAt = new Date(couponForm.expiresAt).toISOString()
+
+      await counsellorBizApi.createCoupon(payload)
+      toast.success('Coupon created.')
+      setCouponForm({ code: '', planType: 'standard', discountPct: 0, maxRedemptions: '', expiresAt: '', isActive: true })
+      await loadCoupons()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to create coupon.')
+    } finally {
+      setCouponSaving(false)
+    }
+  }
+
+  const toggleCouponStatus = async (coupon) => {
+    try {
+      await counsellorBizApi.updateCoupon(coupon.id, { isActive: !coupon.isActive })
+      await loadCoupons()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to update coupon.')
+    }
+  }
+
+  const deactivateCoupon = async (coupon) => {
+    try {
+      await counsellorBizApi.deleteCoupon(coupon.id)
+      await loadCoupons()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to deactivate coupon.')
+    }
+  }
+
   const handleUpdateDiscount = async (e) => {
     e.preventDefault()
     // Discount tab removed (Phase 6) — this handler is kept for backward compat but not called
@@ -249,16 +350,19 @@ export default function CounsellorDashboard() {
     navigate('/staff/login')
   }
 
-  const tabs = ['leads', 'students', 'reports', 'account', 'test-links', 'training', 'payouts', 'assigned-prospects']
+  const tabs = ['leads', 'students', 'reports', 'referral', 'coupons', 'account', 'test-links', 'training', 'payouts', 'consultations', 'assigned-prospects']
 
   const TAB_LABELS = {
     leads: 'Leads',
     students: 'Students',
     reports: 'Reports',
+    referral: 'Referral Link',
+    coupons: 'Coupons',
     account: 'Account',
     'test-links': 'Test Links',
     training: 'Training',
     payouts: 'Payouts',
+    consultations: 'Consultations',
     'assigned-prospects': '📌 Assigned Prospects',
   }
 
@@ -389,6 +493,172 @@ export default function CounsellorDashboard() {
               </div>
             )}
 
+            {activeTab === 'referral' && (
+              <div className="space-y-6">
+                <div className="card">
+                  <h3 className="font-bold text-brand-dark text-lg mb-3">Your Referral Link</h3>
+                  {referralLoading ? (
+                    <div className="py-8 text-center text-gray-400">Loading…</div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex flex-col md:flex-row gap-2">
+                        <input
+                          readOnly
+                          value={referralLink?.url || '—'}
+                          className="input-field text-sm flex-1"
+                        />
+                        <button
+                          onClick={() => referralLink?.url && copyUrl(referralLink.url)}
+                          className="btn-secondary text-sm px-4"
+                          disabled={!referralLink?.url}
+                        >
+                          Copy Link
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500">Share this single link to attribute all student revenue to your profile.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="card">
+                  <h3 className="font-bold text-brand-dark text-lg mb-4">Referral Stats</h3>
+                  {referralLoading ? (
+                    <div className="py-8 text-center text-gray-400">Loading…</div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <StatCard icon="👥" label="Leads" value={referralStats?.totals?.leads ?? 0} />
+                      <StatCard icon="🧠" label="Started" value={referralStats?.totals?.assessmentStarted ?? 0} />
+                      <StatCard icon="✅" label="Completed" value={referralStats?.totals?.assessmentCompleted ?? 0} />
+                      <StatCard icon="💳" label="Paid" value={referralStats?.totals?.paid ?? 0} />
+                      <StatCard icon="📞" label="Consultations" value={referralStats?.totals?.consultations ?? 0} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'coupons' && (
+              <div className="space-y-6">
+                <div className="card">
+                  <h3 className="font-bold text-brand-dark text-lg mb-4">Create Coupon</h3>
+                  <form onSubmit={handleCreateCoupon} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Coupon Code (optional)</label>
+                      <input
+                        type="text"
+                        value={couponForm.code}
+                        onChange={(e) => setCouponForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                        placeholder="Auto-generate if blank"
+                        className="input-field text-sm w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
+                      <select
+                        value={couponForm.planType}
+                        onChange={(e) => setCouponForm((f) => ({ ...f, planType: e.target.value }))}
+                        className="input-field text-sm w-full"
+                      >
+                        <option value="standard">Standard (₹499)</option>
+                        <option value="premium">Premium (₹1,999)</option>
+                        <option value="consultation">Consultation (₹9,999)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Discount %</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={couponForm.discountPct}
+                        onChange={(e) => setCouponForm((f) => ({ ...f, discountPct: e.target.value }))}
+                        className="input-field text-sm w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Redemptions</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={couponForm.maxRedemptions}
+                        onChange={(e) => setCouponForm((f) => ({ ...f, maxRedemptions: e.target.value }))}
+                        placeholder="Optional"
+                        className="input-field text-sm w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                      <input
+                        type="date"
+                        value={couponForm.expiresAt}
+                        onChange={(e) => setCouponForm((f) => ({ ...f, expiresAt: e.target.value }))}
+                        className="input-field text-sm w-full"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button type="submit" disabled={couponSaving} className="btn-primary text-sm w-full">
+                        {couponSaving ? 'Saving…' : 'Create Coupon'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="card">
+                  <h3 className="font-bold text-brand-dark text-lg mb-4">My Coupons</h3>
+                  {couponsLoading ? (
+                    <div className="py-10 text-center text-gray-400">Loading coupons…</div>
+                  ) : (
+                    <Table
+                      headers={['Code', 'Plan', 'Discount', 'Usage', 'Status', 'Expires', 'Actions']}
+                      rows={coupons.map((c) => [
+                        <code key="code" className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{c.code}</code>,
+                        c.planType,
+                        `${c.discountPct}%`,
+                        `${c.usageCount || 0}${c.maxRedemptions ? ` / ${c.maxRedemptions}` : ''}`,
+                        c.isActive ? 'Active' : 'Inactive',
+                        c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('en-IN') : '—',
+                        <div key="actions" className="flex gap-2">
+                          <button onClick={() => toggleCouponStatus(c)} className="text-xs text-indigo-600 hover:underline">
+                            {c.isActive ? 'Disable' : 'Enable'}
+                          </button>
+                          <button onClick={() => deactivateCoupon(c)} className="text-xs text-red-600 hover:underline">Deactivate</button>
+                        </div>,
+                      ])}
+                      emptyText="No coupons created yet."
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'consultations' && (
+              <div className="card">
+                <h3 className="font-bold text-brand-dark text-lg mb-4">Upcoming Consultations</h3>
+                {profile?.isConsultationAuthorized ? (
+                  consultationsLoading ? (
+                    <div className="py-10 text-center text-gray-400">Loading consultations…</div>
+                  ) : (
+                    <Table
+                      headers={['Student', 'Email', 'Phone', 'Scheduled', 'Status', 'Meeting']}
+                      rows={consultations.map((c) => [
+                        c.studentName,
+                        c.studentEmail || '—',
+                        c.studentPhone || '—',
+                        c.scheduledStartAt ? new Date(c.scheduledStartAt).toLocaleString('en-IN') : '—',
+                        c.status,
+                        c.meetingLink
+                          ? <a key="m" href={c.meetingLink} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline">Open</a>
+                          : '—',
+                      ])}
+                      emptyText="No upcoming sessions assigned yet."
+                    />
+                  )
+                ) : (
+                  <div className="text-sm text-gray-500">You are not authorized for ₹9,999 consultations yet.</div>
+                )}
+              </div>
+            )}
+
             {/* ── CC Business tabs ── */}
             {bizLoading && ['account', 'test-links', 'training', 'payouts'].includes(activeTab) && (
               <div className="flex justify-center py-20">
@@ -398,16 +668,18 @@ export default function CounsellorDashboard() {
 
             {!bizLoading && activeTab === 'account' && (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <StatCard icon="💰" label="Total Sales"      value={account ? formatPaise(account.totalSalesPaise)        : '—'} />
                   <StatCard icon="🏆" label="Total Commission" value={account ? formatPaise(account.totalCommissionPaise)    : '—'} />
+                  <StatCard icon="🗓️" label="This Month Income" value={account ? formatPaise(account.monthIncomePaise || 0) : '—'} />
+                  <StatCard icon="📆" label="This Week Income"  value={account ? formatPaise(account.weekIncomePaise || 0)  : '—'} />
                   <StatCard icon="⏳" label="Pending Payout"   value={account ? formatPaise(account.pendingPayoutPaise)      : '—'} />
                   <StatCard icon="✅" label="Paid Out"         value={account ? formatPaise(account.paidAmountPaise)         : '—'} />
                 </div>
                 <div className="card text-sm text-gray-600">
                   <p>📅 Next payout scheduled: <strong>{account?.nextPayoutDate || '—'}</strong></p>
                   <p className="mt-1">🔢 Total sales count: <strong>{account?.totalSalesCount ?? 0}</strong></p>
-                  <p className="mt-1 text-xs text-gray-400">Commission rate: 70% of net sale amount</p>
+                  <p className="mt-1 text-xs text-gray-400">Commission rate: 70% on ₹499/₹1,999; 10% or 50% on ₹9,999 (authorized)</p>
                 </div>
                 {transactions.length > 0 && (
                   <div className="card">

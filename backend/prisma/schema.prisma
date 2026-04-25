@@ -155,11 +155,17 @@ model User {
   ccCommissions     CcCommission[]     @relation("CcCommissions")
   ccPayouts         CcPayout[]         @relation("CcPayouts")
   ccDiscount        CcDiscount?        @relation("CcDiscount")
+  ccCoupons         CcCoupon[]         @relation("CcCoupons")
 
   // Partner approval & bank
   isApproved         Boolean             @default(false)
   approvedAt         DateTime?
   suspendedAt        DateTime?
+  // Consultation authorization (₹9,999 plan)
+  isConsultationAuthorized Boolean       @default(false)
+  consultationAuthorizedAt DateTime?
+  // CC referral link
+  ccReferralCode     String?             @unique
   partnerApplication PartnerApplication?
   bankAccount        BankAccount?
 
@@ -947,20 +953,26 @@ model CcAttributedSale {
   testLinkId          String?  @unique
   paymentId           String   @unique
   saleType            String
+  planType            String   @default("standard")
   grossAmountPaise    Int
   discountAmountPaise Int      @default(0)
   netAmountPaise      Int
+  commissionRate      Float    @default(0.7)
   commissionPaise     Int
+  ccCouponId          String?
+  couponCode          String?
   status              String   @default("confirmed")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   ccUser     User          @relation("CcAttributedSales", fields: [ccUserId], references: [id], onDelete: Restrict)
   testLink   CcTestLink?   @relation(fields: [testLinkId], references: [id], onDelete: SetNull)
+  ccCoupon   CcCoupon?     @relation(fields: [ccCouponId], references: [id], onDelete: SetNull)
   commission CcCommission?
 
   @@index([ccUserId])
   @@index([status])
+  @@index([ccCouponId])
   @@map("cc_attributed_sales")
 }
 
@@ -1023,6 +1035,29 @@ model CcDiscount {
   ccUser User @relation("CcDiscount", fields: [ccUserId], references: [id], onDelete: Cascade)
 
   @@map("cc_discounts")
+}
+
+/// Per-CC discount coupons for standard/premium/consultation plans.
+model CcCoupon {
+  id             String   @id @default(cuid())
+  ccUserId       String
+  code           String   @unique
+  planType       String   // "standard" | "premium" | "consultation"
+  discountPct    Float    @default(0)
+  isActive       Boolean  @default(true)
+  usageCount     Int      @default(0)
+  maxRedemptions Int?
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ccUser          User               @relation("CcCoupons", fields: [ccUserId], references: [id], onDelete: Cascade)
+  attributedSales CcAttributedSale[]
+
+  @@index([ccUserId])
+  @@index([planType])
+  @@index([isActive])
+  @@map("cc_coupons")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1333,6 +1368,9 @@ model ConsultationBooking {
   leadId    String? // nullable for backward compat
   paymentId String  @unique // Payment.id — soft reference (no Prisma relation on Payment side)
 
+  /// Assigned counsellor (optional, for partner view)
+  counsellorUserId String?
+
   /// Secure 64-char hex token included in the slot-selection email link.
   /// Used to authenticate the slot selection without requiring the student to log in.
   slotToken String @unique
@@ -1393,8 +1431,10 @@ model ConsultationBooking {
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  counsellorUser User? @relation(fields: [counsellorUserId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([counsellorUserId])
   @@index([slotToken])
   @@index([status])
   @@index([scheduledStartAt])

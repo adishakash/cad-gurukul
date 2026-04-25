@@ -100,7 +100,10 @@ const getStaffProfile = async (req, res) => {
       where: { id: req.user.id },
       select: {
         id: true, email: true, name: true, role: true,
-        isActive: true, createdAt: true, updatedAt: true,
+        isActive: true,
+        isConsultationAuthorized: true,
+        ccReferralCode: true,
+        createdAt: true, updatedAt: true,
       },
     });
 

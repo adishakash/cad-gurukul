@@ -34,6 +34,8 @@ const { LEAD_STATUS_ORDER, PLAN_TYPE_ORDER } = require('../utils/leadStatusHelpe
 const createOrUpdateLead = async (req, res) => {
   try {
     const { email, ...rest } = req.body;
+    const referralCode = rest.referralCode ? String(rest.referralCode).trim().toUpperCase() : null;
+    const leadSourceOverride = referralCode ? 'referral' : rest.leadSource;
 
     // Deduplicate by email first, then by phone — upsert
     let existing = await prisma.lead.findUnique({ where: { email } });
@@ -64,11 +66,12 @@ const createOrUpdateLead = async (req, res) => {
           userType:      rest.userType      || existing.userType,
           selectedPlan:  rest.selectedPlan === 'paid' ? 'paid' : existing.selectedPlan,
           // Attribution — only set if missing
-          leadSource:  existing.leadSource !== 'direct' ? existing.leadSource : (rest.leadSource || existing.leadSource),
+          leadSource:  existing.leadSource !== 'direct' ? existing.leadSource : (leadSourceOverride || existing.leadSource),
           utmSource:   existing.utmSource   || rest.utmSource   || null,
           utmMedium:   existing.utmMedium   || rest.utmMedium   || null,
           utmCampaign: existing.utmCampaign || rest.utmCampaign || null,
           utmContent:  existing.utmContent  || rest.utmContent  || null,
+          referralCode: existing.referralCode || referralCode || null,
           // Link to user if now authenticated
           userId: req.user?.id || existing.userId || null,
         },
@@ -79,6 +82,8 @@ const createOrUpdateLead = async (req, res) => {
           id:    crypto.randomUUID(),
           email,
           ...rest,
+          referralCode: referralCode || null,
+          leadSource: leadSourceOverride || rest.leadSource,
           userId: req.user?.id || null,
         },
       });

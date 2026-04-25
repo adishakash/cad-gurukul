@@ -5,7 +5,7 @@ const router  = express.Router();
 const { authenticate, requirePortalRole } = require('../middleware/auth');
 const { validate }                     = require('../middleware/validate');
 const { staffLoginSchema, staffLeadListQuerySchema } = require('../validators/staff.validator');
-const { createTestLinkSchema, updateDiscountSchema } = require('../validators/cc.validator');
+const { createTestLinkSchema, updateDiscountSchema, couponCreateSchema, couponUpdateSchema } = require('../validators/cc.validator');
 const staffController                  = require('../controllers/staff.controller');
 const ccController                     = require('../controllers/cc.controller');
 const { getBankAccount, saveBankAccount } = require('../controllers/bankAccount.controller');
@@ -43,6 +43,16 @@ router.get('/reports', staffController.listCounsellorReports);
 router.get('/account',              ccController.getAccountSummary);
 router.get('/account/transactions', ccController.listTransactions);
 
+// Referral link + stats
+router.get('/referral-link',        ccController.getReferralLink);
+router.get('/referral-stats',       ccController.getReferralStats);
+
+// Coupons
+router.get('/coupons',              ccController.listCoupons);
+router.post('/coupons',             validate(couponCreateSchema), ccController.createCoupon);
+router.patch('/coupons/:id',        validate(couponUpdateSchema), ccController.updateCoupon);
+router.delete('/coupons/:id',       ccController.deleteCoupon);
+
 // Test links
 router.get('/test-links',           ccController.listTestLinks);
 router.post('/test-links',          validate(createTestLinkSchema), ccController.createTestLink);
@@ -61,6 +71,9 @@ router.get('/training/:id/file',   ccController.serveTrainingFile);
 // Payouts
 router.get('/payouts',              ccController.listPayouts);
 router.get('/payouts/:id',          ccController.getPayoutDetail);
+
+// Consultation sessions (authorized CC only)
+router.get('/consultations/upcoming', ccController.listUpcomingConsultations);
 
 // Bank account
 router.get('/bank-account', getBankAccount);

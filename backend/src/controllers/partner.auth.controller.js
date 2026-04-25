@@ -12,6 +12,7 @@ const prisma  = require('../config/database');
 const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../utils/token');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const { notifyPartner } = require('../services/notification/partnerNotificationService');
+const { generateCcReferralCode } = require('../utils/referralCode');
 const logger = require('../utils/logger');
 
 const ALLOWED_PARTNER_ROLES = ['CAREER_COUNSELLOR', 'CAREER_COUNSELLOR_LEAD'];
@@ -37,6 +38,10 @@ const registerPartner = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    const ccReferralCode = role === 'CAREER_COUNSELLOR'
+      ? await generateCcReferralCode()
+      : null;
+
     await prisma.user.create({
       data: {
         email,
@@ -44,6 +49,7 @@ const registerPartner = async (req, res) => {
         name: fullName,
         role,
         isApproved: false,
+        ...(ccReferralCode ? { ccReferralCode } : {}),
         partnerApplication: {
           create: {
             role,

@@ -272,6 +272,9 @@ async function listConsultationCalendar({ from = new Date(), days = 14 } = {}) {
             },
           },
         },
+        counsellorUser: {
+          select: { id: true, name: true, email: true },
+        },
         lead: {
           select: { reportId: true },
         },

@@ -77,6 +77,7 @@ const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../util
 const logger = require('../utils/logger');
 const { triggerAutomation } = require('../services/automation/automationService');
 const { generateReportAsync } = require('./assessment.controller');
+const { generateCcReferralCode } = require('../utils/referralCode');
 const {
   sendEmail,
   sendReportReadyEmail,
@@ -84,6 +85,21 @@ const {
   getEmailHealthSnapshot,
 } = require('../services/email/emailService');
 const { sendCounsellingReportForBooking } = require('../services/consultation/consultationAutomationService');
+
+const getWeekStart = (date = new Date()) => {
+  const start = new Date(date);
+  const day = start.getDay();
+  const diff = (day + 6) % 7;
+  start.setDate(start.getDate() - diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
+const getMonthStart = (date = new Date()) => {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH
@@ -372,6 +388,47 @@ const getAnalytics = async (req, res) => {
     });
   } catch (err) {
     logger.error('[Admin] getAnalytics error', { error: err.message });
+    throw err;
+  }
+};
+
+/**
+ * GET /admin/revenue/summary
+ * Returns revenue totals for all-time, this month, and this week.
+ */
+const getRevenueSummary = async (req, res) => {
+  try {
+    const now = new Date();
+    const weekStart = getWeekStart(now);
+    const monthStart = getMonthStart(now);
+
+    const [allPayments, monthPayments, weekPayments] = await Promise.all([
+      prisma.payment.findMany({
+        where: { status: 'CAPTURED' },
+        select: { amountPaise: true, metadata: true },
+      }),
+      prisma.payment.findMany({
+        where: { status: 'CAPTURED', paidAt: { gte: monthStart } },
+        select: { amountPaise: true, metadata: true },
+      }),
+      prisma.payment.findMany({
+        where: { status: 'CAPTURED', paidAt: { gte: weekStart } },
+        select: { amountPaise: true, metadata: true },
+      }),
+    ]);
+
+    const sumPayments = (rows) => rows.reduce(
+      (sum, payment) => sum + (payment.metadata?.totalAmountPaise || payment.amountPaise || 0),
+      0,
+    );
+
+    return successResponse(res, {
+      allTimePaise: sumPayments(allPayments),
+      monthPaise: sumPayments(monthPayments),
+      weekPaise: sumPayments(weekPayments),
+    });
+  } catch (err) {
+    logger.error('[Admin] getRevenueSummary error', { error: err.message });
     throw err;
   }
 };
@@ -1020,8 +1077,21 @@ async function createStaff(req, res) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    const ccReferralCode = role === 'CAREER_COUNSELLOR'
+      ? await generateCcReferralCode()
+      : null;
+
     const staff = await prisma.user.create({
-      data: { name, email, passwordHash, role, isActive: true, isApproved: true, approvedAt: new Date() },
+      data: {
+        name,
+        email,
+        passwordHash,
+        role,
+        isActive: true,
+        isApproved: true,
+        approvedAt: new Date(),
+        ...(ccReferralCode ? { ccReferralCode } : {}),
+      },
       select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
     });
 
@@ -1050,9 +1120,16 @@ async function updateStaffRole(req, res) {
       return errorResponse(res, 'Target user is not a staff member', 422, 'INVALID_TARGET');
     }
 
+    const ccReferralCode = role === 'CAREER_COUNSELLOR' && !user.ccReferralCode
+      ? await generateCcReferralCode()
+      : null;
+
     const updated = await prisma.user.update({
       where: { id: req.params.id },
-      data: { role },
+      data: {
+        role,
+        ...(ccReferralCode ? { ccReferralCode } : {}),
+      },
       select: { id: true, name: true, email: true, role: true, isActive: true },
     });
 
@@ -1143,6 +1220,7 @@ module.exports = {
 
   // ── Analytics ──────────────────────────────────────────────────────────────
   getAnalytics,
+  getRevenueSummary,
 
   // ── Payments ───────────────────────────────────────────────────────────────
   listPayments,

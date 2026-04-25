@@ -7,6 +7,7 @@ import { leadApi, paymentApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
 import { isPlanIncluded, formatRupees } from '../utils/planPricing'
 import { splitGstFromInclusive } from '../utils/gst'
+import { getStoredCouponCode } from '../utils/referral'
 
 // ── Value ladder plan config ──────────────────────────────────────────────────
 const PLAN_CONFIG = {
@@ -101,15 +102,21 @@ export default function Payment() {
   const [loading, setLoading] = useState(false)
   const [quote, setQuote] = useState(null)
   const [quoteLoading, setQuoteLoading] = useState(true)
+  const [couponCode, setCouponCode] = useState(getStoredCouponCode())
+  const [couponApplying, setCouponApplying] = useState(false)
 
   useEffect(() => {
     let mounted = true
     const loadQuote = async () => {
       setQuoteLoading(true)
       try {
-        const { data } = await paymentApi.getQuote(planId, assessmentId)
+        const { data } = await paymentApi.getQuote(planId, assessmentId, { couponCode })
         if (mounted) setQuote(data.data)
       } catch (err) {
+        if (couponCode) {
+          toast.error(err?.response?.data?.message || 'Invalid coupon code.')
+          if (mounted) setCouponCode('')
+        }
         if (mounted) {
           setQuote({
             currentPlan: 'free',
@@ -137,6 +144,27 @@ export default function Payment() {
     trackEvent('payment_page_viewed', { plan: planId, source: document.referrer })
   }, [planId])
 
+  const applyCoupon = async () => {
+    setCouponApplying(true)
+    const normalized = couponCode.trim().toUpperCase()
+    setCouponCode(normalized)
+    try {
+      const { data } = await paymentApi.getQuote(planId, assessmentId, { couponCode: normalized })
+      setQuote(data.data)
+      if (normalized) {
+        localStorage.setItem('cg_coupon_code', normalized)
+        toast.success('Coupon applied.')
+      } else {
+        localStorage.removeItem('cg_coupon_code')
+        toast.success('Coupon cleared.')
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Invalid coupon code.')
+    } finally {
+      setCouponApplying(false)
+    }
+  }
+
   const handlePayment = async () => {
     if (quote?.alreadyIncluded || quote?.alreadyOwned || quote?.canPurchase === false) {
       toast.error(quote?.alreadyOwned ? `You already have the ${plan.label}.` : `${plan.label} is already included in your current plan.`)
@@ -162,7 +190,20 @@ export default function Payment() {
         return
       }
 
-      const { data } = await paymentApi.createOrder(assessmentId, planId)
+      const { data } = await paymentApi.createOrder(assessmentId, planId, { couponCode })
+
+      if (data.data?.free) {
+        trackEvent('payment_success', { plan: planId, amount: 0, coupon: couponCode || null })
+        toast.success(plan.successMsg)
+        if (planId === 'consultation') {
+          navigate('/dashboard')
+        } else if (data.data?.resumeAssessment) {
+          navigate('/assessment?plan=PAID&resume=1')
+        } else {
+          navigate('/dashboard')
+        }
+        return
+      }
 
       const options = {
         key: data.data.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
@@ -185,7 +226,7 @@ export default function Payment() {
               razorpaySignature: response.razorpay_signature,
             })
             const resumeAssessment = Boolean(verifyRes?.data?.data?.resumeAssessment)
-            trackEvent('payment_success', { plan: planId, amount: quote?.effectivePrice || plan.priceNum })
+            trackEvent('payment_success', { plan: planId, amount: quote?.discountedTotalRupees ?? quote?.effectivePrice || plan.priceNum })
             leadApi.update({ planType: planId }).catch(() => {})
             toast.success(plan.successMsg)
             if (planId === 'consultation') {
@@ -214,8 +255,13 @@ export default function Payment() {
   }
 
   const currentPlan = quote?.currentPlan || 'free'
-  const displayPrice = quote?.effectivePriceLabel || plan.price
-  const displayAmount = quote?.effectivePrice ?? plan.priceNum
+  const discountPct = quote?.discountPct || 0
+  const discountAmountPaise = quote?.discountAmountPaise || 0
+  const discountedTotalRupees = quote?.discountedTotalRupees ?? quote?.effectivePrice ?? plan.priceNum
+  const displayPrice = discountPct > 0
+    ? (quote?.discountedTotalLabel || formatRupees(discountedTotalRupees))
+    : (quote?.effectivePriceLabel || plan.price)
+  const displayAmount = discountedTotalRupees
   const isIncluded = Boolean(quote?.alreadyIncluded)
   const isOwned = Boolean(quote?.alreadyOwned)
   const isUpgrade = Boolean(quote?.isUpgrade)
@@ -271,6 +317,11 @@ export default function Payment() {
                     ? `Upgrade from ${currentPlan} by paying only the difference`
                     : 'One-time payment · No subscription · Lifetime access'}
             </p>
+            {discountPct > 0 && (
+              <p className="text-xs text-green-600 mt-1">
+                Coupon applied: −{discountPct}% (save {formatRupees(discountAmountPaise / 100)})
+              </p>
+            )}
             {gstIncluded && gstAmountPaise > 0 && (
               <p className="text-[11px] text-gray-400 mt-1">
                 GST ({gstRate}%) included: {formatRupees(gstAmountPaise / 100)}
@@ -289,6 +340,27 @@ export default function Payment() {
           {/* Urgency text */}
           <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 mb-5 text-center">
             <p className="text-xs text-orange-700 font-semibold">⏳ {plan.urgency}</p>
+          </div>
+
+          <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Have a coupon?</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder="Enter coupon code"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-red/50"
+              />
+              <button
+                onClick={applyCoupon}
+                disabled={couponApplying || quoteLoading}
+                className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-black disabled:opacity-60"
+              >
+                {couponApplying ? 'Applying…' : 'Apply'}
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-2">Coupon discounts apply only to this plan.</p>
           </div>
 
           <button

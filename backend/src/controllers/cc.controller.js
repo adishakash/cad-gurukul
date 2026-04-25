@@ -7,6 +7,7 @@ const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
+const { generateCcReferralCode } = require('../utils/referralCode');
 
 const COMMISSION_RATE = 0.70; // 70% on net sale amount
 
@@ -46,6 +47,42 @@ function getNextThursday() {
   return next;
 }
 
+function getWeekStart(date = new Date()) {
+  const start = new Date(date);
+  const day = start.getDay(); // 0 = Sunday
+  const diff = (day + 6) % 7; // Monday start
+  start.setDate(start.getDate() - diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function getMonthStart(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+async function generateUniqueCouponCode() {
+  for (let i = 0; i < 10; i += 1) {
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const existing = await prisma.ccCoupon.findUnique({ where: { code } });
+    if (!existing) return code;
+  }
+  throw new Error('Failed to generate a unique coupon code after 10 attempts.');
+}
+
+async function resolveCouponPolicy(planType) {
+  const policy = await prisma.discountPolicy.findUnique({
+    where: { role_planType: { role: 'CAREER_COUNSELLOR', planType } },
+  });
+  const defaultMax = planType === 'standard' ? 100 : 20;
+  return {
+    minPct: policy ? policy.minPct : 0,
+    maxPct: policy ? policy.maxPct : defaultMax,
+    isActive: policy ? policy.isActive : true,
+  };
+}
+
 async function generateUniqueCode() {
   for (let i = 0; i < 10; i++) {
     const code = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -74,15 +111,34 @@ const getAccountSummary = async (req, res) => {
   try {
     const ccUserId = req.user.id;
 
-    const [salesAgg, commissions, discount] = await Promise.all([
+    const weekStart = getWeekStart();
+    const monthStart = getMonthStart();
+
+    const [salesAgg, salesWeekAgg, salesMonthAgg, commissions, commissionWeekAgg, commissionMonthAgg, discount] = await Promise.all([
       prisma.ccAttributedSale.aggregate({
         where: { ccUserId, status: 'confirmed' },
         _sum: { grossAmountPaise: true },
         _count: true,
       }),
+      prisma.ccAttributedSale.aggregate({
+        where: { ccUserId, status: 'confirmed', createdAt: { gte: weekStart } },
+        _sum: { grossAmountPaise: true },
+      }),
+      prisma.ccAttributedSale.aggregate({
+        where: { ccUserId, status: 'confirmed', createdAt: { gte: monthStart } },
+        _sum: { grossAmountPaise: true },
+      }),
       prisma.ccCommission.findMany({
         where: { ccUserId },
         select: { amountPaise: true, status: true },
+      }),
+      prisma.ccCommission.aggregate({
+        where: { ccUserId, status: { not: 'cancelled' }, createdAt: { gte: weekStart } },
+        _sum: { amountPaise: true },
+      }),
+      prisma.ccCommission.aggregate({
+        where: { ccUserId, status: { not: 'cancelled' }, createdAt: { gte: monthStart } },
+        _sum: { amountPaise: true },
       }),
       prisma.ccDiscount.findUnique({ where: { ccUserId } }),
     ]);
@@ -102,12 +158,22 @@ const getAccountSummary = async (req, res) => {
       .filter((c) => c.status === 'paid')
       .reduce((sum, c) => sum + c.amountPaise, 0);
 
+    const weekSalesPaise = salesWeekAgg._sum.grossAmountPaise || 0;
+    const monthSalesPaise = salesMonthAgg._sum.grossAmountPaise || 0;
+    const weekIncomePaise = commissionWeekAgg._sum.amountPaise || 0;
+    const monthIncomePaise = commissionMonthAgg._sum.amountPaise || 0;
+
     return successResponse(res, {
       totalSalesPaise,
+      totalBusinessPaise: totalSalesPaise,
       totalSalesCount,
       totalCommissionPaise,
       pendingPayoutPaise,
       paidAmountPaise,
+      weekSalesPaise,
+      monthSalesPaise,
+      weekIncomePaise,
+      monthIncomePaise,
       nextPayoutDate: getNextThursday().toISOString().slice(0, 10),
       discount: discount
         ? { discountPct: discount.discountPct, planType: discount.planType, isActive: discount.isActive }
@@ -140,6 +206,7 @@ const listTransactions = async (req, res) => {
         include: {
           commission: { select: { amountPaise: true, status: true, payoutId: true } },
           testLink: { select: { code: true, candidateName: true, candidateEmail: true } },
+          ccCoupon: { select: { code: true } },
         },
       }),
       prisma.ccAttributedSale.count({ where: { ccUserId } }),
@@ -152,6 +219,278 @@ const listTransactions = async (req, res) => {
   } catch (err) {
     logger.error('[CC] listTransactions error', { error: err.message });
     return errorResponse(res, 'Failed to load transactions', 500);
+  }
+};
+
+/**
+ * GET /api/v1/counsellor/referral-link
+ * Returns or creates the single CC referral link.
+ */
+const getReferralLink = async (req, res) => {
+  try {
+    const ccUserId = req.user.id;
+    const user = await prisma.user.findUnique({
+      where: { id: ccUserId },
+      select: { ccReferralCode: true },
+    });
+
+    let code = user?.ccReferralCode || null;
+    if (!code) {
+      code = await generateCcReferralCode();
+      await prisma.user.update({
+        where: { id: ccUserId },
+        data: { ccReferralCode: code },
+      });
+    }
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://cadgurukul.com').replace(/\/$/, '');
+    return successResponse(res, {
+      code,
+      url: `${frontendUrl}/?ref=${code}`,
+    });
+  } catch (err) {
+    logger.error('[CC] getReferralLink error', { error: err.message });
+    return errorResponse(res, 'Failed to load referral link', 500);
+  }
+};
+
+/**
+ * GET /api/v1/counsellor/referral-stats
+ * Returns lead/assessment stats for the CC referral link.
+ */
+const getReferralStats = async (req, res) => {
+  try {
+    const ccUserId = req.user.id;
+    const user = await prisma.user.findUnique({
+      where: { id: ccUserId },
+      select: { ccReferralCode: true },
+    });
+
+    let code = user?.ccReferralCode || null;
+    if (!code) {
+      code = await generateCcReferralCode();
+      await prisma.user.update({
+        where: { id: ccUserId },
+        data: { ccReferralCode: code },
+      });
+    }
+
+    const where = { referralCode: code };
+    const [totalLeads, assessmentStarted, assessmentCompleted, paidLeads, consultationLeads] = await Promise.all([
+      prisma.lead.count({ where }),
+      prisma.lead.count({ where: { ...where, assessmentId: { not: null } } }),
+      prisma.lead.count({
+        where: {
+          ...where,
+          status: {
+            in: [
+              'assessment_completed',
+              'free_report_ready',
+              'payment_pending',
+              'paid',
+              'premium_report_generating',
+              'premium_report_ready',
+              'counselling_interested',
+              'closed',
+            ],
+          },
+        },
+      }),
+      prisma.lead.count({
+        where: {
+          ...where,
+          status: {
+            in: ['paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'],
+          },
+        },
+      }),
+      prisma.lead.count({ where: { ...where, planType: 'consultation' } }),
+    ]);
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://cadgurukul.com').replace(/\/$/, '');
+    return successResponse(res, {
+      code,
+      url: `${frontendUrl}/?ref=${code}`,
+      totals: {
+        leads: totalLeads,
+        assessmentStarted,
+        assessmentCompleted,
+        paid: paidLeads,
+        consultations: consultationLeads,
+      },
+    });
+  } catch (err) {
+    logger.error('[CC] getReferralStats error', { error: err.message });
+    return errorResponse(res, 'Failed to load referral stats', 500);
+  }
+};
+
+/**
+ * GET /api/v1/counsellor/coupons
+ */
+const listCoupons = async (req, res) => {
+  try {
+    const ccUserId = req.user.id;
+    const coupons = await prisma.ccCoupon.findMany({
+      where: { ccUserId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return successResponse(res, coupons);
+  } catch (err) {
+    logger.error('[CC] listCoupons error', { error: err.message });
+    return errorResponse(res, 'Failed to load coupons', 500);
+  }
+};
+
+/**
+ * POST /api/v1/counsellor/coupons
+ */
+const createCoupon = async (req, res) => {
+  try {
+    const ccUserId = req.user.id;
+    const { code, planType, discountPct: rawDiscountPct, isActive, maxRedemptions, expiresAt } = req.body;
+
+    const policy = await resolveCouponPolicy(planType);
+    const cappedDiscountPct = Math.min(Math.max(Number(rawDiscountPct) || 0, policy.minPct), policy.maxPct);
+
+    const couponCode = (code || '').trim().toUpperCase() || await generateUniqueCouponCode();
+
+    const coupon = await prisma.ccCoupon.create({
+      data: {
+        ccUserId,
+        code: couponCode,
+        planType,
+        discountPct: cappedDiscountPct,
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
+        maxRedemptions: maxRedemptions ? Number(maxRedemptions) : null,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      },
+    });
+
+    await auditLog(ccUserId, 'cc.coupon.created', 'CcCoupon', coupon.id, {
+      code: coupon.code,
+      planType: coupon.planType,
+      discountPct: coupon.discountPct,
+    });
+
+    return successResponse(res, coupon, 'Coupon created', 201);
+  } catch (err) {
+    logger.error('[CC] createCoupon error', { error: err.message });
+    return errorResponse(res, err.message || 'Failed to create coupon', 500);
+  }
+};
+
+/**
+ * PATCH /api/v1/counsellor/coupons/:id
+ */
+const updateCoupon = async (req, res) => {
+  try {
+    const ccUserId = req.user.id;
+    const { id } = req.params;
+    const { discountPct: rawDiscountPct, isActive, maxRedemptions, expiresAt } = req.body;
+
+    const existing = await prisma.ccCoupon.findFirst({ where: { id, ccUserId } });
+    if (!existing) return errorResponse(res, 'Coupon not found', 404, 'NOT_FOUND');
+
+    const updateData = {};
+    if (rawDiscountPct !== undefined) {
+      const policy = await resolveCouponPolicy(existing.planType);
+      updateData.discountPct = Math.min(Math.max(Number(rawDiscountPct) || 0, policy.minPct), policy.maxPct);
+    }
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+    if (maxRedemptions !== undefined) updateData.maxRedemptions = maxRedemptions ? Number(maxRedemptions) : null;
+    if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+
+    if (Object.keys(updateData).length === 0) {
+      return successResponse(res, existing, 'No changes applied');
+    }
+
+    const coupon = await prisma.ccCoupon.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await auditLog(ccUserId, 'cc.coupon.updated', 'CcCoupon', coupon.id, updateData);
+
+    return successResponse(res, coupon, 'Coupon updated');
+  } catch (err) {
+    logger.error('[CC] updateCoupon error', { error: err.message });
+    return errorResponse(res, 'Failed to update coupon', 500);
+  }
+};
+
+/**
+ * DELETE /api/v1/counsellor/coupons/:id
+ */
+const deleteCoupon = async (req, res) => {
+  try {
+    const ccUserId = req.user.id;
+    const { id } = req.params;
+
+    const existing = await prisma.ccCoupon.findFirst({ where: { id, ccUserId } });
+    if (!existing) return errorResponse(res, 'Coupon not found', 404, 'NOT_FOUND');
+
+    const coupon = await prisma.ccCoupon.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    await auditLog(ccUserId, 'cc.coupon.deactivated', 'CcCoupon', coupon.id, { code: coupon.code });
+
+    return successResponse(res, coupon, 'Coupon deactivated');
+  } catch (err) {
+    logger.error('[CC] deleteCoupon error', { error: err.message });
+    return errorResponse(res, 'Failed to deactivate coupon', 500);
+  }
+};
+
+/**
+ * GET /api/v1/counsellor/consultations/upcoming
+ */
+const listUpcomingConsultations = async (req, res) => {
+  try {
+    const ccUserId = req.user.id;
+    const user = await prisma.user.findUnique({
+      where: { id: ccUserId },
+      select: { isConsultationAuthorized: true },
+    });
+
+    if (!user?.isConsultationAuthorized) {
+      return errorResponse(res, 'Consultation access not authorized', 403, 'FORBIDDEN');
+    }
+
+    const now = new Date();
+    const bookings = await prisma.consultationBooking.findMany({
+      where: {
+        counsellorUserId: ccUserId,
+        scheduledStartAt: { not: null, gte: now },
+      },
+      orderBy: { scheduledStartAt: 'asc' },
+      include: {
+        user: {
+          select: {
+            email: true,
+            studentProfile: { select: { fullName: true, mobileNumber: true } },
+          },
+        },
+      },
+    });
+
+    const enriched = bookings.map((booking) => ({
+      id: booking.id,
+      status: booking.status,
+      scheduledStartAt: booking.scheduledStartAt,
+      scheduledEndAt: booking.scheduledEndAt,
+      meetingLink: booking.meetingLink || booking.googleMeetLink || null,
+      studentName: booking.user?.studentProfile?.fullName || booking.user?.email || 'Student',
+      studentEmail: booking.user?.email || null,
+      studentPhone: booking.user?.studentProfile?.mobileNumber || null,
+    }));
+
+    return successResponse(res, enriched);
+  } catch (err) {
+    logger.error('[CC] listUpcomingConsultations error', { error: err.message });
+    return errorResponse(res, 'Failed to load consultations', 500);
   }
 };
 
@@ -286,6 +625,8 @@ const createTestOrder = async (req, res) => {
         grossAmountPaise:    link.feeAmountPaise,
         discountAmountPaise: link.feeAmountPaise,
         netAmountPaise:      0,
+        planType:            link.planType,
+        commissionRate:      COMMISSION_RATE,
       });
 
       logger.info('[CC] Free test link processed (100% discount)', { code, ccUserId: link.ccUserId });
@@ -406,6 +747,8 @@ const verifyTestPayment = async (req, res) => {
       grossAmountPaise,
       discountAmountPaise,
       netAmountPaise,
+      planType:          link.planType,
+      commissionRate:    COMMISSION_RATE,
     });
 
     return successResponse(
@@ -755,6 +1098,13 @@ module.exports = {
   // Account
   getAccountSummary,
   listTransactions,
+  getReferralLink,
+  getReferralStats,
+  listCoupons,
+  createCoupon,
+  updateCoupon,
+  deleteCoupon,
+  listUpcomingConsultations,
   // Public test link payment flow
   resolveTestLink,
   createTestOrder,

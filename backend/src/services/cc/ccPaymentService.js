@@ -15,7 +15,7 @@
 const prisma = require('../../config/database');
 const logger = require('../../utils/logger');
 
-const COMMISSION_RATE = 0.70; // 70% of net sale amount
+const DEFAULT_COMMISSION_RATE = 0.70; // 70% of net sale amount
 
 /**
  * createCcSaleAndCommission
@@ -34,6 +34,11 @@ const COMMISSION_RATE = 0.70; // 70% of net sale amount
  * @param {number} params.grossAmountPaise - fee before discount
  * @param {number} params.discountAmountPaise - discount applied (≥0)
  * @param {number} params.netAmountPaise   - pre-tax net amount (GST excluded)
+ * @param {string} [params.saleType]
+ * @param {string} [params.planType]
+ * @param {number} [params.commissionRate]
+ * @param {string} [params.ccCouponId]
+ * @param {string} [params.couponCode]
  * @returns {{ sale, commission, isNew }}
  */
 async function createCcSaleAndCommission({
@@ -44,8 +49,13 @@ async function createCcSaleAndCommission({
   grossAmountPaise,
   discountAmountPaise = 0,
   netAmountPaise,
+  saleType = 'test_link',
+  planType = 'standard',
+  commissionRate = DEFAULT_COMMISSION_RATE,
+  ccCouponId = null,
+  couponCode = null,
 }) {
-  const commissionPaise = Math.round(netAmountPaise * COMMISSION_RATE);
+  const commissionPaise = Math.round(netAmountPaise * commissionRate);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -62,11 +72,15 @@ async function createCcSaleAndCommission({
           ccUserId,
           testLinkId: testLinkId || null,
           paymentId,
-          saleType: 'test_link',
+          saleType,
+          planType,
           grossAmountPaise,
           discountAmountPaise,
           netAmountPaise,
+          commissionRate,
           commissionPaise,
+          ccCouponId,
+          couponCode,
           status: 'confirmed',
         },
       });
@@ -94,6 +108,13 @@ async function createCcSaleAndCommission({
         });
       }
 
+      if (ccCouponId) {
+        await tx.ccCoupon.update({
+          where: { id: ccCouponId },
+          data: { usageCount: { increment: 1 } },
+        });
+      }
+
       // ── Audit log (non-fatal if it fails) ──────────────────────────────────
       await tx.activityLog.create({
         data: {
@@ -103,11 +124,15 @@ async function createCcSaleAndCommission({
           entityId: sale.id,
           metadata: {
             commissionPaise,
+            commissionRate,
             grossAmountPaise,
             discountAmountPaise,
             netAmountPaise,
             paymentId,
             testLinkId,
+            planType,
+            ccCouponId,
+            couponCode,
           },
         },
       }).catch((e) => logger.warn('[CC] Audit log write failed', { error: e.message }));

@@ -56,6 +56,7 @@ router.delete('/users/:id', adminController.deleteUser);
 
 // Dashboard analytics
 router.get('/analytics', adminController.getAnalytics);
+router.get('/revenue/summary', adminController.getRevenueSummary);
 
 // Payments & Reports
 router.get('/payments', adminController.listPayments);
@@ -117,10 +118,12 @@ const settlementAdminController = require('../controllers/settlement.admin.contr
 
 // ─── Partner Management ───────────────────────────────────────────────────────
 router.get('/partners',                          partnerAdminController.listPartners);
+router.get('/partners/performance',              partnerAdminController.listPartnerPerformance);
 router.get('/partners/:id',                      partnerAdminController.getPartner);
 router.patch('/partners/:id/approve',            partnerAdminController.approvePartner);
 router.patch('/partners/:id/reject',             partnerAdminController.rejectPartner);
 router.patch('/partners/:id/suspend',            partnerAdminController.suspendPartner);
+router.patch('/partners/:id/consultation-auth',  partnerAdminController.toggleConsultationAuthorization);
 router.patch('/partners/:id/bank-account/verify', partnerAdminController.verifyBankAccount);
 router.post('/partners/:id/adjustments',         partnerAdminController.createAdjustment);
 router.get('/partners/:id/adjustments',          partnerAdminController.listAdjustments);

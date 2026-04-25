@@ -259,6 +259,7 @@ describe('Test 3 — Scope safety: CC can only see own data', () => {
   it('getAccountSummary uses req.user.id as scope', async () => {
     prisma.ccAttributedSale.aggregate.mockResolvedValue({ _sum: { grossAmountPaise: null }, _count: 0 });
     prisma.ccCommission.findMany.mockResolvedValue([]);
+    prisma.ccCommission.aggregate.mockResolvedValue({ _sum: { amountPaise: null } });
     prisma.ccDiscount.findUnique.mockResolvedValue(null);
 
     const req = mockReq({}, {}, {}, 'cc-user-1');

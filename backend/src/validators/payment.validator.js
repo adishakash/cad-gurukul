@@ -8,6 +8,8 @@ const createOrderSchema = Joi.object({
     then: Joi.string().trim().optional(),
     otherwise: Joi.string().trim().required(),
   }),
+  referralCode: Joi.string().trim().max(50).optional().allow('', null),
+  couponCode:   Joi.string().trim().max(20).optional().allow('', null),
 });
 
 const verifyPaymentSchema = Joi.object({
