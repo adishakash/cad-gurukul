@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 
 /**
- * MultiSendModal - bulk send WA links (test links for CC, joining links for CCL)
+ * MultiSendModal - bulk send WA links (joining links for CCL)
  * Props:
  *   isOpen: bool
  *   onClose: fn

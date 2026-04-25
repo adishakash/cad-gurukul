@@ -59,7 +59,7 @@ import VerifyEmail from './pages/VerifyEmail'
 // Public consultation slot-selection page (no auth required — link from email)
 import ConsultationSlotPage from './pages/Public/ConsultationSlotPage'
 
-// Public test link page (no auth required — candidate payment via CC link)
+// Deprecated test link page (no auth required)
 import TestLinkPage from './pages/Public/TestLinkPage'
 // Public counsellor referral redirect (no auth required)
 import ReferralRedirect from './pages/Public/ReferralRedirect'
@@ -153,7 +153,7 @@ export default function App() {
         {/* Public consultation slot-selection page (no login required — link from email) */}
         <Route path="/consultation/select-slot" element={<ConsultationSlotPage />} />
 
-        {/* Public test link page (no login required — candidate assessment via CC link) */}
+        {/* Deprecated test link path — keep reserved to avoid referral capture */}
         <Route path="/testlink" element={<TestLinkPage />} />
 
         {/* Admin routes */}

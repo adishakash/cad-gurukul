@@ -273,7 +273,7 @@ export const counsellorApi = {
   getAssignedProspects: () => staffApiClient.get('/counsellor/assigned-prospects'),
 }
 
-// ─── Counsellor Business API (CC Phase 5 — income, test links, payouts) ──────
+// ─── Counsellor Business API (CC Phase 5 — income, coupons, payouts) ────────
 // Uses staffApiClient (cg_staff_token), hits /counsellor/* business routes.
 export const counsellorBizApi = {
   getAccount:       ()                  => staffApiClient.get('/counsellor/account'),
@@ -285,13 +285,6 @@ export const counsellorBizApi = {
   updateCoupon:     (id, data)          => staffApiClient.patch(`/counsellor/coupons/${id}`, data),
   deleteCoupon:     (id)                => staffApiClient.delete(`/counsellor/coupons/${id}`),
   getUpcomingConsultations: ()          => staffApiClient.get('/counsellor/consultations/upcoming'),
-  getTestLinks:     (page = 1, limit = 20) => staffApiClient.get(`/counsellor/test-links?page=${page}&limit=${limit}`),
-  createTestLink:   (data)              => staffApiClient.post('/counsellor/test-links', data),
-  // Discount policy (Phase 6)
-  getDiscountPolicy: (planType = 'standard') => staffApiClient.get('/counsellor/discount-policy', { params: { planType } }),
-  // Discount config (legacy)
-  getDiscount:      ()                  => staffApiClient.get('/counsellor/discount'),
-  updateDiscount:   (data)              => staffApiClient.put('/counsellor/discount', data),
   getTraining:      ()                  => staffApiClient.get('/counsellor/training'),
   // Protected file access
   getTrainingFile:     (id)             => staffApiClient.get(`/counsellor/training/${id}/file`,              { responseType: 'blob' }),
@@ -301,8 +294,6 @@ export const counsellorBizApi = {
   // Bank account
   getBankAccount:   ()                  => staffApiClient.get('/counsellor/bank-account'),
   saveBankAccount:  (data)              => staffApiClient.put('/counsellor/bank-account', data),
-  // Bulk send
-  bulkSendTestLinks: (data)             => staffApiClient.post('/counsellor/test-links/bulk', data),
 }
 
 // ─── CCL Biz API (lead staff) ──────────────────────────────────────────────────
@@ -364,13 +355,6 @@ export const settlementApi = {
   retry:     (id)    => adminApiClient.post(`/admin/settlement/payouts/${id}/retry`),
   clearFlag: (id)    => adminApiClient.post(`/admin/settlement/payouts/${id}/clear-flag`),
   exportCsv: (params)=> adminApiClient.get('/admin/settlement/export', { params, responseType: 'blob' }),
-}
-
-// ─── Public Test Link API (no auth required) ──────────────────────────────────
-export const testlinkApi = {
-  resolve:     (code)       => api.get(`/testlink/${code}`),
-  createOrder: (code, data) => api.post(`/testlink/${code}/order`, data),
-  verify:      (code, data) => api.post(`/testlink/${code}/verify`, data),
 }
 
 // ─── Analytics helper (fire-and-forget from frontend) ────────────────────────

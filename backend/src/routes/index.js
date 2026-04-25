@@ -49,7 +49,6 @@ router.post('/contact', validate(contactSchema), async (req, res) => {
   return successResponse(res, { id: query.id }, 'Message received. We will get back to you soon.', 201);
 });
 
-const testlinkRoutes = require('./testlink.routes');
 const consultationRoutes = require('./consultation.routes');
 const schedulingRoutes = require('./scheduling.routes');
 
@@ -64,7 +63,6 @@ router.use('/leads', leadRoutes);
 router.use('/staff', staffRoutes);
 router.use('/counsellor', counsellorRoutes);
 router.use('/join', joiningRoutes);
-router.use('/testlink', testlinkRoutes);
 router.use('/auth/partner', partnerAuthRoutes);
 router.use('/partner/join', partnerJoinRoutes);
 router.use('/consultation', consultationRoutes);

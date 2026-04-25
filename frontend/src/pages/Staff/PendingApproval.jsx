@@ -17,7 +17,7 @@ export default function PendingApproval() {
             <li>Admin reviews your application</li>
             <li>You receive an approval/rejection notification</li>
             <li>On approval, log in and set up your bank account</li>
-            <li>Start sharing test links and earn commissions</li>
+            <li>Start sharing your referral link and earn commissions</li>
           </ul>
         </div>
         <Link to="/staff/login" className="inline-block text-sm text-blue-600 hover:underline">

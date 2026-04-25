@@ -81,7 +81,6 @@ export default function CounsellorDashboard() {
   // CC business data
   const [account, setAccount]         = useState(null)
   const [transactions, setTransactions] = useState([])
-  const [testLinks, setTestLinks]     = useState([])
   const [payouts, setPayouts]         = useState([])
   const [training, setTraining]       = useState([])
   const [bizLoading, setBizLoading]   = useState(false)
@@ -99,17 +98,10 @@ export default function CounsellorDashboard() {
   const [prospectsLoading, setProspectsLoading] = useState(false)
   const prospectsLastFetched = useRef(null) // 30-second cache TTL
 
-  // Test link creation form
-  const [linkForm, setLinkForm] = useState({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '', discountPct: 0, applyDiscount: false })
-  const [linkCreating, setLinkCreating] = useState(false)
-
-  // Phase 6: discount policy (fetched on test-links tab open and when planType changes)
-  const [discountPolicy, setDiscountPolicy] = useState({ minPct: 0, maxPct: 20, isActive: true })
 
   const [activeTab, setActiveTab] = useState('leads')
 
   const counsellor = JSON.parse(localStorage.getItem('cg_staff') || '{}')
-  const frontendUrl = window.location.origin
 
   useEffect(() => {
     const token = localStorage.getItem('cg_staff_token')
@@ -160,16 +152,14 @@ export default function CounsellorDashboard() {
   const loadBizData = async () => {
     setBizLoading(true)
     try {
-      const [accountRes, txRes, linksRes, payoutsRes, trainingRes] = await Promise.all([
+      const [accountRes, txRes, payoutsRes, trainingRes] = await Promise.all([
         counsellorBizApi.getAccount(),
         counsellorBizApi.getTransactions(1, 20),
-        counsellorBizApi.getTestLinks(1, 20),
         counsellorBizApi.getPayouts(),
         counsellorBizApi.getTraining(),
       ])
       setAccount(accountRes.data.data)
       setTransactions(txRes.data.data?.sales || [])
-      setTestLinks(linksRes.data.data?.links || [])
       setPayouts(payoutsRes.data.data || [])
       setTraining(trainingRes.data.data || [])
     } catch {
@@ -223,16 +213,6 @@ export default function CounsellorDashboard() {
     }
   }
 
-  // Fetch discount policy for given planType (Phase 6)
-  const loadDiscountPolicy = async (planType) => {
-    try {
-      const res = await counsellorBizApi.getDiscountPolicy(planType)
-      setDiscountPolicy(res.data.data || { minPct: 0, maxPct: planType === '499plan' ? 100 : 20, isActive: true })
-    } catch {
-      // Non-fatal — silently keep defaults
-    }
-  }
-
   const fetchProspects = useCallback((force = false) => {
     const now = Date.now()
     if (!force && prospectsLastFetched.current && now - prospectsLastFetched.current < 30_000) return
@@ -245,9 +225,8 @@ export default function CounsellorDashboard() {
 
   // Load biz data when switching to biz tabs
   useEffect(() => {
-    if (['account', 'test-links', 'training', 'payouts'].includes(activeTab)) {
+    if (['account', 'training', 'payouts'].includes(activeTab)) {
       loadBizData()
-      if (activeTab === 'test-links') loadDiscountPolicy(linkForm.planType)
     }
     if (activeTab === 'referral') loadReferralData()
     if (activeTab === 'coupons') loadCoupons()
@@ -265,30 +244,6 @@ export default function CounsellorDashboard() {
       setLeads(res.data.data?.leads || [])
     } catch {
       toast.error('Search failed.')
-    }
-  }
-
-  const handleCreateTestLink = async (e) => {
-    e.preventDefault()
-    setLinkCreating(true)
-    try {
-      const payload = { planType: linkForm.planType }
-      if (linkForm.candidateName)  payload.candidateName  = linkForm.candidateName
-      if (linkForm.candidateEmail) payload.candidateEmail = linkForm.candidateEmail
-      if (linkForm.candidatePhone) payload.candidatePhone = linkForm.candidatePhone
-      if (linkForm.expiryDays)     payload.expiryDays     = Number(linkForm.expiryDays)
-      if (linkForm.applyDiscount && Number(linkForm.discountPct) > 0) {
-        payload.discountPct = Number(linkForm.discountPct)
-      }
-
-      await counsellorBizApi.createTestLink(payload)
-      toast.success('Test link created!')
-      setLinkForm({ planType: 'standard', candidateName: '', candidateEmail: '', candidatePhone: '', expiryDays: '', discountPct: 0, applyDiscount: false })
-      await loadBizData()
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to create test link.')
-    } finally {
-      setLinkCreating(false)
     }
   }
 
@@ -350,7 +305,7 @@ export default function CounsellorDashboard() {
     navigate('/staff/login')
   }
 
-  const tabs = ['leads', 'students', 'reports', 'referral', 'coupons', 'account', 'test-links', 'training', 'payouts', 'consultations', 'assigned-prospects']
+  const tabs = ['leads', 'students', 'reports', 'referral', 'coupons', 'account', 'training', 'payouts', 'consultations', 'assigned-prospects']
 
   const TAB_LABELS = {
     leads: 'Leads',
@@ -359,7 +314,6 @@ export default function CounsellorDashboard() {
     referral: 'Referral Link',
     coupons: 'Coupons',
     account: 'Account',
-    'test-links': 'Test Links',
     training: 'Training',
     payouts: 'Payouts',
     consultations: 'Consultations',
@@ -660,7 +614,7 @@ export default function CounsellorDashboard() {
             )}
 
             {/* ── CC Business tabs ── */}
-            {bizLoading && ['account', 'test-links', 'training', 'payouts'].includes(activeTab) && (
+            {bizLoading && ['account', 'training', 'payouts'].includes(activeTab) && (
               <div className="flex justify-center py-20">
                 <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full" />
               </div>
@@ -700,117 +654,6 @@ export default function CounsellorDashboard() {
                     />
                   </div>
                 )}
-              </div>
-            )}
-
-            {!bizLoading && activeTab === 'test-links' && (
-              <div className="space-y-6">
-                {/* Create form */}
-                <div className="card">
-                  <h3 className="font-bold text-brand-dark text-lg mb-4">Create Test Link</h3>
-                  <form onSubmit={handleCreateTestLink} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Plan Type</label>
-                      <select
-                        value={linkForm.planType}
-                        onChange={(e) => {
-                          const planType = e.target.value
-                          setLinkForm((f) => ({ ...f, planType, discountPct: 0, applyDiscount: false }))
-                          loadDiscountPolicy(planType)
-                        }}
-                        className="input-field text-sm w-full"
-                      >
-                        <option value="standard">Standard (₹12,000)</option>
-                        <option value="499plan">₹499 Plan</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Candidate Name</label>
-                      <input type="text" value={linkForm.candidateName} onChange={(e) => setLinkForm((f) => ({ ...f, candidateName: e.target.value }))}
-                        placeholder="Optional" className="input-field text-sm w-full" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Candidate Email</label>
-                      <input type="email" value={linkForm.candidateEmail} onChange={(e) => setLinkForm((f) => ({ ...f, candidateEmail: e.target.value }))}
-                        placeholder="Optional" className="input-field text-sm w-full" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Candidate Phone</label>
-                      <input type="tel" value={linkForm.candidatePhone} onChange={(e) => setLinkForm((f) => ({ ...f, candidatePhone: e.target.value }))}
-                        placeholder="Optional 10-digit" className="input-field text-sm w-full" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Expires In (days)</label>
-                      <input type="number" min="1" max="90" value={linkForm.expiryDays} onChange={(e) => setLinkForm((f) => ({ ...f, expiryDays: e.target.value }))}
-                        placeholder="Optional (1–90)" className="input-field text-sm w-full" />
-                    </div>
-                    <div className="flex items-end">
-                      <button type="submit" disabled={linkCreating} className="btn-primary text-sm w-full">
-                        {linkCreating ? 'Creating…' : 'Create Link'}
-                      </button>
-                    </div>
-
-                    {/* Phase 6: Inline Discount */}
-                    {discountPolicy.isActive && discountPolicy.maxPct > 0 && (
-                      <div className="col-span-full border rounded-lg p-4 bg-yellow-50 border-yellow-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <input
-                            type="checkbox"
-                            id="applyDiscount"
-                            checked={linkForm.applyDiscount}
-                            onChange={(e) => setLinkForm((f) => ({ ...f, applyDiscount: e.target.checked }))}
-                            className="w-4 h-4 accent-red-600"
-                          />
-                          <label htmlFor="applyDiscount" className="text-sm font-semibold text-gray-700">Apply Discount to this link</label>
-                        </div>
-                        {linkForm.applyDiscount && (
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">
-                              Discount (%) <span className="text-gray-400">({discountPolicy.minPct}%–{discountPolicy.maxPct}% allowed)</span>
-                            </label>
-                            <input
-                              type="number"
-                              className="input-field text-sm"
-                              min={discountPolicy.minPct}
-                              max={discountPolicy.maxPct}
-                              step="0.5"
-                              value={linkForm.discountPct}
-                              onChange={(e) => setLinkForm((f) => ({ ...f, discountPct: e.target.value }))}
-                            />
-                            {Number(linkForm.discountPct) > 0 && (
-                              <p className="text-xs text-yellow-700 mt-1">
-                                💡 Candidate will receive {linkForm.discountPct}% off the plan fee
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </form>
-                </div>
-
-                {/* Links list */}
-                <div className="card">
-                  <h3 className="font-bold text-brand-dark text-lg mb-4">My Test Links ({testLinks.length})</h3>
-                  <Table
-                    headers={['Code', 'Plan', 'Candidate', 'Discount', 'Status', 'Expires', 'Actions']}
-                    rows={testLinks.map((l) => [
-                      <code key="c" className="text-xs bg-gray-100 px-1 py-0.5 rounded">{l.code}</code>,
-                      l.planType === '499plan' ? '₹499 Plan' : 'Standard',
-                      l.candidateName || l.candidateEmail || '—',
-                      l.discountPctUsed > 0 ? <span key="d" className="text-xs text-yellow-600 font-medium">{l.discountPctUsed}% off</span> : '—',
-                      l.isUsed
-                        ? <span key="u" className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Used</span>
-                        : l.isExpired
-                          ? <span key="e" className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">Expired</span>
-                          : <span key="a" className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">Active</span>,
-                      l.expiresAt ? new Date(l.expiresAt).toLocaleDateString('en-IN') : 'Never',
-                      <button key="cp" onClick={() => copyUrl(`${frontendUrl}/testlink?ref=${l.code}`)}
-                        className="text-xs text-indigo-600 hover:underline">Copy URL</button>,
-                    ])}
-                    emptyText="No test links yet. Create one above."
-                  />
-                </div>
               </div>
             )}
 

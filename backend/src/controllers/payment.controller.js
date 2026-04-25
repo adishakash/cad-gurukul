@@ -116,9 +116,10 @@ const resolveCcAttribution = async ({ couponCode, referralCode, planType }) => {
   const policy = await prisma.discountPolicy.findUnique({
     where: { role_planType: { role: 'CAREER_COUNSELLOR', planType } },
   });
-  const defaultMax = planType === 'standard' ? 100 : 20;
+  const absoluteMax = planType === 'standard' ? 100 : 20;
+  const policyMax = policy ? policy.maxPct : absoluteMax;
   const cappedDiscountPct = coupon
-    ? Math.min(coupon.discountPct, policy ? policy.maxPct : defaultMax)
+    ? Math.min(coupon.discountPct, Math.min(policyMax, absoluteMax))
     : 0;
 
   return {

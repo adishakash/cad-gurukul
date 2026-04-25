@@ -5,11 +5,10 @@ const router  = express.Router();
 const { authenticate, requirePortalRole } = require('../middleware/auth');
 const { validate }                     = require('../middleware/validate');
 const { staffLoginSchema, staffLeadListQuerySchema } = require('../validators/staff.validator');
-const { createTestLinkSchema, updateDiscountSchema, couponCreateSchema, couponUpdateSchema } = require('../validators/cc.validator');
+const { couponCreateSchema, couponUpdateSchema } = require('../validators/cc.validator');
 const staffController                  = require('../controllers/staff.controller');
 const ccController                     = require('../controllers/cc.controller');
 const { getBankAccount, saveBankAccount } = require('../controllers/bankAccount.controller');
-const { bulkSendTestLinks }              = require('../controllers/bulkSend.controller');
 
 // ─── Public route ─────────────────────────────────────────────────────────────
 
@@ -53,16 +52,6 @@ router.post('/coupons',             validate(couponCreateSchema), ccController.c
 router.patch('/coupons/:id',        validate(couponUpdateSchema), ccController.updateCoupon);
 router.delete('/coupons/:id',       ccController.deleteCoupon);
 
-// Test links
-router.get('/test-links',           ccController.listTestLinks);
-router.post('/test-links',          validate(createTestLinkSchema), ccController.createTestLink);
-
-// Discount policy — read-only range for inline discount on link creation
-router.get('/discount-policy',      ccController.getDiscountPolicy);
-
-// Discount config
-router.get('/discount',             ccController.getDiscount);
-router.put('/discount',             validate(updateDiscountSchema), ccController.updateDiscount);
 
 // Training content
 router.get('/training',            ccController.listTraining);
@@ -79,8 +68,6 @@ router.get('/consultations/upcoming', ccController.listUpcomingConsultations);
 router.get('/bank-account', getBankAccount);
 router.put('/bank-account', saveBankAccount);
 
-// Bulk send
-router.post('/test-links/bulk', bulkSendTestLinks);
 
 // Assigned Prospects — leads assigned to this CC by admin
 // Uses the same handler as /staff/assigned-prospects (role-neutral, filters by req.user.id)
