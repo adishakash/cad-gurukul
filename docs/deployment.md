@@ -83,14 +83,11 @@ The frontend Docker image now supports a build arg `NGINX_USE_PROXY`:
 docker-compose up -d --build
 ```
 
-### 4. Run migrations & seed
+### 4. Run migrations
 
 ```bash
 docker exec cadgurukul_backend npx prisma migrate deploy
-docker exec cadgurukul_backend node prisma/seed.js
 ```
-
-Default admin: `admin@cadgurukul.com` / `Admin@123456` — **change immediately.**
 
 ---
 
@@ -103,7 +100,6 @@ cd backend
 npm ci
 npx prisma generate
 npx prisma migrate deploy
-node prisma/seed.js
 node src/server.js
 ```
 

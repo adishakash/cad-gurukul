@@ -1328,7 +1328,7 @@ model AssessmentProfileRule {
   @@map("assessment_profile_rules")
 }
 
-/// Reusable question pool. Admin-managed. Seed via prisma/seed.js.
+/// Reusable question pool. Admin-managed.
 model QuestionTemplate {
   id           String           @id @default(cuid())
   questionText String

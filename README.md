@@ -189,7 +189,6 @@ cp .env.example .env
 # Fill in .env values (see Environment Variables below)
 npx prisma migrate dev --name init
 npx prisma generate
-node prisma/seed.js      # optional: seed sample data
 npm run dev
 ```
 
@@ -284,7 +283,6 @@ docker-compose up -d --build
 
 # 4. Run migrations
 docker exec cadgurukul_backend npx prisma migrate deploy
-docker exec cadgurukul_backend node prisma/seed.js
 ```
 
 App available at `http://localhost` (frontend) and `http://localhost:5000` (API).
