@@ -185,9 +185,7 @@ const createCcSaleFromPayment = async ({ payment, planType, lead }) => {
 
   return createCcSaleAndCommission({
     ccUserId,
-    testLinkId: null,
     paymentId,
-    razorpayPaymentId: paymentId,
     grossAmountPaise,
     discountAmountPaise,
     netAmountPaise,
@@ -788,51 +786,8 @@ const handleWebhook = async (req, res) => {
       });
 
       if (!joiningLink) {
-        // Check if this is a CC test link payment
-        const testLink = await prisma.ccTestLink.findFirst({
-          where: { testOrderId: razorpayOrderId },
-        });
-
-        if (!testLink) {
-          logger.warn('[Payment] Webhook for unknown order', { razorpayOrderId });
-          return successResponse(res, { received: true, ignored: true }, 'Unknown order');
-        }
-
-        if (testLink.testPaymentStatus === 'captured') {
-          return successResponse(res, { received: true, ignored: true }, 'CC test payment already processed');
-        }
-
-        try {
-          const { createCcSaleAndCommission } = require('../services/cc/ccPaymentService');
-          const grossAmountPaise = testLink.feeAmountPaise;
-          const totalAmountPaise = testLink.testNetAmountPaise ?? testLink.feeAmountPaise;
-          const { basePaise: taxableAmountPaise } = splitGstFromInclusive(totalAmountPaise, config.gst?.rate);
-          const discountAmountPaise = config.gst?.included === false
-            ? grossAmountPaise - taxableAmountPaise
-            : grossAmountPaise - totalAmountPaise;
-          const netAmountPaise = taxableAmountPaise;
-
-          await createCcSaleAndCommission({
-            ccUserId:          testLink.ccUserId,
-            testLinkId:        testLink.id,
-            paymentId:         razorpayPaymentId,
-            razorpayPaymentId,
-            grossAmountPaise,
-            discountAmountPaise,
-            netAmountPaise,
-            planType:          testLink.planType,
-            commissionRate:    0.70,
-          });
-
-          logger.info('[Payment] CC test link payment processed via webhook', {
-            code: testLink.code,
-            paymentId: razorpayPaymentId,
-          });
-        } catch (err) {
-          logger.error('[Payment] Webhook CC test payment error', { error: err.message, razorpayOrderId });
-        }
-
-        return successResponse(res, { received: true }, 'CC test payment processed');
+        logger.warn('[Payment] Webhook for unknown order', { razorpayOrderId });
+        return successResponse(res, { received: true, ignored: true }, 'Unknown order');
       }
 
       // Idempotency: if already captured, return success

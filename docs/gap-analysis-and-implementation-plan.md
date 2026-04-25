@@ -12,6 +12,8 @@
 - **MISSING** — Not in schema, backend, or frontend
 - **NOT CONFIRMED** — README/code is ambiguous; needs verification
 
+Note: CC test links are retired. CCs use a single referral link plus coupon codes.
+
 ---
 
 ### A. Admin Capabilities
@@ -22,7 +24,7 @@
 | SUPER_ADMIN / ADMIN / SUPPORT sub-roles | **EXISTING** | `AdminRole` enum in schema |
 | Lead pipeline view + funnel metrics | **EXISTING** | `AdminDashboard.jsx`, `/admin/funnel` endpoint |
 | Lead table with filters + CSV export | **EXISTING** | `LeadList.jsx`, `LeadDetail.jsx` |
-| CC test-link oversight | **EXISTING** | `cc.admin.controller.js`, `/admin/cc/test-links` |
+| CC referral attribution oversight | **EXISTING** | `/admin/cc/sales`, `/admin/cc/commissions` |
 | CCL joining-link oversight | **EXISTING** | `ccl.admin.controller.js`, `/admin/ccl/joining-links` |
 | CC sales + commission view | **EXISTING** | `/admin/cc/sales`, `/admin/cc/commissions` |
 | CCL sales + commission view | **EXISTING** | `/admin/ccl/sales`, `/admin/ccl/commissions` |
@@ -48,8 +50,8 @@
 | CC dashboard | **EXISTING** | `CounsellorDashboard.jsx` with multi-tab layout |
 | Account summary (wallet, sales, commissions, payouts) | **EXISTING** | `getAccountSummary()` in `cc.controller.js` |
 | Transaction history (paginated) | **EXISTING** | `listTransactions()` in `cc.controller.js` |
-| Test link creation | **EXISTING** | `createTestLink()`, `CcTestLink` model |
-| Test link resolution + order creation | **EXISTING** | `resolveTestLink()`, `createTestOrder()` (public endpoints) |
+| Referral link attribution | **EXISTING** | CC referral code stored on User; used during payment to attribute sale |
+| Coupon creation (CC) | **EXISTING** | `POST /counsellor/coupons` with plan-capped discounts |
 | 70% commission on net sales | **EXISTING** | `COMMISSION_RATE = 0.70` in `cc.controller.js` |
 | Discount control (up to 20%) | **EXISTING** | `CcDiscount` model, `DiscountPolicy`, plan-aware cap enforced |
 | Training section (videos/books) | **EXISTING** | `CclTrainingContent` (targetRole CCL/CC/ALL), training tab in dashboard |
@@ -607,20 +609,6 @@ function calculateNetSales({ grossAmountPaise, discountAmountPaise = 0, platform
 ### 5.7 Multi-Send Flow
 
 ```
-POST /api/v1/counsellor/test-links/bulk
-  Body: {
-    recipients: [
-      { name, email?, phone },
-      ...  // max 50
-    ],
-    planType: "standard",
-    expiryDays?: 7,
-    discountPct?: 0
-  }
-  → Creates one CcTestLink per recipient
-  → Sends WA message to each phone number with their unique test URL
-  → Returns: { created: n, links: [...] }
-
 POST /api/v1/staff/joining-links/bulk
   Body: {
     recipients: [...]
@@ -728,7 +716,7 @@ PATCH  /api/v1/admin/plans/:id/toggle-active
 | File | Change |
 |---|---|
 | `pages/Staff/StaffLogin.jsx` | Add link to `/staff/register`; handle 403 PENDING_APPROVAL |
-| `pages/Counsellor/CounsellorDashboard.jsx` | Add "Bank Account" tab, "Multi Send" button on test-links tab |
+| `pages/Counsellor/CounsellorDashboard.jsx` | Add "Bank Account" tab; keep referral link + coupon management visible |
 | `pages/Staff/LeadDashboard.jsx` | Add "Bank Account" tab, "Multi Send" button on joining-links tab |
 | `pages/Admin/AdminDashboard.jsx` | Add "Partners", "Payouts", "Plans" nav items |
 | `pages/Assessment.jsx` | Add `AssessmentProfileForm` step before first question (optional, skippable) |
@@ -778,7 +766,7 @@ CCL Commission  = Net Sales × 0.10  (Career Counsellor Lead, 10%)
 ### 7.2 Discount Cap Enforcement
 
 ```js
-// Enforced in both createTestLink() and createJoiningLink()
+// Enforced in both createCoupon() and createJoiningLink()
 const policy = await prisma.discountPolicy.findUnique({
   where: { role_planType: { role: 'CAREER_COUNSELLOR', planType } }
 });
@@ -786,16 +774,16 @@ const cap = policy?.maxPct ?? 20;
 const effectiveDiscount = Math.min(Math.max(0, requestedDiscount), cap);
 ```
 
-Discount is stored on the link at creation time (`discountPctUsed`) to freeze it — subsequent policy changes do not retroactively affect issued links.
+Discount is stored on the coupon at creation time to freeze it — subsequent policy changes do not retroactively affect issued coupons.
 
 ### 7.3 Attribution Tracking
 
 **CC Attribution Flow:**
-1. Student clicks test URL → `/testlink?ref=CODE`
-2. Frontend resolves code via `GET /api/v1/testlink/:code`
-3. Student pays → `POST /api/v1/testlink/:code/pay/verify`
-4. Backend: verify Razorpay signature → `createCcSaleAndCommission(linkId, paymentId)`
-5. `CcTestLink.isUsed = true`, `CcAttributedSale` created, `CcCommission` created
+1. Student clicks referral URL with `ref=CODE`
+2. Frontend carries ref into checkout
+3. Student pays → `POST /api/v1/payments/verify`
+4. Backend: verify Razorpay signature → `createCcSaleAndCommission({ paymentId, ccUserId, ... })`
+5. `CcAttributedSale` created, `CcCommission` created
 
 **CCL Attribution Flow:**
 1. Candidate clicks joining URL → `/join?ref=CODE`
@@ -805,7 +793,7 @@ Discount is stored on the link at creation time (`discountPctUsed`) to freeze it
 5. `CclJoiningLink.isUsed = true`, `CclAttributedSale` + `CclCommission` created
 
 **Direct Student Flow (no partner):**
-- Normal payment flow: no test link, no attribution
+- Normal payment flow: no referral code, no attribution
 - No commission created
 
 ### 7.4 Payout Eligibility
@@ -924,7 +912,6 @@ catch both fail:
 | View leads | `/admin/leads` | `admin.controller` | **EXISTS** |
 | View funnel metrics | `/admin/funnel` | `admin.controller` | **EXISTS** |
 | Update lead status | `PATCH /admin/leads/:id` | `admin.controller` | **EXISTS** |
-| CC test link overview | `/admin/cc/test-links` | `cc.admin.controller` | **EXISTS** |
 | CC sales overview | `/admin/cc/sales` | `cc.admin.controller` | **EXISTS** |
 | CC payout management | `/admin/cc/payouts` | `cc.admin.controller` | **EXISTS** |
 | CCL joining link overview | `/admin/ccl/joining-links` | `ccl.admin.controller` | **EXISTS** |
@@ -1085,8 +1072,7 @@ ADMIN_ALERT_EMAIL=admin@cadgurukul.com
 
 | Risk | Mitigation |
 |---|---|
-| Test link used twice | `isUsed` flag; `joiningOrderId`/`testOrderId` unique constraint |
-| Link with expired date accepted | `isExpired` computed from `expiresAt`; checked in createTestOrder |
+| Legacy test-link edge cases | Deprecated (test links retired); referral/coupon flow is used |
 | Commission on failed payment | Commission creation only after Razorpay signature verification |
 | Net sales miscalculation | `netSalesCalculator.js` as single canonical service; unit-tested |
 
@@ -1222,20 +1208,17 @@ ADMIN_ALERT_EMAIL=admin@cadgurukul.com
 
 **Goal:** Partners can send links to multiple recipients at once.
 
-- [ ] Build `POST /api/v1/counsellor/test-links/bulk`
 - [ ] Build `POST /api/v1/staff/joining-links/bulk`
 - [ ] WA message sent to each recipient with their unique link URL
 - [ ] Rate limit bulk endpoint: max 50 per call, max 200 per day per partner
 - [ ] Frontend: `components/MultiSendModal.jsx`
-- [ ] Wire into CounsellorDashboard + LeadDashboard test-links tabs
+- [ ] Wire into LeadDashboard joining-links tab
 
 **Files to create:**
 - `frontend/src/components/MultiSendModal.jsx`
 
 **Files to modify:**
-- `backend/src/controllers/cc.controller.js`
 - `backend/src/controllers/ccl.controller.js`
-- `frontend/src/pages/Counsellor/CounsellorDashboard.jsx`
 - `frontend/src/pages/Staff/LeadDashboard.jsx`
 
 ---
@@ -1281,7 +1264,7 @@ ADMIN_ALERT_EMAIL=admin@cadgurukul.com
 
 - [ ] Full audit log review (all financial operations logged to `ActivityLog`)
 - [ ] PII scrubbing in logger (phone, email, account numbers)
-- [ ] Rate limiting on: `/auth/partner/register` (10/hour), `/testlink/*/order` (5/min/IP), `/bulk` (200/day/user)
+- [ ] Rate limiting on: `/auth/partner/register` (10/hour), `/payments/verify` (5/min/IP), `/bulk` (200/day/user)
 - [ ] Webhook signature verification audit (Razorpay payment + payout webhooks)
 - [ ] `BANK_ACCOUNT_ENCRYPTION_KEY` rotation strategy documented
 - [ ] Add `bankAccountSnapshot` JSON backup on payout initiation
@@ -1431,7 +1414,7 @@ These are the **blocking gaps** that prevent the business from operating correct
 | CC dashboard | ✓ | | |
 | CC account/wallet | ✓ | | |
 | CC transaction history | ✓ | | |
-| CC test links | ✓ | | |
+| CC referral attribution | ✓ | | |
 | CC discount control | ✓ | | |
 | CC training section | ✓ | | |
 | CC bank account | | | ✓ |

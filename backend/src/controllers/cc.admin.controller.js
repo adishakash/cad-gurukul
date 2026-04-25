@@ -3,7 +3,6 @@
  * CC Admin Controller
  * ─────────────────────────────────────────────────────────────────
  * Admin oversight for the entire CC business layer:
- *   - All test links across all CCs
  *   - All attributed sales and commissions
  *   - Payout batch generation and status management
  *   - Training content CRUD (shared CclTrainingContent table with targetRole, file upload support)
@@ -33,53 +32,6 @@ function getNextThursday() {
   return next;
 }
 
-// ─── CC Test Links (admin view) ───────────────────────────────────────────────
-
-/**
- * GET /api/v1/admin/cc/test-links
- * List all test links across all CCs, newest first, with pagination.
- */
-const listAllTestLinks = async (req, res) => {
-  try {
-    const page  = Math.max(1, parseInt(req.query.page, 10)  || 1);
-    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
-    const skip  = (page - 1) * limit;
-
-    const where = {};
-    if (req.query.ccUserId) where.ccUserId = req.query.ccUserId;
-    if (req.query.isUsed !== undefined) where.isUsed = req.query.isUsed === 'true';
-
-    const [links, total] = await Promise.all([
-      prisma.ccTestLink.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-        include: {
-          ccUser:         { select: { name: true, email: true } },
-          attributedSales: { select: { id: true, status: true, grossAmountPaise: true, commissionPaise: true } },
-        },
-      }),
-      prisma.ccTestLink.count({ where }),
-    ]);
-
-    const frontendUrl = (process.env.FRONTEND_URL || 'https://cadgurukul.com').replace(/\/$/, '');
-    const enriched = links.map((l) => ({
-      ...l,
-      isExpired: l.expiresAt ? new Date() > new Date(l.expiresAt) : false,
-      testUrl: `${frontendUrl}/testlink?ref=${l.code}`,
-    }));
-
-    return successResponse(res, {
-      links: enriched,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    });
-  } catch (err) {
-    logger.error('[Admin.CC] listAllTestLinks error', { error: err.message });
-    return errorResponse(res, 'Failed to load test links', 500);
-  }
-};
-
 // ─── CC Sales (admin view) ────────────────────────────────────────────────────
 
 /**
@@ -105,7 +57,6 @@ const listAllSales = async (req, res) => {
         include: {
           ccUser:    { select: { name: true, email: true } },
           commission: { select: { amountPaise: true, status: true, payoutId: true } },
-          testLink:  { select: { code: true, candidateName: true, candidateEmail: true } },
         },
       }),
       prisma.ccAttributedSale.count({ where }),
@@ -285,11 +236,7 @@ const getPayoutDetail = async (req, res) => {
         ccUser: { select: { name: true, email: true } },
         commissions: {
           include: {
-            attributedSale: {
-              include: {
-                testLink: { select: { code: true, candidateName: true, candidateEmail: true } },
-              },
-            },
+            attributedSale: true,
           },
         },
       },
@@ -553,8 +500,6 @@ const listTrainingHistory = async (req, res) => {
 };
 
 module.exports = {
-  // Test links
-  listAllTestLinks,
   // Sales
   listAllSales,
   // Commissions

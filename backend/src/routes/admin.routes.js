@@ -137,9 +137,6 @@ router.post('/settlement/payouts/:id/retry',     settlementAdminController.retry
 router.post('/settlement/payouts/:id/clear-flag', settlementAdminController.clearFraudFlag);
 router.get('/settlement/export',                 settlementAdminController.exportPayoutsCSV);
 
-// Test links
-router.get('/cc/test-links',          ccAdminController.listAllTestLinks);
-
 // Attributed sales
 router.get('/cc/sales',               ccAdminController.listAllSales);
 

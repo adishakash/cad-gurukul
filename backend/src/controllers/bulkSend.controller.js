@@ -1,7 +1,6 @@
 'use strict';
 /**
  * Bulk Send Controller
- * CC: bulk test-link send to multiple recipients (max 50)
  * CCL: bulk joining-link send to multiple recipients (max 50)
  */
 
@@ -13,68 +12,6 @@ let automationService;
 try { automationService = require('../services/automation/automationService'); } catch (_) {}
 
 const MAX_RECIPIENTS = 50;
-
-// ─── CC: Bulk Test Links ───────────────────────────────────────────────────────
-
-/**
- * POST /api/v1/counsellor/test-links/bulk
- * Body: { recipients: [{ name, phone, email?, courseId? }], message? }
- */
-const bulkSendTestLinks = async (req, res) => {
-  try {
-    const { recipients, message } = req.body;
-
-    if (!Array.isArray(recipients) || recipients.length === 0) {
-      return errorResponse(res, 'recipients must be a non-empty array', 400, 'INVALID_INPUT');
-    }
-    if (recipients.length > MAX_RECIPIENTS) {
-      return errorResponse(res, `Max ${MAX_RECIPIENTS} recipients per request`, 400, 'TOO_MANY_RECIPIENTS');
-    }
-
-    const ccUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, cclId: true } });
-
-    const results = await Promise.allSettled(
-      recipients.map(async (r) => {
-        if (!r.phone || !r.name) throw new Error(`Invalid recipient: missing name or phone`);
-
-        // Create a test link record
-        const link = await prisma.ccTestLink.create({
-          data: {
-            ccId:      ccUser.id,
-            studentName: r.name,
-            studentPhone: r.phone,
-            studentEmail: r.email || null,
-          },
-        });
-
-        // Send WhatsApp if automation available
-        if (automationService?.triggerAutomation) {
-          try {
-            await automationService.triggerAutomation('cc_test_link_send', {
-              phone:     r.phone,
-              name:      r.name,
-              testToken: link.token,
-              message,
-            });
-          } catch (waErr) {
-            logger.warn('[BulkSend] WA send failed for recipient', { phone: r.phone, error: waErr.message });
-          }
-        }
-
-        return { phone: r.phone, name: r.name, token: link.token, status: 'sent' };
-      })
-    );
-
-    const sent   = results.filter(r => r.status === 'fulfilled').map(r => r.value);
-    const failed = results.filter(r => r.status === 'rejected').map(r => ({ error: r.reason?.message }));
-
-    logger.info('[BulkSend] CC bulk test link send', { userId: req.user.id, sent: sent.length, failed: failed.length });
-    return successResponse(res, { sent, failed, total: recipients.length }, `Sent ${sent.length}/${recipients.length} links`);
-  } catch (err) {
-    logger.error('[BulkSend] bulkSendTestLinks error', { error: err.message });
-    return errorResponse(res, 'Failed to send bulk test links', 500);
-  }
-};
 
 // ─── CCL: Bulk Joining Links ───────────────────────────────────────────────────
 
@@ -134,4 +71,4 @@ const bulkSendJoiningLinks = async (req, res) => {
   }
 };
 
-module.exports = { bulkSendTestLinks, bulkSendJoiningLinks };
+module.exports = { bulkSendJoiningLinks };

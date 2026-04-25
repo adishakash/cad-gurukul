@@ -66,15 +66,6 @@ async function resolveCouponPolicy(planType) {
   };
 }
 
-async function generateUniqueCode() {
-  for (let i = 0; i < 10; i++) {
-    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
-    const existing = await prisma.ccTestLink.findUnique({ where: { code } });
-    if (!existing) return code;
-  }
-  throw new Error('Failed to generate a unique test link code after 10 attempts.');
-}
-
 // ─── Account ─────────────────────────────────────────────────────────────────
 
 /**
@@ -180,7 +171,6 @@ const listTransactions = async (req, res) => {
         take: limit,
         include: {
           commission: { select: { amountPaise: true, status: true, payoutId: true } },
-          testLink: { select: { code: true, candidateName: true, candidateEmail: true } },
           ccCoupon: { select: { code: true } },
         },
       }),
@@ -511,11 +501,7 @@ const getPayoutDetail = async (req, res) => {
       include: {
         commissions: {
           include: {
-            attributedSale: {
-              include: {
-                testLink: { select: { code: true, candidateName: true, candidateEmail: true } },
-              },
-            },
+            attributedSale: true,
           },
         },
       },

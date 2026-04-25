@@ -150,7 +150,6 @@ model User {
   cclDiscount        CclDiscount?        @relation("CclDiscount")
 
   // CC business layer relations
-  ccTestLinks       CcTestLink[]       @relation("CcTestLinks")
   ccAttributedSales CcAttributedSale[] @relation("CcAttributedSales")
   ccCommissions     CcCommission[]     @relation("CcCommissions")
   ccPayouts         CcPayout[]         @relation("CcPayouts")
@@ -916,42 +915,10 @@ model CclTrainingContent {
 // CC BUSINESS LAYER — Phase 5
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Test links created by a CC to send to students/parents.
-/// Payment goes to platform; successful payment creates CcAttributedSale + CcCommission.
-model CcTestLink {
-  id                 String    @id @default(cuid())
-  ccUserId           String
-  code               String    @unique
-  planType           String    @default("standard") // "499plan" | "standard"
-  candidateName      String?
-  candidateEmail     String?
-  candidatePhone     String?
-  feeAmountPaise     Int       @default(49900) // ₹499
-  isUsed             Boolean   @default(false)
-  usedAt             DateTime?
-  expiresAt          DateTime?
-  testOrderId        String?   @unique
-  testPaymentId      String?
-  testPaymentStatus  String    @default("pending")
-  testNetAmountPaise Int?
-  // Phase 6: inline discount applied when this link was created
-  discountPctUsed    Float     @default(0)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  ccUser          User               @relation("CcTestLinks", fields: [ccUserId], references: [id], onDelete: Cascade)
-  attributedSales CcAttributedSale[]
-
-  @@index([ccUserId])
-  @@index([testOrderId])
-  @@map("cc_test_links")
-}
-
-/// Ledger record for every sale attributed to a CC via test link. Commission is 70% of netAmountPaise.
+/// Ledger record for every sale attributed to a CC. Commission is 70% of netAmountPaise.
 model CcAttributedSale {
   id                  String   @id @default(cuid())
   ccUserId            String
-  testLinkId          String?  @unique
   paymentId           String   @unique
   saleType            String
   planType            String   @default("standard")
@@ -967,7 +934,6 @@ model CcAttributedSale {
   updatedAt           DateTime @updatedAt
 
   ccUser     User          @relation("CcAttributedSales", fields: [ccUserId], references: [id], onDelete: Restrict)
-  testLink   CcTestLink?   @relation(fields: [testLinkId], references: [id], onDelete: SetNull)
   ccCoupon   CcCoupon?     @relation(fields: [ccCouponId], references: [id], onDelete: SetNull)
   commission CcCommission?
 

@@ -62,18 +62,18 @@
 
 ### 1.3 Career Counsellor (CC) Portal
 
+Note: Test links are retired. CCs use a single referral link plus coupon codes.
+
 | Feature | Status | Notes |
 |---|---|---|
 | CC login (shared auth, `CAREER_COUNSELLOR` role) | ✅ EXISTING | `StaffLogin.jsx` → staff JWT; `STAFF_PORTAL_ROLES` config |
-| CC dashboard (`CounsellorDashboard.jsx`) | ⚠️ PARTIAL | Account summary, test links, payouts shown; missing training tab and multi-send |
+| CC dashboard (`CounsellorDashboard.jsx`) | ⚠️ PARTIAL | Account summary, referral link, coupons, payouts shown; training tab present |
 | Wallet balance / commission earned display | ✅ EXISTING | `GET /counsellor/account` → `totalCommissionPaise`, `pendingPayoutPaise`, `paidAmountPaise` |
 | Total sales / net sales display | ⚠️ PARTIAL | `totalSalesPaise` shown; **net sales** not separately computed/displayed |
 | Transaction history (paginated) | ✅ EXISTING | `GET /counsellor/account/transactions` |
 | Payouts list | ✅ EXISTING | `GET /counsellor/payouts` |
 | Training section (videos/books) | ⚠️ PARTIAL | `CclTrainingContent` model (targetRole="CC") exists; backend `/counsellor/training` likely exposed; **no frontend training page component** |
-| Test link generation (single) | ✅ EXISTING | `POST /counsellor/test-links` |
-| Test link multi-send (multiple students) | ❌ MISSING | Only single candidate fields. No bulk send flow or multi-recipient modal |
-| Discount control (up to 20%) | ✅ EXISTING | `CcDiscount` model; `discountPct`, cap enforced; toggle in dashboard |
+| Discount control (plan-capped) | ✅ EXISTING | `CcDiscount` model; `discountPct`, policy cap + absolute cap enforced; toggle in dashboard |
 | All student payments go to platform | ✅ EXISTING | Razorpay order created centrally; CC never handles money |
 | Commission = 70% of net sales | ✅ EXISTING | `COMMISSION_RATE = 0.70` in `ccPaymentService.js` |
 | Thursday auto-payout (scheduled) | ⚠️ PARTIAL | `scheduledFor = getNextThursday()` stored; **no cron job runs it automatically** |
@@ -524,13 +524,11 @@ model CclPayout {
 | GET | `/counsellor/wallet` | CC | Real-time wallet balance + WalletTransaction history |
 | GET | `/staff/wallet` | CCL | Same for CCL |
 
-#### Multi-Send — `/api/v1/counsellor/test-links/bulk` and `/api/v1/staff/joining-links/bulk`
+#### Multi-Send — `/api/v1/staff/joining-links/bulk`
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/counsellor/test-links/bulk` | CC (approved) | Create N test links + send via WhatsApp/email |
 | POST | `/staff/joining-links/bulk` | CCL (approved) | Create N joining links + send |
-| GET | `/counsellor/test-links/bulk/:batchId` | CC | Get batch status |
 | GET | `/staff/joining-links/bulk/:batchId` | CCL | Get batch status |
 
 #### Admin Payout Management — `/api/v1/admin/payouts`
@@ -735,16 +733,16 @@ await walletLedgerService.creditCommission({
 
 | Role | Plan | Max Discount | Enforced In |
 |---|---|---|---|
-| CC | ₹499 plan | 20% | `cc.controller.js` + `DiscountPolicy` |
+| CC | ₹499 plan | 100% | `cc.controller.js` + `DiscountPolicy` |
 | CC | ₹1,999 plan | 20% | Same |
 | CC | ₹9,999 plan | 20% | Same |
 | CCL | ₹12,000 joining | 20% | `ccl.controller.js` + `DiscountPolicy` |
 
-Discount is stored at link creation time (`discountPctUsed` on `CcTestLink` / `CclJoiningLink`). This is already implemented. Admin can adjust policy via `DiscountPolicy` model.
+Discount is applied via CC coupons at checkout and capped by the DiscountPolicy plus absolute plan limits. Admin can adjust policy via `DiscountPolicy`.
 
 ### 7.4 Attribution Rules
 
-- **CC attribution**: via `CcTestLink.code` in payment URL. The student follows the link → creates Razorpay order with CC context → on success, `createCcSaleAndCommission()` fires.
+- **CC attribution**: via the CC referral code in the payment URL. The student follows the link → creates Razorpay order with CC context → on success, `createCcSaleAndCommission()` fires.
 - **CCL attribution**: via `CclJoiningLink.code`. The counsellor candidate follows → ₹12,000 joining payment → `createCclSaleAndCommission()` fires.
 - **Direct student purchase**: no `ref` code → normal Payment flow → no commission created. ✅ EXISTING.
 - **Multiple attributions**: each link code is unique and `@unique` constrained; one payment = one attributed sale.
@@ -975,8 +973,7 @@ Weekly reconciliation job (Saturday morning, post-Thursday payouts):
 | Commission credited but bank transfer fails | Wallet debit is inside transfer transaction; if transfer fails, debit is rolled back |
 | Partner changes bank details after payout is approved | Lock `bankAccountId` on payout approval; prevent edit after that point |
 | CCL discount > 20% submitted | Backend enforces `Math.min(discountPct, MAX_DISCOUNT_PCT)`; Joi validates input |
-| Student uses expired test link | `resolveTestLink` checks `expiresAt`; returns `isExpired: true`; no order created |
-| Same test link used twice | `CcTestLink.isUsed = true` after first use; second use rejected with 409 |
+| Legacy test-link edge cases | Deprecated (test links retired); referral/coupon flow is used |
 | Razorpay webhook replayed | Webhook handler checks `razorpayPaymentId` in `CcAttributedSale` before creating |
 | AI question generation failure | Fallback chain: GPT-4o → Gemini → static pool → hardcoded default |
 | Partner approval pending but tries to create links | Backend `requireApproved` middleware blocks; frontend shows `PendingApproval.jsx` |
@@ -1029,11 +1026,10 @@ Weekly reconciliation job (Saturday morning, post-Thursday payouts):
 | # | Task | File(s) |
 |---|---|---|
 | 3.1 | Add `MultiSendBatch` model | `prisma/schema.prisma` |
-| 3.2 | `POST /counsellor/test-links/bulk` — create N links | `controllers/cc.controller.js` |
-| 3.3 | `POST /staff/joining-links/bulk` — create N links | `controllers/ccl.controller.js` |
-| 3.4 | Wire `partnerNotificationService.sendLinkToRecipient()` | `services/notification/partnerNotificationService.js` |
-| 3.5 | Frontend: `MultiSendModal.jsx` shared component | `components/MultiSendModal.jsx` |
-| 3.6 | Wire modal into CC dashboard + CCL dashboard | `CounsellorDashboard.jsx`, `LeadDashboard.jsx` |
+| 3.2 | `POST /staff/joining-links/bulk` — create N links | `controllers/ccl.controller.js` |
+| 3.3 | Wire `partnerNotificationService.sendLinkToRecipient()` | `services/notification/partnerNotificationService.js` |
+| 3.4 | Frontend: `MultiSendModal.jsx` shared component | `components/MultiSendModal.jsx` |
+| 3.5 | Wire modal into CCL dashboard | `LeadDashboard.jsx` |
 
 ### Phase 4 — Admin Payout UI + Training UI (Weeks 6–8)
 

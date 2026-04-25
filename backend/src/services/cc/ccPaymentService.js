@@ -3,8 +3,7 @@
  * CC Payment Service
  * ─────────────────────────────────────────────────────────────────
  * Shared atomic service for creating an attributed sale + commission
- * when a test link payment succeeds. Used by both the frontend
- * verify endpoint and the Razorpay server webhook for idempotency.
+ * when a CC-attributed payment succeeds (referral or coupon).
  *
  * Idempotency guarantee:
  *   CcAttributedSale.paymentId has a @unique constraint.
@@ -23,14 +22,11 @@ const DEFAULT_COMMISSION_RATE = 0.70; // 70% of net sale amount
  * Atomically creates:
  *   1. CcAttributedSale  — ledger record for the sale
  *   2. CcCommission      — 70% commission record (status: pending)
- *   3. Updates the CcTestLink — marks as used, stores paymentId
- *   4. ActivityLog entry  — audit trail
+ *   3. ActivityLog entry  — audit trail
  *
  * @param {object} params
  * @param {string} params.ccUserId
- * @param {string} params.testLinkId
  * @param {string} params.paymentId       - Razorpay payment ID (idempotency key)
- * @param {string} params.razorpayPaymentId
  * @param {number} params.grossAmountPaise - fee before discount
  * @param {number} params.discountAmountPaise - discount applied (≥0)
  * @param {number} params.netAmountPaise   - pre-tax net amount (GST excluded)
@@ -43,13 +39,11 @@ const DEFAULT_COMMISSION_RATE = 0.70; // 70% of net sale amount
  */
 async function createCcSaleAndCommission({
   ccUserId,
-  testLinkId,
   paymentId,
-  razorpayPaymentId,
   grossAmountPaise,
   discountAmountPaise = 0,
   netAmountPaise,
-  saleType = 'test_link',
+  saleType = 'referral',
   planType = 'standard',
   commissionRate = DEFAULT_COMMISSION_RATE,
   ccCouponId = null,
@@ -70,7 +64,6 @@ async function createCcSaleAndCommission({
       const sale = await tx.ccAttributedSale.create({
         data: {
           ccUserId,
-          testLinkId: testLinkId || null,
           paymentId,
           saleType,
           planType,
@@ -95,19 +88,6 @@ async function createCcSaleAndCommission({
         },
       });
 
-      // ── Mark test link as used ──────────────────────────────────────────────
-      if (testLinkId) {
-        await tx.ccTestLink.update({
-          where: { id: testLinkId },
-          data: {
-            isUsed: true,
-            usedAt: new Date(),
-            testPaymentId: razorpayPaymentId,
-            testPaymentStatus: 'captured',
-          },
-        });
-      }
-
       if (ccCouponId) {
         await tx.ccCoupon.update({
           where: { id: ccCouponId },
@@ -129,7 +109,6 @@ async function createCcSaleAndCommission({
             discountAmountPaise,
             netAmountPaise,
             paymentId,
-            testLinkId,
             planType,
             ccCouponId,
             couponCode,
