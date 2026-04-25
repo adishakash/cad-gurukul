@@ -210,6 +210,7 @@ const createOrder = async (req, res) => {
       return successResponse(res, {
         orderId: order.id,
         amountPaise: totals.totalAmountPaise,
+        totalAmountPaise: totals.totalAmountPaise,
         currency: 'INR',
         keyId: config.razorpay.keyId,
         gstRate: totals.gstRate,
@@ -271,6 +272,7 @@ const createOrder = async (req, res) => {
     return successResponse(res, {
       orderId: order.id,
       amountPaise: totals.totalAmountPaise,
+      totalAmountPaise: totals.totalAmountPaise,
       currency: 'INR',
       keyId: config.razorpay.keyId,
       gstRate: totals.gstRate,

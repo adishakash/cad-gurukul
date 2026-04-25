@@ -45,10 +45,10 @@ export default function PartnerRegister() {
   }
 
   const summary = useMemo(() => ({
-    baseAmountPaise: quote?.baseAmountPaise || 4999900,
-    discountPaise: quote?.discountPaise || 0,
-    gstAmountPaise: quote?.gstAmountPaise || 0,
-    totalAmountPaise: quote?.totalAmountPaise || 4999900,
+    baseAmountPaise: quote?.baseAmountPaise ?? 4999900,
+    discountPaise: quote?.discountPaise ?? 0,
+    gstAmountPaise: quote?.gstAmountPaise ?? 0,
+    totalAmountPaise: quote?.totalAmountPaise ?? quote?.amountPaise ?? 4999900,
     gstRate: quote?.gstRate ?? 18,
     gstIncluded: quote?.gstIncluded ?? true,
   }), [quote])
