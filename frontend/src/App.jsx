@@ -61,6 +61,8 @@ import ConsultationSlotPage from './pages/Public/ConsultationSlotPage'
 
 // Public test link page (no auth required — candidate payment via CC link)
 import TestLinkPage from './pages/Public/TestLinkPage'
+// Public counsellor referral redirect (no auth required)
+import ReferralRedirect from './pages/Public/ReferralRedirect'
 
 // Guards
 const ProtectedRoute = ({ children }) => {
@@ -183,6 +185,9 @@ export default function App() {
         <Route path="/privacy" element={<PublicLayout><PrivacyPolicy /></PublicLayout>} />
         <Route path="/terms" element={<PublicLayout><TermsOfService /></PublicLayout>} />
         <Route path="/refund" element={<PublicLayout><RefundPolicy /></PublicLayout>} />
+
+        {/* Counsellor referral short link */}
+        <Route path="/:referralCode" element={<ReferralRedirect />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

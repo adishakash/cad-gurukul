@@ -1078,7 +1078,7 @@ async function createStaff(req, res) {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const ccReferralCode = role === 'CAREER_COUNSELLOR'
-      ? await generateCcReferralCode()
+      ? await generateCcReferralCode(name)
       : null;
 
     const staff = await prisma.user.create({
@@ -1121,7 +1121,7 @@ async function updateStaffRole(req, res) {
     }
 
     const ccReferralCode = role === 'CAREER_COUNSELLOR' && !user.ccReferralCode
-      ? await generateCcReferralCode()
+      ? await generateCcReferralCode(user.name)
       : null;
 
     const updated = await prisma.user.update({

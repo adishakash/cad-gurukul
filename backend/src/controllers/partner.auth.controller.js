@@ -39,7 +39,7 @@ const registerPartner = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const ccReferralCode = role === 'CAREER_COUNSELLOR'
-      ? await generateCcReferralCode()
+      ? await generateCcReferralCode(fullName)
       : null;
 
     await prisma.user.create({

@@ -240,12 +240,12 @@ const getReferralLink = async (req, res) => {
     const ccUserId = req.user.id;
     const user = await prisma.user.findUnique({
       where: { id: ccUserId },
-      select: { ccReferralCode: true },
+      select: { ccReferralCode: true, name: true },
     });
 
     let code = user?.ccReferralCode || null;
     if (!code) {
-      code = await generateCcReferralCode();
+      code = await generateCcReferralCode(user?.name);
       await prisma.user.update({
         where: { id: ccUserId },
         data: { ccReferralCode: code },
@@ -255,7 +255,7 @@ const getReferralLink = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'https://cadgurukul.com').replace(/\/$/, '');
     return successResponse(res, {
       code,
-      url: `${frontendUrl}/?ref=${code}`,
+      url: `${frontendUrl}/${encodeURIComponent(code.toLowerCase())}`,
     });
   } catch (err) {
     logger.error('[CC] getReferralLink error', { error: err.message });
@@ -272,12 +272,12 @@ const getReferralStats = async (req, res) => {
     const ccUserId = req.user.id;
     const user = await prisma.user.findUnique({
       where: { id: ccUserId },
-      select: { ccReferralCode: true },
+      select: { ccReferralCode: true, name: true },
     });
 
     let code = user?.ccReferralCode || null;
     if (!code) {
-      code = await generateCcReferralCode();
+      code = await generateCcReferralCode(user?.name);
       await prisma.user.update({
         where: { id: ccUserId },
         data: { ccReferralCode: code },
@@ -319,7 +319,7 @@ const getReferralStats = async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'https://cadgurukul.com').replace(/\/$/, '');
     return successResponse(res, {
       code,
-      url: `${frontendUrl}/?ref=${code}`,
+      url: `${frontendUrl}/${encodeURIComponent(code.toLowerCase())}`,
       totals: {
         leads: totalLeads,
         assessmentStarted,
