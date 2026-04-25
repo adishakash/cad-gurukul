@@ -456,20 +456,6 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                {/* Test-mode warning banner */}
-                {(analytics?.isTestMode || funnel?.isTestMode) && (
-                  <div className="mb-6 bg-yellow-50 border-2 border-yellow-400 rounded-xl px-5 py-3 flex items-center gap-3">
-                    <span className="text-yellow-600 text-xl shrink-0">🧪</span>
-                    <div>
-                      <p className="text-sm font-bold text-yellow-800">PAYMENT TEST MODE IS ACTIVE</p>
-                      <p className="text-xs text-yellow-700 mt-0.5">
-                        Revenue figures reflect catalog prices (real plan amounts stored in DB are correct).
-                        Razorpay was charged symbolic test amounts only. Disable <code className="bg-yellow-100 px-1 rounded">PAYMENT_TEST_MODE</code> in backend .env before going live.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {/* General analytics */}
                 {analytics && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -700,13 +686,7 @@ export default function AdminDashboard() {
                   headers={['User', 'Amount', 'Status', 'Provider', 'Date']}
                   rows={payments.map((p) => [
                     p.user?.name || p.userId,
-                    p.metadata?.testMode
-                      ? <span key="amt" className="flex items-center gap-1">
-                          <span className="text-gray-500 line-through text-xs">₹{((p.amountPaise || 0) / 100).toLocaleString('en-IN')}</span>
-                          <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-1.5 py-0.5 rounded">🧪 TEST</span>
-                          <span className="text-yellow-700 text-xs font-semibold">₹{((p.metadata.chargeAmountPaise || 0) / 100).toFixed(2)}</span>
-                        </span>
-                      : `₹${((p.amountPaise || 0) / 100).toLocaleString('en-IN')}`,
+                    `₹${((p.amountPaise || 0) / 100).toLocaleString('en-IN')}`,
                     <span key="status" className={`px-2 py-0.5 rounded-full text-xs font-bold ${p.status === 'CAPTURED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.status}</span>,
                     p.provider || 'RAZORPAY',
                     new Date(p.createdAt).toLocaleDateString('en-IN'),

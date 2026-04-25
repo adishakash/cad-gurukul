@@ -212,16 +212,11 @@ export default function Payment() {
   const isIncluded = Boolean(quote?.alreadyIncluded)
   const isOwned = Boolean(quote?.alreadyOwned)
   const isUpgrade = Boolean(quote?.isUpgrade)
-const gstRate = quote?.gstRate ?? 18
+  const gstRate = quote?.gstRate ?? 18
   const gstIncluded = quote?.gstIncluded ?? true
   const displayTotalPaise = Math.round((displayAmount || 0) * 100)
   const fallbackGst = splitGstFromInclusive(displayTotalPaise, gstRate)
   const gstAmountPaise = quote?.gstAmountPaise ?? fallbackGst.gstPaise
-  const isTestMode = Boolean(quote?.isTestMode)
-
-  // Test-mode prices: base purchase = ₹1, upgrade = ₹0.10
-  const TEST_PRICE_DIRECT  = 1      // ₹1
-  const TEST_PRICE_UPGRADE = 0.1    // ₹0.10
   const planSwitcherEntries = Object.entries(PLAN_CONFIG).filter(([id]) => (
     id === planId || !isPlanIncluded(currentPlan, id)
   ))
@@ -229,19 +224,6 @@ const gstRate = quote?.gstRate ?? 18
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-2xl mx-auto">
-
-        {/* Test mode banner */}
-        {isTestMode && (
-          <div className="mb-6 bg-yellow-50 border-2 border-yellow-400 rounded-xl px-5 py-3 flex items-center gap-3">
-            <span className="text-yellow-600 text-xl">🧪</span>
-            <div>
-              <p className="text-sm font-bold text-yellow-800">PAYMENT TEST MODE ACTIVE</p>
-              <p className="text-xs text-yellow-700 mt-0.5">
-                Symbolic test prices are in effect. Direct purchases cost ₹1 · Upgrades cost ₹0.10. No real charges.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Urgency header */}
         <div className="text-center mb-8">
@@ -351,9 +333,7 @@ const gstRate = quote?.gstRate ?? 18
                 <div className="font-bold">
                   {id === planId && quote?.effectivePriceLabel
                     ? quote.effectivePriceLabel
-                    : isTestMode
-                      ? formatRupees(currentPlan === 'free' ? TEST_PRICE_DIRECT : TEST_PRICE_UPGRADE)
-                      : formatRupees(currentPlan === 'free' ? p.priceNum : Math.max(0, p.priceNum - (PLAN_CONFIG[currentPlan]?.priceNum || 0)))}
+                    : formatRupees(currentPlan === 'free' ? p.priceNum : Math.max(0, p.priceNum - (PLAN_CONFIG[currentPlan]?.priceNum || 0)))}
                 </div>
                 <div className="font-normal text-gray-500 mt-0.5 leading-tight">{p.label}</div>
               </button>
@@ -371,4 +351,3 @@ const gstRate = quote?.gstRate ?? 18
     </div>
   )
 }
-

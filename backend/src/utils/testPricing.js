@@ -1,94 +1,57 @@
 'use strict';
 /**
- * ════════════════════════════════════════════════════════════════════════════
- *  TEST PRICING OVERRIDE  —  backend/src/utils/testPricing.js
- * ════════════════════════════════════════════════════════════════════════════
+ * ─── TEMPORARY TEST PRICING OVERRIDE ───────────────────────────────────────
  *
- *  PURPOSE
- *  ───────
- *  Allows complete end-to-end payment testing with real Razorpay test-mode
- *  keys without transacting at catalog prices.
+ * PURPOSE:
+ *   Allows end-to-end payment testing with real Razorpay (test mode keys)
+ *   without having to transact at full catalog prices.
  *
- *  ACTIVATION
- *  ──────────
- *  backend/.env:  PAYMENT_TEST_MODE=true
- *  To disable:    PAYMENT_TEST_MODE=false  (or remove the variable)
+ * HOW TO ENABLE:
+ *   Set in backend/.env:
+ *     PAYMENT_TEST_MODE=true
  *
- *  ┌─────────────────────────────────────────────────────────────────────┐
- *  │  CANONICAL PRICING MATRIX  (when PAYMENT_TEST_MODE=true)           │
- *  │                                                                     │
- *  │  Direct plan purchases                                              │
- *  │    free  → standard      (₹499)   Razorpay charge → ₹1.00         │
- *  │    free  → premium       (₹1,999) Razorpay charge → ₹1.00         │
- *  │    free  → consultation  (₹9,999) Razorpay charge → ₹1.00         │
- *  │                                                                     │
- *  │  Upgrade between paid plans                                         │
- *  │    standard → premium              Razorpay charge → ₹0.10        │
- *  │    premium  → consultation         Razorpay charge → ₹0.10        │
- *  │    standard → consultation         Razorpay charge → ₹0.10        │
- *  │                                                                     │
- *  │  CCL counsellor joining fee (any amount)                            │
- *  │                                   Razorpay charge → ₹0.10         │
- *  └─────────────────────────────────────────────────────────────────────┘
+ * HOW TO DISABLE (revert to production pricing):
+ *   Remove or set to false:
+ *     PAYMENT_TEST_MODE=false
  *
- *  ARCHITECTURE CONTRACT
- *  ─────────────────────
- *  1.  buildQuote()  in payment.controller.js is the SINGLE source of
- *      truth for what the user sees AND what Razorpay is charged.
- *      It uses IS_TEST_MODE + TEST_BASE_PAISE / TEST_UPGRADE_PAISE.
+ * TEST PRICE MAP (paise):
+ *   ₹499  plan  (49900 paise)  → ₹1  (100 paise)
+ *   ₹1999 plan  (199900 paise) → ₹2  (200 paise)
+ *   ₹9999 plan  (999900 paise) → ₹3  (300 paise)
  *
- *  2.  Payment.amountPaise in the DB ALWAYS stores the REAL catalog price
- *      (from quote.catalogPrice), NOT the test amount.
- *      This keeps admin revenue, CSV exports, and financial totals correct.
+ * IMPORTANT:
+ *   - Only the amount sent to Razorpay is reduced.
+ *   - The catalog/original amount is stored in the DB (Payment.amountPaise)
+ *     and in Payment.metadata.originalAmountPaise so reports, admin views,
+ *     and analytics all reflect the real plan price.
+ *   - Webhook and verify flows are unaffected — they do NOT validate amount.
+ *   - CCL and CC payment flows are NOT affected (they use separate services).
  *
- *  3.  Payment.metadata.testMode = true and
- *      Payment.metadata.chargeAmountPaise = <test paise>
- *      are added to every test-mode record so the payment list can surface
- *      a visual badge and the discrepancy is never hidden.
- *
- *  4.  getEffectiveChargeAmount() below is a safety-net fallback only.
- *      It should never be called with catalog-range paise values in practice
- *      because buildQuote() already converts them to test amounts.
- *
- *  5.  CCL joining fee override lives in ccl.controller.js / createJoiningOrder
- *      and follows the same contract: real gross stored, test amount charged.
- *
- *  REVERT
- *  ──────
- *  Set PAYMENT_TEST_MODE=false.  No code changes required.
- * ════════════════════════════════════════════════════════════════════════════
+ * TO FULLY REVERT THIS FILE:
+ *   git checkout restore/pre-test-pricing -- backend/src/utils/testPricing.js
+ *   (or simply delete this file and remove the single call site in payment.controller.js)
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 const IS_TEST_MODE = process.env.PAYMENT_TEST_MODE === 'true';
 
-// ── Symbolic test amounts (paise) ────────────────────────────────────────────
-// These are the ONLY amounts sent to Razorpay when IS_TEST_MODE is true.
-const TEST_BASE_PAISE        = 100;  // ₹1.00  — any direct plan purchase
-const TEST_UPGRADE_PAISE     = 10;   // ₹0.10  — any upgrade between paid plans
-const TEST_JOINING_FEE_PAISE = 10;   // ₹0.10  — CCL counsellor joining fee
-
-// Human-readable labels for UI consistency
-const TEST_BASE_LABEL        = '₹1';
-const TEST_UPGRADE_LABEL     = '₹0.10';
-const TEST_JOINING_FEE_LABEL = '₹0.10';
-
-// ── Safety-net fallback map ───────────────────────────────────────────────────
-// Only triggered if a catalog-range paise amount bypasses buildQuote().
-// Maps known catalog amounts → TEST_BASE_PAISE.
+/**
+ * Maps catalog paise amounts to test paise amounts.
+ * Any amount not in the map is returned unchanged.
+ */
 const TEST_PRICE_MAP = {
-  49900:  TEST_BASE_PAISE,   // ₹499  → ₹1
-  199900: TEST_BASE_PAISE,   // ₹1999 → ₹1
-  999900: TEST_BASE_PAISE,   // ₹9999 → ₹1
+  49900:  100,   // ₹499 → ₹1
+  199900: 200,   // ₹1,999 → ₹2
+  999900: 300,   // ₹9,999 → ₹3
 };
 
 /**
- * Safety-net: clips known catalog paise amounts to the test base price.
- * The primary test-mode override is in buildQuote(); this is a last-resort guard.
+ * Returns the amount that should actually be sent to Razorpay.
  *
  * In PRODUCTION (PAYMENT_TEST_MODE != 'true'): returns originalAmountPaise unchanged.
- * In TEST MODE  (PAYMENT_TEST_MODE = 'true'):  maps catalog amounts; passes others through.
+ * In TEST MODE  (PAYMENT_TEST_MODE = 'true'):  returns the mapped test amount.
  *
- * @param {number} originalAmountPaise
+ * @param {number} originalAmountPaise  - catalog price in paise
  * @returns {{ chargeAmountPaise: number, isTestMode: boolean }}
  */
 function getEffectiveChargeAmount(originalAmountPaise) {
@@ -98,20 +61,11 @@ function getEffectiveChargeAmount(originalAmountPaise) {
 
   const testAmount = TEST_PRICE_MAP[originalAmountPaise];
   if (testAmount === undefined) {
-    // Already a test amount or unknown amount — pass through unchanged.
+    // Unknown amount — pass through unchanged (safe fallback)
     return { chargeAmountPaise: originalAmountPaise, isTestMode: true };
   }
 
   return { chargeAmountPaise: testAmount, isTestMode: true };
 }
 
-module.exports = {
-  IS_TEST_MODE,
-  TEST_BASE_PAISE,
-  TEST_UPGRADE_PAISE,
-  TEST_JOINING_FEE_PAISE,
-  TEST_BASE_LABEL,
-  TEST_UPGRADE_LABEL,
-  TEST_JOINING_FEE_LABEL,
-  getEffectiveChargeAmount,
-};
+module.exports = { getEffectiveChargeAmount, IS_TEST_MODE };

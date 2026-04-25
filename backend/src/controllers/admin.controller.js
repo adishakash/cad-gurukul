@@ -369,7 +369,6 @@ const getAnalytics = async (req, res) => {
       totalPayments,
       totalRevenueRupees: ((totalRevenuePaise._sum.amountPaise || 0) / 100).toFixed(2),
       recentSignups,
-      isTestMode: process.env.PAYMENT_TEST_MODE === 'true',
     });
   } catch (err) {
     logger.error('[Admin] getAnalytics error', { error: err.message });
@@ -755,7 +754,6 @@ const getFunnelMetrics = async (req, res) => {
       totalRevenueRupees: ((totalRevenuePaise._sum.amountPaise || 0) / 100).toFixed(2),
       statusBreakdown: byStatus.map((r) => ({ status: r.status, count: r._count.id })),
       sourceBreakdown: bySource.map((r) => ({ source: r.leadSource, count: r._count.id })),
-      isTestMode: process.env.PAYMENT_TEST_MODE === 'true',
     });
   } catch (err) {
     logger.error('[Admin] getFunnelMetrics error', { error: err.message });

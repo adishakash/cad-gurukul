@@ -8,7 +8,7 @@ const config = require('../config');
 const { triggerAutomation } = require('../services/automation/automationService');
 const analytics = require('../services/analytics/analyticsService');
 const { sendConsultationSlotEmail } = require('../services/email/emailService');
-const { getEffectiveChargeAmount, IS_TEST_MODE, TEST_BASE_PAISE, TEST_UPGRADE_PAISE } = require('../utils/testPricing');
+const { getEffectiveChargeAmount } = require('../utils/testPricing');
 const { safeLeadUpdate } = require('../utils/leadStatusHelper');
 const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
 const {
@@ -37,6 +37,7 @@ const buildGstBreakdown = (subtotalPaise) => {
       taxableAmountPaise: subtotalPaise,
       totalAmountPaise: totalPaise,
     };
+  }
 
   const { basePaise, gstPaise } = splitGstFromInclusive(subtotalPaise, rate);
   return {
@@ -91,6 +92,7 @@ const resolveCurrentPlanForUser = async (userId) => {
   const leadPlanType = normalizePlanType(lead?.planType || 'free');
   if (lead && PAID_STATUSES.includes(lead.status) && leadPlanType !== 'free') {
     return leadPlanType;
+  }
 
   return 'free';
 };
@@ -99,25 +101,9 @@ const buildQuote = ({ currentPlan, requestedPlan }) => {
   const targetPlan = normalizePlanType(requestedPlan);
   const sourcePlan = normalizePlanType(currentPlan);
   const basePrice = PLAN_PRICES[targetPlan];
-  const realEffectivePrice = getUpgradePrice(sourcePlan, targetPlan);
+  const effectivePrice = getUpgradePrice(sourcePlan, targetPlan);
   const alreadyIncluded = isPlanIncluded(sourcePlan, targetPlan);
   const alreadyOwned = sourcePlan === targetPlan && sourcePlan !== 'free';
-  const isUpgrade = sourcePlan !== 'free' && !alreadyIncluded;
-
-  // ── Test-mode pricing override ────────────────────────────────────────────
-  // When PAYMENT_TEST_MODE=true:
-  //   • Direct purchases (from 'free') → ₹1     (100 paise)
-  //   • Upgrades between paid plans    → ₹0.10  (10 paise)
-  //
-  // catalogPrice always holds the REAL production price and is what
-  // gets written to Payment.amountPaise in the DB — keeping admin
-  // revenue totals, CSV exports, and financial summaries correct.
-  //
-  // effectivePrice is what the user sees AND what Razorpay is charged.
-  let effectivePrice = realEffectivePrice;
-  if (IS_TEST_MODE && !alreadyIncluded && !alreadyOwned && realEffectivePrice > 0) {
-    effectivePrice = isUpgrade ? TEST_UPGRADE_PAISE / 100 : TEST_BASE_PAISE / 100;
-
   const effectivePricePaise = rupeesToPaise(effectivePrice);
   const gstBreakdown = buildGstBreakdown(effectivePricePaise);
 
@@ -125,13 +111,11 @@ const buildQuote = ({ currentPlan, requestedPlan }) => {
     currentPlan: sourcePlan,
     requestedPlan: targetPlan,
     basePrice,
-    catalogPrice: realEffectivePrice,     // REAL production price — always stored in DB
-    effectivePrice,                        // What user pays (test or catalog)
+    effectivePrice,
     basePriceLabel: formatRupees(basePrice),
-    catalogPriceLabel: formatRupees(realEffectivePrice),
     effectivePriceLabel: formatRupees(effectivePrice),
-    isUpgrade,
-    upgradeFrom: isUpgrade ? sourcePlan : null,
+    isUpgrade: sourcePlan !== 'free' && !alreadyIncluded,
+    upgradeFrom: sourcePlan !== 'free' && !alreadyIncluded ? sourcePlan : null,
     alreadyIncluded,
     alreadyOwned,
     canPurchase: !alreadyIncluded && effectivePrice > 0,
@@ -142,7 +126,6 @@ const buildQuote = ({ currentPlan, requestedPlan }) => {
     totalAmountPaise: gstBreakdown.totalAmountPaise,
     gstAmountLabel: formatRupees(gstBreakdown.gstAmountPaise / 100),
     taxableAmountLabel: formatRupees(gstBreakdown.taxableAmountPaise / 100),
-    isTestMode: IS_TEST_MODE,
   };
 };
 
@@ -151,12 +134,14 @@ const getQuote = async (req, res) => {
     const requestedPlan = normalizePlanType(req.query.planType || 'standard');
     if (!PLAN_PRICES[requestedPlan] || requestedPlan === 'free') {
       return errorResponse(res, 'Invalid plan type', 400, 'INVALID_PLAN');
+    }
 
     const currentPlan = await resolveCurrentPlanForUser(req.user.id);
     return successResponse(res, buildQuote({ currentPlan, requestedPlan }));
   } catch (err) {
     logger.error('[Payment] getQuote error', { error: err.message });
     throw err;
+  }
 };
 
 /**
@@ -171,13 +156,16 @@ const createOrder = async (req, res) => {
     // Validate planType
     if (!PLAN_PRICES[planType]) {
       return errorResponse(res, 'Invalid plan type', 400, 'INVALID_PLAN');
+    }
 
     const currentPlan = await resolveCurrentPlanForUser(req.user.id);
     const quote = buildQuote({ currentPlan, requestedPlan: planType });
     if (quote.alreadyOwned) {
       return errorResponse(res, `You already have the ${planType} plan on your account.`, 409, 'ALREADY_OWNED');
+    }
     if (quote.alreadyIncluded) {
       return errorResponse(res, `${planType} is already included in your ${currentPlan} plan.`, 409, 'PLAN_INCLUDED');
+    }
 
     // CONSULTATION orders don't require an assessment
     if (planType !== 'consultation') {
@@ -186,6 +174,8 @@ const createOrder = async (req, res) => {
       });
       if (!assessment) {
         return errorResponse(res, 'Assessment not found', 404, 'NOT_FOUND');
+      }
+    }
 
     // Prevent duplicate captured payment for the same assessment + planType
     if (assessmentId) {
@@ -203,27 +193,23 @@ const createOrder = async (req, res) => {
       });
       if (existingPayment) {
         return errorResponse(res, 'Payment already completed for this plan', 409, 'CONFLICT');
+      }
+    }
 
-    // ── Amount separation: charge vs. stored ─────────────────────────────────
-    // effectivePrice = what the user pays (test amount in test mode, real amount in prod)
-    // catalogPrice   = real production price — ALWAYS stored in DB so admin revenue
-    //                  totals, CSV exports, and financial summaries stay accurate.
-    const chargeAmountRupees  = quote.effectivePrice;
-    const chargeAmountPaise   = rupeesToPaise(chargeAmountRupees);
-    const catalogAmountRupees = quote.catalogPrice;
-    const catalogAmountPaise  = rupeesToPaise(catalogAmountRupees);
-    const gstBreakdown = buildGstBreakdown(chargeAmountPaise);
+    const amountRupees = quote.effectivePrice;
+    const amountPaise  = rupeesToPaise(amountRupees);
+    const gstBreakdown = buildGstBreakdown(amountPaise);
     const orderAmountPaise = gstBreakdown.totalAmountPaise;
-    const isTestMode          = IS_TEST_MODE;
 
+    // ── Test pricing override ─────────────────────────────────────────────────
+    // In PAYMENT_TEST_MODE the charge sent to Razorpay is reduced (₹1/₹2/₹3).
+    // The DB record always stores the real catalog price (amountPaise).
+    const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(orderAmountPaise);
     if (isTestMode) {
-      logger.warn('[Payment] TEST MODE — charging symbolic amount, storing catalog price', {
-        planType,
-        isUpgrade: quote.isUpgrade,
-        catalogPath: quote.isUpgrade ? `${quote.currentPlan}→${quote.requestedPlan}` : quote.requestedPlan,
-        catalogPaise:  catalogAmountPaise,
-        chargePaise:   chargeAmountPaise,
+      logger.warn('[Payment] TEST MODE — charging reduced amount', {
+        planType, originalPaise: amountPaise, chargePaise: chargeAmountPaise,
       });
+    }
 
     // Create Razorpay order
     const receiptBase = assessmentId ? assessmentId.slice(0, 12) : req.user.id.slice(0, 12);
@@ -234,11 +220,11 @@ const createOrder = async (req, res) => {
       notes: { userId: req.user.id, assessmentId: assessmentId || null, planType },
     });
 
-    // Save payment record — always stores CATALOG price so admin revenue totals are correct
+    // Save payment record — always stores CATALOG price so reports/admin are correct
     const payment = await prisma.payment.create({
       data: {
         userId: req.user.id,
-        amountPaise: catalogAmountPaise,   // real catalog price — never test amount
+        amountPaise,             // catalog price — real plan price
         currency: 'INR',
         status: 'CREATED',
         razorpayOrderId: order.id,
@@ -246,7 +232,7 @@ const createOrder = async (req, res) => {
           assessmentId: assessmentId || null,
           planType,
           currentPlan,
-          effectiveAmountRupees: catalogAmountRupees,
+          effectiveAmountRupees: amountRupees,
           gstRate: gstBreakdown.gstRate,
           gstIncluded: gstBreakdown.gstIncluded,
           gstAmountPaise: gstBreakdown.gstAmountPaise,
@@ -257,15 +243,16 @@ const createOrder = async (req, res) => {
       },
     });
 
-    // Track analytics — always report real catalog amount so analytics stay meaningful
-    analytics.track('payment_initiated', req, { userId: req.user.id, planType, amountRupees: catalogAmountRupees });
-    analytics.track('plan_selected', req, { userId: req.user.id, planType, amountRupees: catalogAmountRupees });
+    // Track analytics
+    analytics.track('payment_initiated', req, { userId: req.user.id, planType, amountRupees });
+    analytics.track('plan_selected', req, { userId: req.user.id, planType, amountRupees });
 
     // Link lead to payment_pending
     const lead = await prisma.lead.findFirst({ where: { userId: req.user.id } });
     if (lead) {
       await safeLeadUpdate(lead.id, { status: 'payment_pending', planType });
       await triggerAutomation('payment_initiated', { leadId: lead.id, userId: req.user.id, planType });
+    }
 
     logger.info('[Payment] Order created', { paymentId: payment.id, orderId: order.id, planType });
 
@@ -281,6 +268,7 @@ const createOrder = async (req, res) => {
   } catch (err) {
     logger.error('[Payment] createOrder error', { error: err.message });
     throw err;
+  }
 };
 
 /**
@@ -298,6 +286,7 @@ const verifyPayment = async (req, res) => {
 
     if (!payment || payment.userId !== req.user.id) {
       return errorResponse(res, 'Payment record not found', 404, 'NOT_FOUND');
+    }
 
     // Verify HMAC signature
     const expectedSignature = crypto
@@ -312,6 +301,7 @@ const verifyPayment = async (req, res) => {
         data: { status: 'FAILED' },
       });
       return errorResponse(res, 'Payment verification failed', 400, 'PAYMENT_VERIFICATION_FAILED');
+    }
 
     // Update payment as captured
     const updatedPayment = await prisma.payment.update({
@@ -372,6 +362,8 @@ const verifyPayment = async (req, res) => {
             include: { parentDetail: true },
           }),
         ]);
+      }
+    }
 
     logger.info('[Payment] Payment verified', { paymentId: payment.id, razorpayPaymentId, planType });
 
@@ -402,11 +394,13 @@ const verifyPayment = async (req, res) => {
         amountRupees,
         paymentId:   updatedPayment.id,
       });
+    }
 
     // Fire-and-forget report generation
     if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
       const { generateReportAsync } = require('./assessment.controller');
       generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
+    }
 
     // ─── Consultation: create booking + send slot-selection email ─────────────
     if (planType === 'consultation') {
@@ -418,6 +412,7 @@ const verifyPayment = async (req, res) => {
       }).catch((err) =>
         logger.error('[Payment] Consultation booking creation failed', { error: err.message }),
       );
+    }
 
     const successMsg = planType === 'consultation'
       ? 'Booking confirmed! Your scheduling email is being prepared now.'
@@ -427,6 +422,7 @@ const verifyPayment = async (req, res) => {
   } catch (err) {
     logger.error('[Payment] verifyPayment error', { error: err.message });
     throw err;
+  }
 };
 
 /**
@@ -438,6 +434,7 @@ const handleWebhook = async (req, res) => {
     if (!config.razorpay.webhookSecret) {
       logger.warn('[Payment] webhookSecret missing, webhook ignored');
       return successResponse(res, { received: true, ignored: true }, 'Webhook ignored');
+    }
 
     const signature = req.headers['x-razorpay-signature'];
     const bodyBuffer = Buffer.isBuffer(req.body)
@@ -452,6 +449,7 @@ const handleWebhook = async (req, res) => {
     if (!signature || signature !== expected) {
       logger.warn('[Payment] Webhook signature mismatch');
       return errorResponse(res, 'Invalid webhook signature', 400, 'INVALID_SIGNATURE');
+    }
 
     const payload = JSON.parse(bodyBuffer.toString('utf8'));
 
@@ -481,6 +479,7 @@ const handleWebhook = async (req, res) => {
                   createdBy:   'SYSTEM',
                 },
               }).catch(() => {});
+            }
             if (payment.cclCommissionId) {
               await prisma.commissionAdjustment.create({
                 data: {
@@ -492,13 +491,19 @@ const handleWebhook = async (req, res) => {
                   createdBy:   'SYSTEM',
                 },
               }).catch(() => {});
+            }
             logger.info('[Payment] Refund adjustments created', { rzpPaymentId, refundAmount });
+          }
+        }
       } catch (refundErr) {
         logger.error('[Payment] Refund commission adjustment error', { error: refundErr.message });
+      }
       return successResponse(res, { received: true }, 'Refund processed');
+    }
 
     if (payload.event !== 'payment.captured') {
       return successResponse(res, { received: true, ignored: true }, 'Webhook ignored');
+    }
 
     const paymentEntity = payload.payload?.payment?.entity;
     const razorpayOrderId = paymentEntity?.order_id;
@@ -506,6 +511,7 @@ const handleWebhook = async (req, res) => {
 
     if (!razorpayOrderId) {
       return errorResponse(res, 'Missing order reference', 400, 'INVALID_WEBHOOK_PAYLOAD');
+    }
 
     const payment = await prisma.payment.findUnique({ where: { razorpayOrderId } });
     if (!payment) {
@@ -523,9 +529,11 @@ const handleWebhook = async (req, res) => {
         if (!testLink) {
           logger.warn('[Payment] Webhook for unknown order', { razorpayOrderId });
           return successResponse(res, { received: true, ignored: true }, 'Unknown order');
+        }
 
         if (testLink.testPaymentStatus === 'captured') {
           return successResponse(res, { received: true, ignored: true }, 'CC test payment already processed');
+        }
 
         try {
           const { createCcSaleAndCommission } = require('../services/cc/ccPaymentService');
@@ -553,12 +561,15 @@ const handleWebhook = async (req, res) => {
           });
         } catch (err) {
           logger.error('[Payment] Webhook CC test payment error', { error: err.message, razorpayOrderId });
+        }
 
         return successResponse(res, { received: true }, 'CC test payment processed');
+      }
 
       // Idempotency: if already captured, return success
       if (joiningLink.joiningPaymentStatus === 'captured') {
         return successResponse(res, { received: true, ignored: true }, 'Joining payment already processed');
+      }
 
       // Delegate to the shared CCL payment service
       try {
@@ -587,8 +598,10 @@ const handleWebhook = async (req, res) => {
         });
       } catch (err) {
         logger.error('[Payment] Webhook joining payment error', { error: err.message, razorpayOrderId });
+      }
 
       return successResponse(res, { received: true }, 'Joining payment processed');
+    }
 
     if (payment.status !== 'CAPTURED') {
       const updatedPayment = await prisma.payment.update({
@@ -637,6 +650,8 @@ const handleWebhook = async (req, res) => {
               include: { parentDetail: true },
             }),
           ]);
+        }
+      }
 
       const lead = await prisma.lead.findFirst({ where: { userId: payment.userId } });
       if (lead) {
@@ -659,6 +674,7 @@ const handleWebhook = async (req, res) => {
           amountRupees,
           paymentId:    updatedPayment.id,
         });
+      }
 
       analytics.track('payment_success', null, {
         userId: payment.userId,
@@ -670,6 +686,7 @@ const handleWebhook = async (req, res) => {
       if (assessmentForGeneration && profileForGeneration && reportIdForGeneration) {
         const { generateReportAsync } = require('./assessment.controller');
         generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
+      }
 
       // ─── Consultation: create booking + send slot-selection email ───────────
       // This mirrors the verifyPayment path.  The idempotency guard inside the
@@ -682,11 +699,14 @@ const handleWebhook = async (req, res) => {
         }).catch((err) =>
           logger.error('[Payment] Webhook: Consultation booking creation failed', { error: err.message }),
         );
+      }
+    }
 
     return successResponse(res, { received: true }, 'Webhook processed');
   } catch (err) {
     logger.error('[Payment] handleWebhook error', { error: err.message });
     return errorResponse(res, 'Webhook processing failed', 500, 'WEBHOOK_ERROR');
+  }
 };
 
 /**
@@ -726,6 +746,7 @@ const getPaymentHistory = async (req, res) => {
   } catch (err) {
     logger.error('[Payment] getPaymentHistory error', { error: err.message });
     throw err;
+  }
 };
 
 /**
@@ -745,6 +766,7 @@ const getPaymentStatus = async (req, res) => {
   } catch (err) {
     logger.error('[Payment] getPaymentStatus error', { error: err.message });
     throw err;
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -764,6 +786,7 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
   if (existing) {
     logger.info('[Payment] ConsultationBooking already exists, skipping', { paymentId });
     return existing;
+  }
 
   // Secure, unguessable 64-char hex token for email links
   const slotToken = crypto.randomBytes(32).toString('hex');
@@ -791,6 +814,7 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
     }).catch((err) =>
       logger.warn('[Payment] ConsultationBooking LeadEvent failed', { error: err.message }),
     );
+  }
 
   // Fetch the registered user email for scheduling
   const user = await prisma.user.findUnique({
@@ -842,6 +866,7 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
             metadata: { bookingId: booking.id },
           },
         }).catch(() => {});
+      }
     } catch (err) {
       await prisma.consultationBooking.update({
         where: { id: booking.id },
@@ -863,6 +888,8 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
             metadata: { bookingId: booking.id, error: err.message },
           },
         }).catch(() => {});
+      }
+    }
   } else {
     await prisma.consultationBooking.update({
       where: { id: booking.id },
@@ -882,6 +909,8 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
           metadata: { bookingId: booking.id, error: 'Student email unavailable' },
         },
       }).catch(() => {});
+    }
+  }
 
   logger.info('[Payment] ConsultationBooking created', {
     bookingId: booking.id,
@@ -890,5 +919,6 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
   });
 
   return booking;
+}
 
 module.exports = { createOrder, getQuote, verifyPayment, handleWebhook, getPaymentHistory, getPaymentStatus };
