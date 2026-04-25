@@ -66,6 +66,17 @@ async function resolveCouponPolicy(planType) {
   };
 }
 
+/**
+ * Write a non-fatal audit log entry.
+ */
+async function auditLog(userId, action, entityType, entityId, metadata = {}) {
+  try {
+    await prisma.activityLog.create({ data: { userId, action, entityType, entityId, metadata } });
+  } catch (e) {
+    logger.warn('[CC] Audit log write failed', { action, error: e.message });
+  }
+}
+
 // ─── Account ─────────────────────────────────────────────────────────────────
 
 /**
