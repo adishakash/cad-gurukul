@@ -18,14 +18,14 @@ const ScoreRadar = ({ evaluation }) => {
     score: Math.round(Number(value) * 10) / 10,
   }))
   return (
-    <div className="card mb-6">
+    <div className="card mb-8">
       <h3 className="section-title mb-4">{t('report.sections.aptitudeProfile')}</h3>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data}>
             <PolarGrid />
             <PolarAngleAxis dataKey="category" tick={{ fontSize: 11 }} />
-            <Radar name={t('report.chart.scoreLabel')} dataKey="score" stroke="#e53e3e" fill="#e53e3e" fillOpacity={0.25} />
+            <Radar name={t('report.chart.scoreLabel')} dataKey="score" stroke="#c18a3b" fill="#c18a3b" fillOpacity={0.2} />
             <Tooltip />
           </RadarChart>
         </ResponsiveContainer>
@@ -54,11 +54,11 @@ const CareerCard = ({ career, index }) => {
       </div>
       {career.stream && (
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="bg-orange-50 text-brand-red text-xs font-semibold px-3 py-1 rounded-full">
+          <span className="bg-[#fff0d7] text-[#a4631b] text-xs font-semibold px-3 py-1 rounded-full">
             {t('report.careerCard.stream', { stream: career.stream })}
           </span>
           {career.subjects?.slice(0, 3).map((s) => (
-            <span key={s} className="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">{s}</span>
+            <span key={s} className="bg-[#f4ecdf] text-gray-700 text-xs px-3 py-1 rounded-full">{s}</span>
           ))}
         </div>
       )}
@@ -220,36 +220,117 @@ export default function Report() {
       ? t('report.labels.full')
       : t('report.labels.free')
 
+  const reportYear = report?.generatedAt
+    ? new Date(report.generatedAt).getFullYear()
+    : new Date().getFullYear()
+  const careerCount = isPaid ? careers.length : Math.min(careers.length, 3)
+  const topCareer = careers[0]
+  const hasConfidenceScore = Number.isFinite(Number(report.confidenceScore))
+  const tocItems = [
+    {
+      id: 'careers',
+      label: isPaid
+        ? t('report.sections.careersPaid', { count: careerCount })
+        : t('report.sections.careersFree'),
+    },
+    isPaid && { id: 'aptitude', label: t('report.sections.aptitudeProfile') },
+    isPremium && subjectStrategy && { id: 'subject-strategy', label: t('report.sections.subjectStrategy') },
+    isPaid && roadmaps.length > 0 && { id: 'roadmaps', label: t('report.sections.roadmaps') },
+    isPaid && parentGuidance && { id: 'parents', label: t('report.sections.parents') },
+    isPremium && report.keyActionNextMonth && { id: 'priority', label: t('report.sections.priority') },
+  ].filter(Boolean)
+
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen report-theme relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="report-grid" />
+        <div className="report-orb report-orb--one" />
+        <div className="report-orb report-orb--two" />
+      </div>
+      <div className="relative max-w-5xl mx-auto px-4 py-12">
         {/* Header */}
-        <div className="card shadow-xl mb-6 text-center">
-          <div className="text-5xl mb-2">📊</div>
-          <h1 className="text-2xl font-extrabold text-brand-dark">{t('report.header.title')}</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {reportLabel} · {t('report.header.generated', { date: new Date(report.generatedAt).toLocaleDateString(locale, { dateStyle: 'medium' }) })}
-          </p>
-          {streamRec && (
-            <div className="mt-4 inline-block bg-red-50 text-brand-red font-bold px-5 py-2 rounded-full text-sm">
-              {t('report.header.recommendedStream', { stream: streamRec })}
+        <div className="report-card mb-10 p-8 md:p-10 animate-fade-in">
+          <div className="flex flex-col lg:flex-row gap-10">
+            <div className="flex-1">
+              <div className="report-kicker">CAD Gurukul</div>
+              <h1 className="report-title text-4xl md:text-5xl">{t('report.header.title')}</h1>
+              <p className="report-meta mt-2">
+                {reportLabel} · {t('report.header.generated', { date: new Date(report.generatedAt).toLocaleDateString(locale, { dateStyle: 'medium' }) })}
+              </p>
+              {streamRec && (
+                <div className="mt-4 inline-flex items-center report-chip text-sm font-semibold px-4 py-2 rounded-full">
+                  {t('report.header.recommendedStream', { stream: streamRec })}
+                </div>
+              )}
+              {(hasConfidenceScore || topCareer) && (
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {hasConfidenceScore && (
+                    <div className="report-stat p-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--report-ink-muted)]">
+                        {t('report.careerCard.fit')}
+                      </div>
+                      <div className="report-stat-value">{Math.round(Number(report.confidenceScore))}%</div>
+                    </div>
+                  )}
+                  {topCareer && (
+                    <div className="report-stat p-4">
+                      <div className="text-[0.68rem] font-semibold uppercase tracking-[0.25em] text-[var(--report-ink-muted)]">
+                        {isPaid
+                          ? t('report.sections.careersPaid', { count: careerCount })
+                          : t('report.sections.careersFree')}
+                      </div>
+                      <div className="text-lg font-semibold text-[var(--report-navy)]">{topCareer.name}</div>
+                      {topCareer.stream && (
+                        <div className="text-xs text-[var(--report-ink-muted)] mt-1">
+                          {t('report.careerCard.stream', { stream: topCareer.stream })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {isPaid && (
+                <div className="mt-6">
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="report-btn"
+                  >
+                    {downloading ? t('report.header.downloading') : t('report.header.download')}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-          {isPaid && (
-            <div className="mt-4">
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="btn-primary flex items-center gap-2 mx-auto"
-              >
-                {downloading ? t('report.header.downloading') : t('report.header.download')}
-              </button>
+            <div className="w-full lg:w-[250px] space-y-4">
+              <div className="report-stat p-5 text-center">
+                <div className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--report-ink-muted)]">
+                  {t('report.header.title')}
+                </div>
+                <div className="report-stat-value text-4xl">{reportYear}</div>
+                <div className="text-xs text-[var(--report-ink-muted)] mt-1">{reportLabel}</div>
+              </div>
+              {tocItems.length > 1 && (
+                <div className="report-outline rounded-2xl p-4 bg-white/70">
+                  <div className="report-kicker">Contents</div>
+                  <div className="mt-3 space-y-2">
+                    {tocItems.map((item) => (
+                      <a
+                        key={item.id}
+                        href={`#${item.id}`}
+                        className="block text-sm text-[var(--report-ink-muted)] hover:text-[var(--report-navy)] transition"
+                      >
+                        {item.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {upgradeInProgress && (
-          <div className="card mb-6 border-2 border-orange-200 bg-orange-50">
+          <div className="card mb-8 border border-[#e1c7a2] bg-[#fff6e8]">
             <h3 className="text-lg font-bold text-brand-dark">Your premium assessment is waiting</h3>
             <p className="text-sm text-gray-600 mt-1">
               Complete the remaining questions to unlock your paid report and PDF download.
@@ -264,60 +345,68 @@ export default function Report() {
         )}
 
         {/* Radar chart (paid only) */}
-        {isPaid && <ScoreRadar evaluation={evaluation} />}
+        {isPaid && (
+          <section id="aptitude" className="mb-10">
+            <div className="report-divider mb-4" />
+            <ScoreRadar evaluation={evaluation} />
+          </section>
+        )}
 
         {/* Subject Strategy — premium only */}
         {isPremium && subjectStrategy && (
-          <div className="card mb-6 border-l-4 border-purple-500 bg-purple-50">
-            <h2 className="section-title mb-3">{t('report.sections.subjectStrategy')}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {subjectStrategy.mustTake?.length > 0 && (
-                <div>
-                  <div className="text-xs font-bold text-green-700 uppercase mb-1">{t('report.subjectStrategy.mustTake')}</div>
-                  {subjectStrategy.mustTake.map((s) => <div key={s} className="text-sm text-gray-700 bg-green-50 px-2 py-1 rounded mb-1">✓ {s}</div>)}
-                </div>
-              )}
-              {subjectStrategy.recommended?.length > 0 && (
-                <div>
-                  <div className="text-xs font-bold text-blue-700 uppercase mb-1">{t('report.subjectStrategy.recommended')}</div>
-                  {subjectStrategy.recommended.map((s) => <div key={s} className="text-sm text-gray-700 bg-blue-50 px-2 py-1 rounded mb-1">→ {s}</div>)}
-                </div>
-              )}
-              {subjectStrategy.avoid?.length > 0 && (
-                <div>
-                  <div className="text-xs font-bold text-red-700 uppercase mb-1">{t('report.subjectStrategy.avoid')}</div>
-                  {subjectStrategy.avoid.map((s) => <div key={s} className="text-sm text-gray-500 bg-red-50 px-2 py-1 rounded mb-1">⚠ {s}</div>)}
-                </div>
-              )}
+          <section id="subject-strategy" className="mb-10">
+            <div className="report-divider mb-4" />
+            <div className="card mb-6 border-l-4 border-[#c18a3b] bg-[#fff6e8]">
+              <h2 className="section-title mb-3">{t('report.sections.subjectStrategy')}</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {subjectStrategy.mustTake?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold text-green-700 uppercase mb-1">{t('report.subjectStrategy.mustTake')}</div>
+                    {subjectStrategy.mustTake.map((s) => <div key={s} className="text-sm text-gray-700 bg-green-50 px-2 py-1 rounded mb-1">✓ {s}</div>)}
+                  </div>
+                )}
+                {subjectStrategy.recommended?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold text-blue-700 uppercase mb-1">{t('report.subjectStrategy.recommended')}</div>
+                    {subjectStrategy.recommended.map((s) => <div key={s} className="text-sm text-gray-700 bg-blue-50 px-2 py-1 rounded mb-1">→ {s}</div>)}
+                  </div>
+                )}
+                {subjectStrategy.avoid?.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold text-red-700 uppercase mb-1">{t('report.subjectStrategy.avoid')}</div>
+                    {subjectStrategy.avoid.map((s) => <div key={s} className="text-sm text-gray-500 bg-red-50 px-2 py-1 rounded mb-1">⚠ {s}</div>)}
+                  </div>
+                )}
+              </div>
+              {subjectStrategy.reasoning && <p className="text-xs text-gray-600 mt-3 leading-relaxed">{subjectStrategy.reasoning}</p>}
             </div>
-            {subjectStrategy.reasoning && <p className="text-xs text-gray-600 mt-3 leading-relaxed">{subjectStrategy.reasoning}</p>}
-          </div>
+          </section>
         )}
 
         {/* 🔐 FREE REPORT: dual-CTA lock banner — only for users who have NOT yet purchased any paid plan */}
         {showUpgradeCTA && (
-          <div className="mb-6 rounded-2xl bg-gradient-to-r from-brand-dark to-brand-navy text-white p-5 shadow-xl">
+          <div className="mb-8 rounded-3xl bg-gradient-to-r from-[#1f2d3a] to-[#2d4154] text-white p-6 shadow-xl">
             <div className="flex items-start gap-3">
               <span className="text-3xl shrink-0">🔐</span>
               <div className="w-full">
                 <p className="font-bold text-base leading-snug">
                   {t('report.lockBanner.title')}
                 </p>
-                <p className="text-gray-300 text-sm mt-1">
+                <p className="text-[#f2dcc4] text-sm mt-1">
                   {t('report.lockBanner.bodyPrefix')}{' '}
-                  <strong className="text-yellow-300">{t('report.lockBanner.bodyEmphasis')}</strong>
+                  <strong className="text-[#f3d19b]">{t('report.lockBanner.bodyEmphasis')}</strong>
                   {t('report.lockBanner.bodySuffix')}
                 </p>
                 <div className="mt-3 flex flex-col sm:flex-row gap-2">
                   <button
                     onClick={() => { trackEvent('premium_clicked', { source: 'lock_banner', plan: 'standard' }); navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`) }}
-                    className="bg-white text-brand-dark font-bold px-4 py-2 rounded-xl text-sm hover:bg-gray-100 transition"
+                    className="report-btn-outline text-sm"
                   >
                     {t('report.lockBanner.ctaStandard', { price: '₹499' })}
                   </button>
                   <button
                     onClick={() => { trackEvent('premium_clicked', { source: 'lock_banner', plan: 'premium' }); navigate(`/payment?plan=premium&assessmentId=${report.assessmentId}`) }}
-                    className="bg-brand-red text-white font-bold px-4 py-2 rounded-xl text-sm hover:bg-red-700 transition border border-red-400"
+                    className="bg-[#c18a3b] text-white font-bold px-4 py-2 rounded-full text-sm hover:bg-[#b1782e] transition"
                   >
                     {t('report.lockBanner.ctaPremium', { price: '₹1,999' })}
                   </button>
@@ -328,7 +417,8 @@ export default function Report() {
         )}
 
         {/* Careers */}
-        <div className="mb-6">
+        <section id="careers" className="mb-10">
+          <div className="report-divider mb-4" />
           <h2 className="section-title mb-4">
             {isPaid
               ? t('report.sections.careersPaid', { count: careers.length })
@@ -360,18 +450,19 @@ export default function Report() {
               <div className="absolute inset-0 flex items-center justify-center">
                 <button
                   onClick={() => navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`)}
-                  className="bg-brand-red text-white font-bold px-6 py-3 rounded-xl shadow-2xl text-sm hover:bg-red-700 transition"
+                  className="report-btn text-sm"
                 >
                   {t('report.lockBanner.unlockMore')}
                 </button>
               </div>
             </div>
           )}
-        </div>
+        </section>
 
         {/* Roadmaps (paid only) */}
         {isPaid && roadmaps.length > 0 && (
-          <div className="mb-6">
+          <section id="roadmaps" className="mb-10">
+            <div className="report-divider mb-4" />
             <h2 className="section-title mb-4">{t('report.sections.roadmaps')}</h2>
             {roadmaps.map((rm, i) => (
               <div key={i} className="card mb-4">
@@ -388,44 +479,50 @@ export default function Report() {
                 </ol>
               </div>
             ))}
-          </div>
+          </section>
         )}
 
         {/* Parent guidance (paid only) */}
         {isPaid && parentGuidance && (
-          <div className="card mb-6 border-l-4 border-brand-navy bg-blue-50">
-            <h2 className="section-title mb-2">{t('report.sections.parents')}</h2>
-            <p className="text-gray-700 text-sm leading-relaxed">{parentGuidance}</p>
-          </div>
+          <section id="parents" className="mb-10">
+            <div className="report-divider mb-4" />
+            <div className="card border-l-4 border-[#1f2d3a] bg-[#f2f4f6]">
+              <h2 className="section-title mb-2">{t('report.sections.parents')}</h2>
+              <p className="text-gray-700 text-sm leading-relaxed">{parentGuidance}</p>
+            </div>
+          </section>
         )}
 
         {/* Key action — premium only */}
         {isPremium && report.keyActionNextMonth && (
-          <div className="card mb-6 border-2 border-brand-red bg-red-50 text-center">
-            <div className="text-3xl mb-2">🎯</div>
-            <h3 className="font-bold text-brand-dark mb-1">{t('report.sections.priority')}</h3>
-            <p className="text-gray-700 text-sm">{report.keyActionNextMonth}</p>
-          </div>
+          <section id="priority" className="mb-10">
+            <div className="report-divider mb-4" />
+            <div className="card border-2 border-[#c18a3b] bg-[#fff6e8] text-center">
+              <div className="text-3xl mb-2">🎯</div>
+              <h3 className="font-bold text-brand-dark mb-1">{t('report.sections.priority')}</h3>
+              <p className="text-gray-700 text-sm">{report.keyActionNextMonth}</p>
+            </div>
+          </section>
         )}
 
         {/* Standard-paid → Premium upsell */}
         {isStandard && report.premiumUpsell?.show && (
-          <div className="card mb-6 border-2 border-purple-400 bg-gradient-to-br from-purple-50 to-white">
+          <div className="card mb-8 border-2 border-[#c18a3b] bg-gradient-to-br from-[#fff6e8] to-white">
             <div className="flex items-start gap-3">
               <span className="text-3xl">🚀</span>
               <div>
-                <div className="text-xs font-bold uppercase tracking-widest text-purple-600 mb-1">{t('report.premiumUpsell.label')}</div>
+                <div className="text-xs font-bold uppercase tracking-widest text-[#a46d26] mb-1">{t('report.premiumUpsell.label')}</div>
                 <h3 className="font-extrabold text-brand-dark text-lg">{premiumHeadline}</h3>
                 <ul className="mt-2 space-y-1">
                   {premiumBenefits.map((b) => (
                     <li key={b} className="text-sm text-gray-700 flex items-start gap-2">
-                      <span className="text-purple-500 mt-0.5 shrink-0">✓</span>{b}
+                      <span className="text-[#c18a3b] mt-0.5 shrink-0">✓</span>{b}
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={() => { trackEvent('premium_clicked', { source: 'standard_report_upsell' }); navigate(`/payment?plan=premium&assessmentId=${report.assessmentId}`) }}
-                  className="mt-4 bg-purple-600 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-purple-700 transition"
+                  className="report-btn mt-4"
                 >
                   {t('report.premiumUpsell.cta', { price: premiumUpgradePrice })}
                 </button>
@@ -437,11 +534,11 @@ export default function Report() {
 
         {/* Consultation CTA — shown for paid report holders who have NOT yet purchased consultation */}
         {(isPremium || isStandard) && !consultationPurchased && report.consultationUpsell?.show && (
-          <div className="card mb-6 border-2 border-orange-400 bg-gradient-to-br from-orange-50 to-white">
+          <div className="card mb-8 border-2 border-[#c45b3c] bg-gradient-to-br from-[#fff0e8] to-white">
             <div className="flex items-start gap-3">
               <span className="text-3xl">📞</span>
               <div>
-                <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">{t('report.consultation.badge')}</div>
+                <div className="inline-block bg-[#c45b3c] text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">{t('report.consultation.badge')}</div>
                 <h3 className="font-extrabold text-brand-dark text-lg">{t('report.consultation.title')}</h3>
                 <p className="text-sm text-gray-600 mt-1">{t('report.consultation.body')}</p>
                 <button
@@ -450,7 +547,7 @@ export default function Report() {
                     trackEvent('premium_clicked', { source })
                     navigate(`/payment?plan=consultation${report.assessmentId ? `&assessmentId=${report.assessmentId}` : ''}`)
                   }}
-                  className="mt-4 bg-orange-500 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-orange-600 transition"
+                  className="mt-4 bg-[#c45b3c] text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-[#b54f34] transition"
                 >
                   {t('report.consultation.cta', { price: consultationUpgradePrice })}
                 </button>
@@ -474,14 +571,14 @@ export default function Report() {
 
       {/* Floating sticky upgrade bar — only for free users without a paid plan */}
       {showUpgradeCTA && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-brand-red text-white px-4 py-3 flex items-center justify-between shadow-2xl md:hidden">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#1f2d3a] text-white px-4 py-3 flex items-center justify-between shadow-2xl md:hidden">
           <div>
             <div className="font-bold text-sm">{t('report.sticky.title')}</div>
-            <div className="text-xs text-red-200">{t('report.sticky.subtitle')}</div>
+            <div className="text-xs text-[#f2dcc4]">{t('report.sticky.subtitle')}</div>
           </div>
           <button
             onClick={() => { trackEvent('premium_cta_clicked', { source: 'sticky_bar' }); navigate(`/payment?plan=standard&assessmentId=${report.assessmentId}`) }}
-            className="bg-white text-brand-red font-bold text-sm px-4 py-2 rounded-lg shrink-0"
+            className="bg-white text-[#1f2d3a] font-bold text-sm px-4 py-2 rounded-lg shrink-0"
           >
             {t('report.sticky.cta')}
           </button>
