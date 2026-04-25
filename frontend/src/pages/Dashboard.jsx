@@ -5,7 +5,7 @@ import { selectUser, clearCredentials } from '../store/slices/authSlice'
 import api, { leadApi, consultationApi, authApi, paymentApi } from '../services/api'
 import toast from 'react-hot-toast'
 import ThemeToggle from '../components/ThemeToggle'
-import { formatRupees, getUpgradePrice } from '../utils/planPricing'
+import { formatRupees, getUpgradePrice, getPlanRank } from '../utils/planPricing'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 const SLOT_LABELS = {
@@ -50,17 +50,28 @@ function TimelineStep({ done, current, icon, label, description, children }) {
 // ── ₹499 Standard Plan Timeline ──────────────────────────────────────────────
 function StandardTimeline({ leadStatus, paidReport, generatingReport, onRefresh, refreshing }) {
   const reportReady = Boolean(paidReport)
-  const generating  = Boolean(generatingReport) || ['paid', 'premium_report_generating'].includes(leadStatus)
+  const generating  = Boolean(generatingReport) || leadStatus === 'premium_report_generating'
   const reportDone  = reportReady || leadStatus === 'premium_report_ready'
+  const needsCompletion = leadStatus === 'paid' && !reportReady && !generating
   const emailDelivered = Boolean(paidReport?.reportEmailSentAt)
   const emailError = paidReport?.emailDeliveryError
 
-  const statusLabel = emailDelivered ? 'Delivered' : reportReady ? 'Ready' : generating ? 'Generating' : 'Processing'
+  const statusLabel = emailDelivered
+    ? 'Delivered'
+    : reportReady
+      ? 'Ready'
+      : needsCompletion
+        ? 'Complete Assessment'
+        : generating
+          ? 'Generating'
+          : 'Processing'
   const statusColor = reportReady
     ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700'
-    : generating
-      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700'
-      : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700'
+    : needsCompletion
+      ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700'
+      : generating
+        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700'
+        : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700'
 
   const steps = [
     {
@@ -79,13 +90,15 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport, onRefresh,
     },
     {
       key:     'generating',
-      label:   generating ? 'Report Generation Started…' : 'Report Generation',
+      label:   needsCompletion ? 'Complete Remaining Questions' : (generating ? 'Report Generation Started…' : 'Report Generation'),
       icon:    '🤖',
-      desc:    generating
-        ? 'Our AI is building your personalised career blueprint — 7+ paths, roadmap, PDF.'
-        : 'AI analysis queued. Will begin shortly.',
+      desc:    needsCompletion
+        ? 'Finish your paid assessment to start report generation.'
+        : generating
+          ? 'Our AI is building your personalised career blueprint — 7+ paths, roadmap, PDF.'
+          : 'AI analysis queued. Will begin shortly.',
       done:    reportDone || generating,
-      current: generating && !reportDone,
+      current: (generating && !reportDone) || needsCompletion,
     },
     {
       key:     'report_ready',
@@ -162,6 +175,16 @@ function StandardTimeline({ leadStatus, paidReport, generatingReport, onRefresh,
                 Usually takes 1–3 minutes. Refresh the page to check.
               </div>
             )}
+            {s.key === 'generating' && needsCompletion && (
+              <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                Payment received. Complete the remaining questions to unlock your full report.
+              </div>
+            )}
+            {s.key === 'generating' && needsCompletion && (
+              <Link to="/assessment?plan=PAID&resume=1" className="inline-block mt-1 text-xs text-amber-700 dark:text-amber-400 font-semibold hover:underline">
+                Continue Assessment →
+              </Link>
+            )}
             {s.key === 'report_ready' && paidReport && (
               <Link to={`/reports/${paidReport.id}`} className="inline-block mt-1 text-xs text-brand-red font-semibold hover:underline">
                 Open Full Report →
@@ -184,15 +207,26 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport, onRefresh, 
   const generating  = Boolean(generatingReport) || leadStatus === 'premium_report_generating'
   const reportReady = Boolean(paidReport)
   const reportDone  = reportReady || leadStatus === 'premium_report_ready'
+  const needsCompletion = leadStatus === 'paid' && !reportReady && !generating
   const emailDelivered = Boolean(paidReport?.reportEmailSentAt)
   const emailError = paidReport?.emailDeliveryError
 
-  const statusLabel = emailDelivered ? 'Delivered' : reportReady ? 'Ready' : generating ? 'Analysing' : 'Processing'
+  const statusLabel = emailDelivered
+    ? 'Delivered'
+    : reportReady
+      ? 'Ready'
+      : needsCompletion
+        ? 'Complete Assessment'
+        : generating
+          ? 'Analysing'
+          : 'Processing'
   const statusColor = reportReady
     ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700'
-    : generating
-      ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-700'
-      : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700'
+    : needsCompletion
+      ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700'
+      : generating
+        ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-700'
+        : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700'
 
   const steps = [
     {
@@ -211,13 +245,15 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport, onRefresh, 
     },
     {
       key:     'generating',
-      label:   generating ? 'Deep Analysis Started…' : 'Deep AI Analysis',
+      label:   needsCompletion ? 'Complete Remaining Questions' : (generating ? 'Deep Analysis Started…' : 'Deep AI Analysis'),
       icon:    '🤖',
-      desc:    generating
-        ? 'Building your year-by-year roadmap, subject strategy, exam timeline & scholarship list.'
-        : 'Premium AI analysis queued.',
+      desc:    needsCompletion
+        ? 'Finish your paid assessment to start premium analysis.'
+        : generating
+          ? 'Building your year-by-year roadmap, subject strategy, exam timeline & scholarship list.'
+          : 'Premium AI analysis queued.',
       done:    reportDone || generating,
-      current: generating && !reportDone,
+      current: (generating && !reportDone) || needsCompletion,
     },
     {
       key:     'report_ready',
@@ -293,6 +329,16 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport, onRefresh, 
                 </svg>
                 Premium analysis takes 2–5 minutes. Refresh to check.
               </div>
+            )}
+            {s.key === 'generating' && needsCompletion && (
+              <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                Payment received. Complete the remaining questions to unlock your premium report.
+              </div>
+            )}
+            {s.key === 'generating' && needsCompletion && (
+              <Link to="/assessment?plan=PAID&resume=1" className="inline-block mt-1 text-xs text-amber-700 dark:text-amber-400 font-semibold hover:underline">
+                Continue Assessment →
+              </Link>
             )}
             {s.key === 'report_ready' && paidReport && (
               <Link to={`/reports/${paidReport.id}`} className="inline-block mt-1 text-xs text-brand-red font-semibold hover:underline">
@@ -714,6 +760,7 @@ export default function Dashboard() {
   const [lead, setLead]         = useState(null)
   const [consultationBooking, setConsultationBooking] = useState(null)
   const [hasConsultationPayment, setHasConsultationPayment] = useState(false)
+  const [paymentHistory, setPaymentHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [timelineRefreshing, setTimelineRefreshing] = useState(false)
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
@@ -752,6 +799,7 @@ export default function Dashboard() {
       setLead(leadRes.data.data)
       setConsultationBooking(consultationRes.data.data)
       setHasConsultationPayment(consultationPaid)
+      setPaymentHistory(paymentHistory)
       setLastSyncedAt(new Date())
 
       if (showToast) toast.success('Timeline refreshed.')
@@ -791,6 +839,13 @@ export default function Dashboard() {
   const freeReport        = completedReports.find((r) => r.accessLevel === 'FREE')
   const paidReport        = completedReports.find((r) => r.accessLevel === 'PAID')
 
+  const capturedPayments = paymentHistory.filter((p) => p.status === 'CAPTURED')
+  const highestCapturedPlan = capturedPayments.reduce((highest, payment) => {
+    const paymentPlan = payment.planType || 'standard'
+    return getPlanRank(paymentPlan) > getPlanRank(highest) ? paymentPlan : highest
+  }, 'free')
+  const hasCapturedPaidPlan = highestCapturedPlan !== 'free'
+
   // ── Payment detection ─────────────────────────────────────────────────────
   // IMPORTANT: Lead.planType has a DB-level DEFAULT 'standard', meaning every lead
   // record — including free users who never paid — has planType = 'standard'.
@@ -802,10 +857,13 @@ export default function Dashboard() {
   // the correct timeline still renders for users who genuinely paid.
   const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed']
   const leadStatus  = lead?.status || 'new_lead'
-  const userHasPaid = PAID_STATUSES.includes(leadStatus) || Boolean(paidReport) || Boolean(consultationBooking)
+  const userHasPaid = PAID_STATUSES.includes(leadStatus)
+    || Boolean(paidReport)
+    || Boolean(consultationBooking)
+    || hasCapturedPaidPlan
   // Resolve plan type: lead record is authoritative; fall back to paidReport.reportType
   const planType    = userHasPaid
-    ? (lead?.planType || paidReport?.reportType || 'standard')
+    ? (lead?.planType || paidReport?.reportType || highestCapturedPlan || 'standard')
     : 'free'
 
   // A consultation booking is definitive proof of the consultation plan even if
@@ -814,6 +872,11 @@ export default function Dashboard() {
   const hasPremium        = planType === 'premium' || hasConsultation
   const hasStandard       = planType === 'standard'
   const hasAnyPaidPlan    = userHasPaid   // simplest, most reliable
+  const paymentConfirmed  = hasCapturedPaidPlan || PAID_STATUSES.includes(leadStatus)
+  const needsAssessmentCompletion = !hasConsultation
+    && paymentConfirmed
+    && !paidReport
+    && generatingReports.length === 0
   const premiumUpgradePrice = formatRupees(getUpgradePrice('standard', 'premium'))
   const consultationUpgradePrice = formatRupees(getUpgradePrice(planType === 'standard' ? 'standard' : 'premium', 'consultation'))
   const consultationUpgradeNote = hasPremium
@@ -891,6 +954,24 @@ export default function Dashboard() {
         )}
         {!userHasPaid && lead && <FunnelProgress status={lead.status} />}
 
+        {needsAssessmentCompletion && (
+          <div className="mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-1">✅ Payment received</div>
+              <div className="font-bold text-brand-dark">Complete your assessment to unlock the full report</div>
+              <p className="text-sm text-amber-700 mt-0.5">
+                Finish the remaining questions to generate your report and enable PDF download.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/assessment?plan=PAID&resume=1')}
+              className="bg-amber-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-amber-600 transition shrink-0"
+            >
+              Continue Assessment →
+            </button>
+          </div>
+        )}
+
         {/* Profile not complete notice */}
         {(!profile || !profile.isOnboardingComplete) && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-xl p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -905,7 +986,7 @@ export default function Dashboard() {
         {/* ── Revenue upsell banners ─────────────────────────────────────────────── */}
 
         {/* Standard ₹499 → Upsell ₹1,999 (only when user has standard and a paid report) */}
-        {hasStandard && paidReport && (
+        {hasStandard && (
           <div className="mb-6 rounded-2xl border-2 border-purple-400 bg-gradient-to-r from-purple-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1">🚀 Unlock Deeper Clarity</div>
@@ -987,6 +1068,16 @@ export default function Dashboard() {
               <div className="text-sm text-gray-500 mt-1">AI is preparing your report. Should be ready in 1–2 min.</div>
               <div className="mt-3 text-blue-500 text-sm font-semibold">Please wait…</div>
             </div>
+          ) : needsAssessmentCompletion ? (
+            <button
+              onClick={() => navigate('/assessment?plan=PAID&resume=1')}
+              className="card hover:shadow-lg transition-shadow text-left border-l-4 border-amber-500 cursor-pointer"
+            >
+              <div className="text-3xl mb-2">✅</div>
+              <div className="font-bold text-brand-dark">Continue Paid Assessment</div>
+              <div className="text-sm text-gray-500 mt-1">Finish remaining questions to unlock your full report</div>
+              <div className="mt-3 text-amber-600 text-sm font-semibold">Resume →</div>
+            </button>
           ) : (
             // Free user — show upgrade prompt
             <button

@@ -331,9 +331,9 @@ export default function Report() {
 
         {upgradeInProgress && (
           <div className="card mb-8 border border-[#e1c7a2] bg-[#fff6e8]">
-            <h3 className="text-lg font-bold text-brand-dark">Your premium assessment is waiting</h3>
+            <h3 className="text-lg font-bold text-brand-dark">Payment received — finish your assessment</h3>
             <p className="text-sm text-gray-600 mt-1">
-              Complete the remaining questions to unlock your paid report and PDF download.
+              Complete the remaining questions to unlock your full report and PDF download.
             </p>
             <button
               onClick={() => navigate('/assessment?plan=PAID&resume=1')}
