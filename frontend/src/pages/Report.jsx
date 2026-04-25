@@ -213,6 +213,14 @@ export default function Report() {
     ? t('report.consultation.note')
     : t('report.premiumUpsell.note')
 
+  useEffect(() => {
+    if (!upgradeInProgress) return
+    const timeout = setTimeout(() => {
+      navigate('/assessment?plan=PAID&resume=1')
+    }, 1200)
+    return () => clearTimeout(timeout)
+  }, [upgradeInProgress, navigate])
+
   // Header label
   const reportLabel = isPremium
     ? t('report.labels.premium')

@@ -838,6 +838,7 @@ export default function Dashboard() {
   const generatingReports = reports.filter((r) => r.status === 'GENERATING')
   const freeReport        = completedReports.find((r) => r.accessLevel === 'FREE')
   const paidReport        = completedReports.find((r) => r.accessLevel === 'PAID')
+  const upgradeAssessmentId = freeReport?.assessmentId || lead?.assessmentId || ''
 
   const capturedPayments = paymentHistory.filter((p) => p.status === 'CAPTURED')
   const highestCapturedPlan = capturedPayments.reduce((highest, payment) => {
@@ -1081,7 +1082,9 @@ export default function Dashboard() {
           ) : (
             // Free user — show upgrade prompt
             <button
-              onClick={() => navigate('/payment?plan=standard')}
+              onClick={() => (upgradeAssessmentId
+                ? navigate(`/payment?plan=standard&assessmentId=${upgradeAssessmentId}`)
+                : navigate('/assessment?plan=FREE&intent=paid'))}
               className="card hover:shadow-lg transition-shadow text-left border-l-4 border-green-500 cursor-pointer"
             >
               <div className="text-3xl mb-2">💎</div>

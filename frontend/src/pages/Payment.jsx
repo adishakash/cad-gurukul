@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectAssessment } from '../store/slices/assessmentSlice'
 import { selectUser } from '../store/slices/authSlice'
-import { leadApi, paymentApi, trackEvent } from '../services/api'
+import { leadApi, paymentApi, reportApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
 import { isPlanIncluded, formatRupees } from '../utils/planPricing'
 import { splitGstFromInclusive } from '../utils/gst'
@@ -97,13 +97,54 @@ export default function Payment() {
   // Plan comes from URL ?plan= (standard | premium | consultation)
   const planId      = searchParams.get('plan') || 'standard'
   const plan        = PLAN_CONFIG[planId] || PLAN_CONFIG.standard
-  const assessmentId = searchParams.get('assessmentId') || assessment?.id
+  const assessmentIdParam = searchParams.get('assessmentId') || ''
+  const [resolvedAssessmentId, setResolvedAssessmentId] = useState(assessmentIdParam || assessment?.id || '')
+  const assessmentId = resolvedAssessmentId || ''
 
   const [loading, setLoading] = useState(false)
   const [quote, setQuote] = useState(null)
   const [quoteLoading, setQuoteLoading] = useState(true)
   const [couponCode, setCouponCode] = useState(getStoredCouponCode())
   const [couponApplying, setCouponApplying] = useState(false)
+
+  useEffect(() => {
+    if (assessmentIdParam && assessmentIdParam !== resolvedAssessmentId) {
+      setResolvedAssessmentId(assessmentIdParam)
+    }
+  }, [assessmentIdParam, resolvedAssessmentId])
+
+  useEffect(() => {
+    if (!resolvedAssessmentId && assessment?.id) {
+      setResolvedAssessmentId(assessment.id)
+    }
+  }, [assessment?.id, resolvedAssessmentId])
+
+  useEffect(() => {
+    if (resolvedAssessmentId || planId === 'consultation') return
+    let mounted = true
+    const resolveAssessmentId = async () => {
+      try {
+        const leadRes = await leadApi.getMe()
+        const leadAssessmentId = leadRes?.data?.data?.assessmentId
+        if (leadAssessmentId && mounted) {
+          setResolvedAssessmentId(leadAssessmentId)
+          return
+        }
+      } catch (_) {}
+
+      try {
+        const reportsRes = await reportApi.getMyReports()
+        const reports = reportsRes?.data?.data || []
+        const latest = reports.find((r) => r.assessmentId)
+        if (latest?.assessmentId && mounted) {
+          setResolvedAssessmentId(latest.assessmentId)
+        }
+      } catch (_) {}
+    }
+
+    resolveAssessmentId()
+    return () => { mounted = false }
+  }, [planId, resolvedAssessmentId])
 
   useEffect(() => {
     let mounted = true
@@ -172,8 +213,8 @@ export default function Payment() {
     }
 
     if (planId !== 'consultation' && !assessmentId) {
-      toast.error('Assessment not found. Please complete the assessment first.')
-      navigate('/dashboard')
+      toast.error('Assessment not found. Please start or resume your assessment first.')
+      navigate('/assessment?plan=FREE&intent=paid')
       return
     }
     setLoading(true)
@@ -365,7 +406,7 @@ export default function Payment() {
 
           <button
             onClick={handlePayment}
-            disabled={loading || quoteLoading || isIncluded || isOwned}
+            disabled={loading || quoteLoading || isIncluded || isOwned || (planId !== 'consultation' && !assessmentId)}
             className="btn-primary w-full py-4 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {loading ? (
@@ -401,6 +442,7 @@ export default function Payment() {
                   if (isPlanIncluded(currentPlan, id) && id !== planId) return
                   const params = new URLSearchParams(searchParams)
                   params.set('plan', id)
+                  if (resolvedAssessmentId) params.set('assessmentId', resolvedAssessmentId)
                   navigate(`/payment?${params.toString()}`, { replace: true })
                 }}
                 className={`text-center rounded-xl border-2 p-3 transition text-xs font-semibold ${
