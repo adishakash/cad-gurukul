@@ -14,6 +14,12 @@
 const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
+const {
+  isSpacesEnabled,
+  uploadTrainingFileFromDisk,
+  toSpacesStoragePath,
+  deleteLocalFileQuietly,
+} = require('../utils/spaces');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -415,12 +421,28 @@ const createTrainingContent = async (req, res) => {
     let mimeType         = null;
 
     if (req.file) {
-      const path         = require('path');
       const relativePath = `/uploads/training/${req.file.filename}`;
       url                = relativePath;
       originalFilename   = req.file.originalname;
       storagePath        = req.file.path;
       mimeType           = req.file.mimetype || null;
+
+      if (isSpacesEnabled()) {
+        try {
+          const key = await uploadTrainingFileFromDisk({
+            localPath: req.file.path,
+            filename: req.file.filename,
+            contentType: mimeType,
+          });
+          storagePath = toSpacesStoragePath(key);
+          url = null;
+          await deleteLocalFileQuietly(req.file.path);
+        } catch (err) {
+          await deleteLocalFileQuietly(req.file.path);
+          logger.error('[Admin.CC] uploadTrainingFileToSpaces error', { error: err.message });
+          return errorResponse(res, 'Failed to upload training file', 500);
+        }
+      }
     }
 
     const item = await prisma.cclTrainingContent.create({

@@ -160,6 +160,18 @@ const config = {
     timezone: process.env.GOOGLE_CALENDAR_TIMEZONE || 'Asia/Kolkata',
   },
 
+  spaces: {
+    enabled: process.env.SPACES_ENABLED === 'true',
+    accessKeyId: (process.env.SPACES_ACCESS_KEY_ID || '').trim(),
+    secretAccessKey: (process.env.SPACES_SECRET_ACCESS_KEY || '').trim(),
+    bucket: (process.env.SPACES_BUCKET || '').trim(),
+    endpoint: (process.env.SPACES_ENDPOINT || '').trim(),
+    region: (process.env.SPACES_REGION || 'us-east-1').trim(),
+    prefix: (process.env.SPACES_PREFIX || 'training').trim(),
+    delivery: (process.env.SPACES_DELIVERY_MODE || 'stream').trim(),
+    signedUrlExpiresSeconds: parseInteger(process.env.SPACES_SIGNED_URL_EXPIRES, 300),
+  },
+
   log: {
     level: process.env.LOG_LEVEL || 'info',
     file: process.env.LOG_FILE || 'logs/app.log',

@@ -8,6 +8,15 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
 const { generateCcReferralCode } = require('../utils/referralCode');
+const {
+  isSpacesEnabled,
+  isSpacesStoragePath,
+  stripSpacesStoragePath,
+  getTrainingObjectStream,
+  getSignedTrainingUrl,
+  shouldRedirectSpacesDownloads,
+  getSafeDownloadName,
+} = require('../utils/spaces');
 
 const COMMISSION_RATE = 0.70; // 70% on net sale amount
 
@@ -1059,6 +1068,49 @@ const serveTrainingFile = async (req, res) => {
 
     if (isDownload && !item.isDownloadable) {
       return errorResponse(res, 'Download not permitted for this resource', 403, 'FORBIDDEN');
+    }
+
+    if (isSpacesStoragePath(item.storagePath)) {
+      if (!isSpacesEnabled()) {
+        return errorResponse(res, 'File storage is not available', 503, 'STORAGE_UNAVAILABLE');
+      }
+
+      const key = stripSpacesStoragePath(item.storagePath);
+      const contentType = item.mimeType || 'application/octet-stream';
+      const downloadName = getSafeDownloadName(item.title, key, item.originalFilename);
+
+      try {
+        if (shouldRedirectSpacesDownloads()) {
+          const contentDisposition = isDownload
+            ? `attachment; filename="${downloadName}"`
+            : 'inline';
+          const signedUrl = await getSignedTrainingUrl({
+            key,
+            contentType,
+            contentDisposition,
+          });
+          return res.redirect(signedUrl);
+        }
+
+        const { stream, contentLength, contentType: objectType } = await getTrainingObjectStream(key);
+        res.setHeader('Content-Type', contentType || objectType || 'application/octet-stream');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Disposition', isDownload ? `attachment; filename="${downloadName}"` : 'inline');
+        if (contentLength) res.setHeader('Content-Length', contentLength);
+
+        stream.on('error', (err) => {
+          logger.error('[CC] serveTrainingFile stream error', { error: err.message, id });
+        });
+
+        return stream.pipe(res);
+      } catch (err) {
+        const statusCode = err?.$metadata?.httpStatusCode;
+        if (err?.name === 'NoSuchKey' || statusCode === 404) {
+          return errorResponse(res, 'File not available', 404, 'NOT_FOUND');
+        }
+        logger.error('[CC] serveTrainingFile spaces error', { error: err.message, id });
+        return errorResponse(res, 'File not accessible', 500);
+      }
     }
 
     const path = require('path');

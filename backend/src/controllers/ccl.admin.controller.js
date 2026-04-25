@@ -16,6 +16,18 @@ const path   = require('path');
 const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
+const {
+  isSpacesEnabled,
+  isSpacesStoragePath,
+  stripSpacesStoragePath,
+  uploadTrainingFileFromDisk,
+  toSpacesStoragePath,
+  getTrainingObjectStream,
+  getSignedTrainingUrl,
+  shouldRedirectSpacesDownloads,
+  getSafeDownloadName,
+  deleteLocalFileQuietly,
+} = require('../utils/spaces');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -422,6 +434,23 @@ const createTrainingContent = async (req, res) => {
       originalFilename    = req.file.originalname;
       storagePath         = req.file.path;
       mimeType            = req.file.mimetype || null;
+
+      if (isSpacesEnabled()) {
+        try {
+          const key = await uploadTrainingFileFromDisk({
+            localPath: req.file.path,
+            filename: req.file.filename,
+            contentType: mimeType,
+          });
+          storagePath = toSpacesStoragePath(key);
+          url = null;
+          await deleteLocalFileQuietly(req.file.path);
+        } catch (err) {
+          await deleteLocalFileQuietly(req.file.path);
+          logger.error('[Admin.CCL] uploadTrainingFileToSpaces error', { error: err.message });
+          return errorResponse(res, 'Failed to upload training file', 500);
+        }
+      }
     }
 
     const item = await prisma.cclTrainingContent.create({
@@ -634,6 +663,49 @@ const serveAdminTrainingFile = async (req, res) => {
 
     if (!item)            return errorResponse(res, 'Resource not found', 404, 'NOT_FOUND');
     if (!item.storagePath) return errorResponse(res, 'No file available for this resource', 404, 'NOT_FOUND');
+
+    if (isSpacesStoragePath(item.storagePath)) {
+      if (!isSpacesEnabled()) {
+        return errorResponse(res, 'File storage is not available', 503, 'STORAGE_UNAVAILABLE');
+      }
+
+      const key = stripSpacesStoragePath(item.storagePath);
+      const contentType = item.mimeType || 'application/octet-stream';
+      const downloadName = getSafeDownloadName(item.title, key, item.originalFilename);
+
+      try {
+        if (shouldRedirectSpacesDownloads()) {
+          const contentDisposition = isDownload
+            ? `attachment; filename="${downloadName}"`
+            : 'inline';
+          const signedUrl = await getSignedTrainingUrl({
+            key,
+            contentType,
+            contentDisposition,
+          });
+          return res.redirect(signedUrl);
+        }
+
+        const { stream, contentLength, contentType: objectType } = await getTrainingObjectStream(key);
+        res.setHeader('Content-Type', contentType || objectType || 'application/octet-stream');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Disposition', isDownload ? `attachment; filename="${downloadName}"` : 'inline');
+        if (contentLength) res.setHeader('Content-Length', contentLength);
+
+        stream.on('error', (err) => {
+          logger.error('[Admin.CCL] serveAdminTrainingFile stream error', { error: err.message, id });
+        });
+
+        return stream.pipe(res);
+      } catch (err) {
+        const statusCode = err?.$metadata?.httpStatusCode;
+        if (err?.name === 'NoSuchKey' || statusCode === 404) {
+          return errorResponse(res, 'File not available', 404, 'NOT_FOUND');
+        }
+        logger.error('[Admin.CCL] serveAdminTrainingFile spaces error', { error: err.message, id });
+        return errorResponse(res, 'File not accessible', 500);
+      }
+    }
 
     // Path traversal guard
     const UPLOADS_BASE = path.resolve(__dirname, '../../uploads/training');
