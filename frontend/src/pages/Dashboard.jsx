@@ -816,6 +816,9 @@ export default function Dashboard() {
   const hasAnyPaidPlan    = userHasPaid   // simplest, most reliable
   const premiumUpgradePrice = formatRupees(getUpgradePrice('standard', 'premium'))
   const consultationUpgradePrice = formatRupees(getUpgradePrice(planType === 'standard' ? 'standard' : 'premium', 'consultation'))
+  const consultationUpgradeNote = hasPremium
+    ? 'Your Premium AI Report is already included. Pay only the difference for the live counselling session.'
+    : 'Your ₹499 report is already included. Pay only the difference for the live counselling session.'
 
   if (isLoading) {
     return (
@@ -918,13 +921,13 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Premium ₹1,999 → Upsell ₹9,999 session (only premium, NOT consultation who already bought it) */}
-        {hasPremium && !hasConsultation && (
+        {/* Premium/Standard → Upsell ₹9,999 session (hide if consultation already bought) */}
+        {(hasPremium || hasStandard) && !hasConsultation && (
           <div className="mb-6 rounded-2xl border-2 border-orange-400 bg-gradient-to-r from-orange-50 to-white p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="inline-block bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full mb-1">🔥 Limited — 3 slots/day</div>
               <div className="font-bold text-brand-dark">Upgrade to 1:1 Session with Adish Gupta — {consultationUpgradePrice}</div>
-              <p className="text-sm text-gray-600 mt-0.5">Your Premium AI Report is already included. Pay only the difference for the live counselling session.</p>
+              <p className="text-sm text-gray-600 mt-0.5">{consultationUpgradeNote}</p>
             </div>
             <button
               onClick={() => navigate(`/payment?plan=consultation${paidReport?.assessmentId ? `&assessmentId=${paidReport.assessmentId}` : ''}`)}

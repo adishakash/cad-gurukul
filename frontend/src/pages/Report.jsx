@@ -209,6 +209,9 @@ export default function Report() {
   const premiumBenefits = Array.isArray(premiumUpsellCopy?.benefits)
     ? premiumUpsellCopy.benefits
     : (report.premiumUpsell?.benefits || [])
+  const consultationNote = isPremium
+    ? t('report.consultation.note')
+    : t('report.premiumUpsell.note')
 
   // Header label
   const reportLabel = isPremium
@@ -432,8 +435,8 @@ export default function Report() {
           </div>
         )}
 
-        {/* Consultation CTA — shown for premium report holders who have NOT yet purchased consultation */}
-        {isPremium && !consultationPurchased && (
+        {/* Consultation CTA — shown for paid report holders who have NOT yet purchased consultation */}
+        {(isPremium || isStandard) && !consultationPurchased && report.consultationUpsell?.show && (
           <div className="card mb-6 border-2 border-orange-400 bg-gradient-to-br from-orange-50 to-white">
             <div className="flex items-start gap-3">
               <span className="text-3xl">📞</span>
@@ -442,12 +445,16 @@ export default function Report() {
                 <h3 className="font-extrabold text-brand-dark text-lg">{t('report.consultation.title')}</h3>
                 <p className="text-sm text-gray-600 mt-1">{t('report.consultation.body')}</p>
                 <button
-                  onClick={() => { trackEvent('premium_clicked', { source: 'premium_report_consultation' }); navigate(`/payment?plan=consultation${report.assessmentId ? `&assessmentId=${report.assessmentId}` : ''}`) }}
+                  onClick={() => {
+                    const source = isPremium ? 'premium_report_consultation' : 'standard_report_consultation'
+                    trackEvent('premium_clicked', { source })
+                    navigate(`/payment?plan=consultation${report.assessmentId ? `&assessmentId=${report.assessmentId}` : ''}`)
+                  }}
                   className="mt-4 bg-orange-500 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-orange-600 transition"
                 >
                   {t('report.consultation.cta', { price: consultationUpgradePrice })}
                 </button>
-                <p className="text-xs text-gray-400 mt-2">{t('report.consultation.note')}</p>
+                <p className="text-xs text-gray-400 mt-2">{consultationNote}</p>
               </div>
             </div>
           </div>
