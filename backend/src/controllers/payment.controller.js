@@ -22,6 +22,7 @@ const {
 
 // Back-compat: keep the old constant so webhook path doesn't break
 const PAID_REPORT_PRICE_RUPEES = PLAN_PRICES.standard;
+const PAID_QUESTION_LIMIT = 30;
 
 const getAmountRupeesForPlan = (planType = 'standard') => PLAN_PRICES[planType] || PAID_REPORT_PRICE_RUPEES;
 
@@ -323,45 +324,68 @@ const verifyPayment = async (req, res) => {
     let assessmentForGeneration = null;
     let profileForGeneration = null;
 
+    let assessmentSnapshot = null;
+    let hasRemainingQuestions = false;
+
     // CONSULTATION: no report generation — just flag the lead
     if (planType !== 'consultation' && assessmentId) {
-      await prisma.assessment.updateMany({
+      assessmentSnapshot = await prisma.assessment.findFirst({
         where: { id: assessmentId, userId: req.user.id },
-        data: { accessLevel: 'PAID', totalQuestions: 30 },
+        include: { answers: true },
       });
 
-      // Upgrade existing report record to PAID and queue regeneration
+      if (assessmentSnapshot) {
+        const answeredCount = assessmentSnapshot.answers.length;
+        hasRemainingQuestions = answeredCount < PAID_QUESTION_LIMIT;
+        const shouldResume = assessmentSnapshot.status === 'COMPLETED' && hasRemainingQuestions;
+
+        await prisma.assessment.update({
+          where: { id: assessmentId },
+          data: {
+            accessLevel: 'PAID',
+            totalQuestions: PAID_QUESTION_LIMIT,
+            ...(shouldResume ? { status: 'IN_PROGRESS', completedAt: null, currentStep: answeredCount } : {}),
+          },
+        });
+      }
+
       const existingReport = await prisma.careerReport.findFirst({
         where: { assessmentId },
       });
 
       if (existingReport) {
-        await prisma.careerReport.update({
-          where: { id: existingReport.id },
-          data: {
-            accessLevel: 'PAID',
-            status: 'GENERATING',
-            reportType: planType, // "standard" | "premium"
-          },
-        });
-
         await prisma.payment.update({
           where: { id: updatedPayment.id },
           data: { reportId: existingReport.id },
         });
 
-        reportIdForGeneration = existingReport.id;
+        const canGenerate = Boolean(assessmentSnapshot)
+          && !hasRemainingQuestions
+          && assessmentSnapshot.status === 'COMPLETED';
 
-        [assessmentForGeneration, profileForGeneration] = await Promise.all([
-          prisma.assessment.findUnique({
-            where: { id: assessmentId },
-            include: { questions: true, answers: true },
-          }),
-          prisma.studentProfile.findUnique({
-            where: { userId: req.user.id },
-            include: { parentDetail: true },
-          }),
-        ]);
+        if (canGenerate) {
+          await prisma.careerReport.update({
+            where: { id: existingReport.id },
+            data: {
+              accessLevel: 'PAID',
+              status: 'GENERATING',
+              reportType: planType, // "standard" | "premium"
+            },
+          });
+
+          reportIdForGeneration = existingReport.id;
+
+          [assessmentForGeneration, profileForGeneration] = await Promise.all([
+            prisma.assessment.findUnique({
+              where: { id: assessmentId },
+              include: { questions: true, answers: true },
+            }),
+            prisma.studentProfile.findUnique({
+              where: { userId: req.user.id },
+              include: { parentDetail: true },
+            }),
+          ]);
+        }
       }
     }
 
@@ -418,7 +442,18 @@ const verifyPayment = async (req, res) => {
       ? 'Booking confirmed! Your scheduling email is being prepared now.'
       : 'Payment successful! Your report is being generated.';
 
-    return successResponse(res, { paymentId: payment.id, status: 'CAPTURED', planType }, successMsg);
+    const resumeAssessment = planType !== 'consultation' && hasRemainingQuestions;
+    return successResponse(
+      res,
+      {
+        paymentId: payment.id,
+        status: 'CAPTURED',
+        planType,
+        assessmentId: assessmentId || null,
+        resumeAssessment,
+      },
+      successMsg
+    );
   } catch (err) {
     logger.error('[Payment] verifyPayment error', { error: err.message });
     throw err;
@@ -619,37 +654,60 @@ const handleWebhook = async (req, res) => {
       let reportIdForGeneration = null;
       let assessmentForGeneration = null;
       let profileForGeneration = null;
+      let assessmentSnapshot = null;
+      let hasRemainingQuestions = false;
 
       if (planType !== 'consultation' && assessmentId) {
-        await prisma.assessment.updateMany({
+        assessmentSnapshot = await prisma.assessment.findFirst({
           where: { id: assessmentId, userId: payment.userId },
-          data: { accessLevel: 'PAID', totalQuestions: 30 },
+          include: { answers: true },
         });
+
+        if (assessmentSnapshot) {
+          const answeredCount = assessmentSnapshot.answers.length;
+          hasRemainingQuestions = answeredCount < PAID_QUESTION_LIMIT;
+          const shouldResume = assessmentSnapshot.status === 'COMPLETED' && hasRemainingQuestions;
+
+          await prisma.assessment.update({
+            where: { id: assessmentId },
+            data: {
+              accessLevel: 'PAID',
+              totalQuestions: PAID_QUESTION_LIMIT,
+              ...(shouldResume ? { status: 'IN_PROGRESS', completedAt: null, currentStep: answeredCount } : {}),
+            },
+          });
+        }
 
         const existingReport = await prisma.careerReport.findFirst({ where: { assessmentId } });
         if (existingReport) {
-          await prisma.careerReport.update({
-            where: { id: existingReport.id },
-            data: { accessLevel: 'PAID', status: 'GENERATING', reportType: planType },
-          });
-
           await prisma.payment.update({
             where: { id: updatedPayment.id },
             data: { reportId: existingReport.id },
           });
 
-          reportIdForGeneration = existingReport.id;
+          const canGenerate = Boolean(assessmentSnapshot)
+            && !hasRemainingQuestions
+            && assessmentSnapshot.status === 'COMPLETED';
 
-          [assessmentForGeneration, profileForGeneration] = await Promise.all([
-            prisma.assessment.findUnique({
-              where: { id: assessmentId },
-              include: { questions: true, answers: true },
-            }),
-            prisma.studentProfile.findUnique({
-              where: { userId: payment.userId },
-              include: { parentDetail: true },
-            }),
-          ]);
+          if (canGenerate) {
+            await prisma.careerReport.update({
+              where: { id: existingReport.id },
+              data: { accessLevel: 'PAID', status: 'GENERATING', reportType: planType },
+            });
+
+            reportIdForGeneration = existingReport.id;
+
+            [assessmentForGeneration, profileForGeneration] = await Promise.all([
+              prisma.assessment.findUnique({
+                where: { id: assessmentId },
+                include: { questions: true, answers: true },
+              }),
+              prisma.studentProfile.findUnique({
+                where: { userId: payment.userId },
+                include: { parentDetail: true },
+              }),
+            ]);
+          }
         }
       }
 

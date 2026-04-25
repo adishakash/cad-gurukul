@@ -7,6 +7,7 @@ const { triggerAutomation } = require('../services/automation/automationService'
 const analytics = require('../services/analytics/analyticsService');
 const { safeLeadUpdateForUser, safeLeadUpdateByReportId } = require('../utils/leadStatusHelper');
 const { sendReportReadyEmail } = require('../services/email/emailService');
+const { normalizePlanType, PAID_STATUSES } = require('../utils/planPricing');
 
 // Max questions per plan
 const QUESTION_LIMITS = { FREE: 10, PAID: 30 };
@@ -21,6 +22,19 @@ const extractTopCareerNames = (topCareers) => {
       return null;
     })
     .filter(Boolean);
+};
+
+const resolvePaidReportType = async (userId) => {
+  const lead = await prisma.lead.findFirst({
+    where: { userId },
+    select: { planType: true, status: true },
+  });
+
+  if (!lead || !PAID_STATUSES.includes(lead.status)) return 'standard';
+
+  const normalizedPlan = normalizePlanType(lead.planType || 'standard');
+  if (normalizedPlan === 'free') return 'standard';
+  return normalizedPlan === 'consultation' ? 'standard' : normalizedPlan;
 };
 
 /**
@@ -256,15 +270,37 @@ const completeAssessment = async (req, res) => {
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
 
-    // Create pending report record
-    const report = await prisma.careerReport.create({
-      data: {
+    const reportType = assessment.accessLevel === 'PAID'
+      ? await resolvePaidReportType(req.user.id)
+      : null;
+
+    const existingReport = await prisma.careerReport.findFirst({
+      where: { assessmentId: assessment.id },
+    });
+
+    let report;
+    if (existingReport) {
+      const updateData = {
+        accessLevel: assessment.accessLevel,
+        status: 'GENERATING',
+      };
+      if (reportType) updateData.reportType = reportType;
+
+      report = await prisma.careerReport.update({
+        where: { id: existingReport.id },
+        data: updateData,
+      });
+    } else {
+      const createData = {
         assessmentId: assessment.id,
         userId: req.user.id,
         accessLevel: assessment.accessLevel,
         status: 'GENERATING',
-      },
-    });
+      };
+      if (reportType) createData.reportType = reportType;
+
+      report = await prisma.careerReport.create({ data: createData });
+    }
 
     // Trigger async report generation (fire-and-forget with error handling)
     const profile = await prisma.studentProfile.findUnique({
@@ -272,7 +308,7 @@ const completeAssessment = async (req, res) => {
       include: { parentDetail: true },
     });
 
-    generateReportAsync(assessment, profile, report.id);
+    generateReportAsync(assessment, profile, report.id, reportType || undefined);
 
     // Analytics + funnel hooks
     analytics.track('assessment_completed', req, {

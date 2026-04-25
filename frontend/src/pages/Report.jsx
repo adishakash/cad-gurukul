@@ -199,6 +199,7 @@ export default function Report() {
   // Backend now sends `userPlanType` and `consultationPurchased` on all report responses.
   const consultationPurchased = report.consultationPurchased || false
   const userPlanType          = report.userPlanType || (isPaid ? reportType : 'free')
+  const upgradeInProgress = !isPaid && ['standard', 'premium'].includes(userPlanType)
   // Only show upgrade CTAs when upgradeCTA is present (backend suppresses it for paid-plan users)
   const showUpgradeCTA = !isPaid && Boolean(report.upgradeCTA)
   const premiumUpgradePrice = report.premiumUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'premium'))
@@ -243,6 +244,21 @@ export default function Report() {
             </div>
           )}
         </div>
+
+        {upgradeInProgress && (
+          <div className="card mb-6 border-2 border-orange-200 bg-orange-50">
+            <h3 className="text-lg font-bold text-brand-dark">Your premium assessment is waiting</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Complete the remaining questions to unlock your paid report and PDF download.
+            </p>
+            <button
+              onClick={() => navigate('/assessment?plan=PAID&resume=1')}
+              className="btn-primary mt-4"
+            >
+              Continue Assessment
+            </button>
+          </div>
+        )}
 
         {/* Radar chart (paid only) */}
         {isPaid && <ScoreRadar evaluation={evaluation} />}

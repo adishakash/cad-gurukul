@@ -30,7 +30,7 @@ const PLAN_CONFIG = {
       'PDF download (lifetime access)',
     ],
     cta: '💎 Pay ₹499 & Unlock Full Report',
-    successMsg: 'Payment successful! Your report is being generated…',
+    successMsg: 'Payment successful! Continue your premium assessment to unlock your full report.',
   },
   premium: {
     label: 'Premium AI Report',
@@ -52,7 +52,7 @@ const PLAN_CONFIG = {
       'Future-scope analysis (2030–2040)',
     ],
     cta: '🚀 Pay ₹1,999 & Get Premium AI Report',
-    successMsg: 'Payment successful! Your Premium AI Report is being generated…',
+    successMsg: 'Payment successful! Continue your premium assessment to unlock your Premium AI report.',
   },
   consultation: {
     label: '1:1 Career Blueprint Session',
@@ -179,15 +179,22 @@ export default function Payment() {
         theme: { color: '#e53e3e' },
         handler: async (response) => {
           try {
-            await paymentApi.verify({
+            const verifyRes = await paymentApi.verify({
               razorpayOrderId:   response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             })
+            const resumeAssessment = Boolean(verifyRes?.data?.data?.resumeAssessment)
             trackEvent('payment_success', { plan: planId, amount: quote?.effectivePrice || plan.priceNum })
             leadApi.update({ planType: planId }).catch(() => {})
             toast.success(plan.successMsg)
-            navigate('/dashboard')
+            if (planId === 'consultation') {
+              navigate('/dashboard')
+            } else if (resumeAssessment) {
+              navigate('/assessment?plan=PAID&resume=1')
+            } else {
+              navigate('/dashboard')
+            }
           } catch {
             toast.error('Payment verification failed. Contact support if amount was deducted.')
           }

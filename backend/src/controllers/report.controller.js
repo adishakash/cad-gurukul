@@ -13,6 +13,12 @@ const formatRoadmapLabel = (key) => key
 
 const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed'];
 
+const isPaidAssessmentComplete = (assessment) => (
+  assessment?.accessLevel === 'PAID'
+  && assessment?.status === 'COMPLETED'
+  && (assessment?.totalQuestions || 0) >= 30
+);
+
 const interpolateTemplate = (template, values = {}) =>
   String(template || '').replace(/{{\s*(\w+)\s*}}/g, (_, key) => (values[key] !== undefined ? values[key] : ''));
 
@@ -255,20 +261,36 @@ const getMyReports = async (req, res) => {
     try {
       const entitlement = await resolveLeadEntitlement(req.user.id);
       if (entitlement.userHasPaid) {
-        const healedReportType = entitlement.planType === 'consultation'
-          ? 'standard'
-          : (entitlement.planType || 'standard');
-
-        await prisma.careerReport.updateMany({
-          where: { userId: req.user.id, accessLevel: 'FREE', status: 'COMPLETED' },
-          data: { accessLevel: 'PAID', reportType: healedReportType },
-        }).catch(() => {});
-
-        outputReports = reports.map((report) => (
+        const candidates = reports.filter((report) => (
           report.accessLevel === 'FREE' && report.status === 'COMPLETED'
-            ? { ...report, accessLevel: 'PAID', reportType: healedReportType }
-            : report
         ));
+
+        if (candidates.length > 0) {
+          const assessmentIds = candidates.map((report) => report.assessmentId);
+          const assessments = await prisma.assessment.findMany({
+            where: { id: { in: assessmentIds } },
+            select: { id: true, accessLevel: true, status: true, totalQuestions: true },
+          });
+          const assessmentMap = new Map(assessments.map((a) => [a.id, a]));
+
+          const healableIds = assessmentIds.filter((id) => isPaidAssessmentComplete(assessmentMap.get(id)));
+          if (healableIds.length > 0) {
+            const healedReportType = entitlement.planType === 'consultation'
+              ? 'standard'
+              : (entitlement.planType || 'standard');
+
+            await prisma.careerReport.updateMany({
+              where: { assessmentId: { in: healableIds } },
+              data: { accessLevel: 'PAID', reportType: healedReportType },
+            }).catch(() => {});
+
+            outputReports = reports.map((report) => (
+              healableIds.includes(report.assessmentId)
+                ? { ...report, accessLevel: 'PAID', reportType: healedReportType }
+                : report
+            ));
+          }
+        }
       }
     } catch (_) { /* non-fatal */ }
 
@@ -333,6 +355,7 @@ const getReport = async (req, res) => {
       let userPlanType = 'free';
       let consultationPurchased = false;
       let hasPaidPlan = false;
+      let paidAssessmentComplete = false;
       try {
         const leadForPlan = await prisma.lead.findFirst({
           where: { userId: req.user.id },
@@ -343,12 +366,18 @@ const getReport = async (req, res) => {
         userPlanType = userHasPaid ? (leadForPlan?.planType || 'standard') : 'free';
         consultationPurchased = userPlanType === 'consultation';
         hasPaidPlan = userHasPaid;
+
+        const assessmentForReport = await prisma.assessment.findUnique({
+          where: { id: report.assessmentId },
+          select: { accessLevel: true, status: true, totalQuestions: true },
+        });
+        paidAssessmentComplete = isPaidAssessmentComplete(assessmentForReport);
       } catch (_) { /* non-fatal */ }
 
       // ── Heal legacy records: paid user whose CareerReport.accessLevel was never upgraded ──
       // For these users the DB still says FREE but they've paid. Upgrade the record in-place
       // so the correct PAID view (with download button) is served from now on.
-      if (hasPaidPlan && report.status === 'COMPLETED') {
+      if (hasPaidPlan && paidAssessmentComplete && report.status === 'COMPLETED') {
         const healedReportType = userPlanType === 'consultation' ? 'standard' : (userPlanType || 'standard');
         await prisma.careerReport.update({
           where: { id: report.id },
@@ -504,6 +533,15 @@ const downloadReportPdf = async (req, res) => {
           select: { status: true },
         });
         if (lead && PAID_STATUSES.includes(lead.status)) {
+          const assessmentForReport = await prisma.assessment.findUnique({
+            where: { id: candidateReport.assessmentId },
+            select: { accessLevel: true, status: true, totalQuestions: true },
+          });
+
+          if (!isPaidAssessmentComplete(assessmentForReport)) {
+            return errorResponse(res, 'Complete your premium assessment to unlock the PDF.', 403, 'ASSESSMENT_INCOMPLETE');
+          }
+
           // Heal the DB record so future queries work correctly
           await prisma.careerReport.update({
             where: { id: candidateReport.id },
@@ -566,7 +604,7 @@ const getReportStatus = async (req, res) => {
   try {
     let report = await prisma.careerReport.findFirst({
       where: { id: req.params.id, userId: req.user.id },
-      select: { id: true, status: true, accessLevel: true, generatedAt: true },
+      select: { id: true, assessmentId: true, status: true, accessLevel: true, generatedAt: true },
     });
 
     if (!report) return errorResponse(res, 'Report not found', 404, 'NOT_FOUND');
@@ -575,6 +613,15 @@ const getReportStatus = async (req, res) => {
       try {
         const entitlement = await resolveLeadEntitlement(req.user.id);
         if (entitlement.userHasPaid) {
+          const assessmentForReport = await prisma.assessment.findUnique({
+            where: { id: report.assessmentId },
+            select: { accessLevel: true, status: true, totalQuestions: true },
+          });
+
+          if (!isPaidAssessmentComplete(assessmentForReport)) {
+            return successResponse(res, report);
+          }
+
           const healedReportType = entitlement.planType === 'consultation'
             ? 'standard'
             : (entitlement.planType || 'standard');
