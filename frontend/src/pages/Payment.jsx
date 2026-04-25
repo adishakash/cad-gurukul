@@ -226,7 +226,7 @@ export default function Payment() {
               razorpaySignature: response.razorpay_signature,
             })
             const resumeAssessment = Boolean(verifyRes?.data?.data?.resumeAssessment)
-            trackEvent('payment_success', { plan: planId, amount: quote?.discountedTotalRupees ?? quote?.effectivePrice || plan.priceNum })
+            trackEvent('payment_success', { plan: planId, amount: quote?.discountedTotalRupees ?? quote?.effectivePrice ?? plan.priceNum })
             leadApi.update({ planType: planId }).catch(() => {})
             toast.success(plan.successMsg)
             if (planId === 'consultation') {
