@@ -30,6 +30,15 @@ const LEAD_STATUS_ORDER = [
   'counselling_interested', 'closed',
 ]
 
+const PAID_STATUSES = [
+  'payment_pending',
+  'paid',
+  'premium_report_generating',
+  'premium_report_ready',
+  'counselling_interested',
+  'closed',
+]
+
 const CLASS_STANDARD_MAP = {
   CLASS_8: '8',
   CLASS_9: '9',
@@ -259,6 +268,17 @@ export default function Onboarding() {
       if (currentIdx <= targetIdx) {
         leadApi.update({ status: 'onboarding_started' }).catch(() => {})
       }
+      const planIntent = getStoredPlan()
+      const isPaidIntent = planIntent === 'paid'
+      const alreadyPaid = PAID_STATUSES.includes(leadStatus)
+
+      if (isPaidIntent && !alreadyPaid) {
+        leadApi.update({ status: 'plan_selected', selectedPlan: 'paid' }).catch(() => {})
+        toast.success('Profile saved! Continue to payment.')
+        navigate('/payment?plan=standard&intent=paid')
+        return
+      }
+
       toast.success('Profile saved! Now start your assessment.')
       navigate('/dashboard')
     } catch (err) {

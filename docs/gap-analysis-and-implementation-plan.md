@@ -778,12 +778,14 @@ Discount is stored on the coupon at creation time to freeze it — subsequent po
 
 ### 7.3 Attribution Tracking
 
-**CC Attribution Flow:**
-1. Student clicks referral URL with `ref=CODE`
-2. Frontend carries ref into checkout
-3. Student pays → `POST /api/v1/payments/verify`
-4. Backend: verify Razorpay signature → `createCcSaleAndCommission({ paymentId, ccUserId, ... })`
-5. `CcAttributedSale` created, `CcCommission` created
+**CC Attribution Flow (counsellor referral link):**
+1. Student opens counsellor referral link containing `ref=CODE`
+2. Student clicks `Get Started Free / Start Free` or `Premium ₹499`
+3. Student completes registration + email verification
+4. On registration completion, persist `ref` on lead/user so the student is attributed to the counsellor account
+5. If `Premium ₹499`, student pays → `POST /api/v1/payments/verify`
+6. Backend: verify Razorpay signature → `createCcSaleAndCommission({ paymentId, ccUserId, ... })`
+7. `CcAttributedSale` created, `CcCommission` created
 
 **CCL Attribution Flow:**
 1. Candidate clicks joining URL → `/join?ref=CODE`
@@ -793,8 +795,11 @@ Discount is stored on the coupon at creation time to freeze it — subsequent po
 5. `CclJoiningLink.isUsed = true`, `CclAttributedSale` + `CclCommission` created
 
 **Direct Student Flow (no partner):**
-- Normal payment flow: no referral code, no attribution
-- No commission created
+1. Student opens cadgurukul.com (no `ref` code)
+2. Student clicks `Get Started Free / Start Free` → registration + email verification → registration complete → dashboard appears
+3. Student clicks `Premium ₹499` → registration + email verification → registration complete → pays ₹499 → dashboard appears
+4. Premium path shows no free test option; only the ₹499 test option
+5. No commission created
 
 ### 7.4 Payout Eligibility
 

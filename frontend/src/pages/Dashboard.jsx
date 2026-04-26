@@ -883,6 +883,10 @@ export default function Dashboard() {
   const consultationUpgradeNote = hasPremium
     ? 'Your Premium AI Report is already included. Pay only the difference for the live counselling session.'
     : 'Your ₹499 report is already included. Pay only the difference for the live counselling session.'
+  const storedPlanIntent = (localStorage.getItem('cg_selected_plan') || '').toLowerCase()
+  const selectedPlanIntent = (lead?.selectedPlan || storedPlanIntent || 'free').toLowerCase()
+  const isPaidIntent = selectedPlanIntent === 'paid' || userHasPaid
+  const standardPaymentPath = `/payment?plan=standard${upgradeAssessmentId ? `&assessmentId=${upgradeAssessmentId}` : ''}${isPaidIntent ? '&intent=paid' : ''}`
 
   if (isLoading) {
     return (
@@ -1022,15 +1026,31 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <button
-            onClick={() => navigate('/assessment?plan=FREE')}
-            className="card hover:shadow-lg transition-shadow text-left border-l-4 border-brand-red cursor-pointer"
-          >
-            <div className="text-3xl mb-2">📝</div>
-            <div className="font-bold text-brand-dark">Free Assessment</div>
-            <div className="text-sm text-gray-500 mt-1">10 AI questions · Basic report</div>
-            <div className="mt-3 text-brand-red text-sm font-semibold">Start Now →</div>
-          </button>
+          {isPaidIntent ? (
+            <button
+              onClick={() => navigate(paymentConfirmed ? '/assessment?plan=PAID&resume=1' : standardPaymentPath)}
+              className="card hover:shadow-lg transition-shadow text-left border-l-4 border-brand-red cursor-pointer"
+            >
+              <div className="text-3xl mb-2">💎</div>
+              <div className="font-bold text-brand-dark">₹499 Assessment</div>
+              <div className="text-sm text-gray-500 mt-1">
+                {paymentConfirmed ? '30 AI questions · Full report' : 'Pay ₹499 to unlock the full test'}
+              </div>
+              <div className="mt-3 text-brand-red text-sm font-semibold">
+                {paymentConfirmed ? 'Continue →' : 'Pay ₹499 →'}
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/assessment?plan=FREE')}
+              className="card hover:shadow-lg transition-shadow text-left border-l-4 border-brand-red cursor-pointer"
+            >
+              <div className="text-3xl mb-2">📝</div>
+              <div className="font-bold text-brand-dark">Free Assessment</div>
+              <div className="text-sm text-gray-500 mt-1">10 AI questions · Basic report</div>
+              <div className="mt-3 text-brand-red text-sm font-semibold">Start Now →</div>
+            </button>
+          )}
 
           {/* Context-aware card 2: depends on what the user has purchased */}
           {hasConsultation ? (
@@ -1155,12 +1175,21 @@ export default function Dashboard() {
                 <div className="text-center py-10">
                   <div className="text-5xl mb-4">📝</div>
                   <p className="text-gray-500 text-sm">No reports yet. Start an assessment to get your first career report.</p>
-                  <button
-                    onClick={() => navigate('/assessment?plan=FREE')}
-                    className="btn-primary mt-4 text-sm"
-                  >
-                    Start Free Assessment
-                  </button>
+                  {isPaidIntent ? (
+                    <button
+                      onClick={() => navigate(paymentConfirmed ? '/assessment?plan=PAID&resume=1' : standardPaymentPath)}
+                      className="btn-primary mt-4 text-sm"
+                    >
+                      {paymentConfirmed ? 'Start Paid Assessment' : 'Pay ₹499 & Start Assessment'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/assessment?plan=FREE')}
+                      className="btn-primary mt-4 text-sm"
+                    >
+                      Start Free Assessment
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">

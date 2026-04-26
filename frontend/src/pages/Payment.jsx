@@ -100,6 +100,9 @@ export default function Payment() {
   const assessmentIdParam = searchParams.get('assessmentId') || ''
   const [resolvedAssessmentId, setResolvedAssessmentId] = useState(assessmentIdParam || assessment?.id || '')
   const assessmentId = resolvedAssessmentId || ''
+  const intentParam = (searchParams.get('intent') || '').toLowerCase()
+  const storedPlanIntent = (localStorage.getItem('cg_selected_plan') || '').toLowerCase()
+  const hasPaidIntent = intentParam === 'paid' || storedPlanIntent === 'paid'
 
   const [loading, setLoading] = useState(false)
   const [quote, setQuote] = useState(null)
@@ -259,9 +262,10 @@ export default function Payment() {
       if (data.data?.free) {
         trackEvent('payment_success', { plan: planId, amount: 0, coupon: couponCode || null })
         toast.success(plan.successMsg)
+        const skipAutoResume = hasPaidIntent && planId === 'standard'
         if (planId === 'consultation') {
           navigate('/dashboard')
-        } else if (data.data?.resumeAssessment) {
+        } else if (!skipAutoResume && data.data?.resumeAssessment) {
           navigate('/assessment?plan=PAID&resume=1')
         } else {
           navigate('/dashboard')
@@ -293,9 +297,10 @@ export default function Payment() {
             trackEvent('payment_success', { plan: planId, amount: quote?.discountedTotalRupees ?? quote?.effectivePrice ?? plan.priceNum })
             leadApi.update({ planType: planId }).catch(() => {})
             toast.success(plan.successMsg)
+            const skipAutoResume = hasPaidIntent && planId === 'standard'
             if (planId === 'consultation') {
               navigate('/dashboard')
-            } else if (resumeAssessment) {
+            } else if (!skipAutoResume && resumeAssessment) {
               navigate('/assessment?plan=PAID&resume=1')
             } else {
               navigate('/dashboard')
@@ -429,7 +434,7 @@ export default function Payment() {
 
           <button
             onClick={handlePayment}
-            disabled={loading || quoteLoading || isIncluded || isOwned || (planId !== 'consultation' && !assessmentId)}
+            disabled={loading || quoteLoading || isIncluded || isOwned}
             className="btn-primary w-full py-4 text-base font-bold flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {loading ? (

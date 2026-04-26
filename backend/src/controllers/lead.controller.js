@@ -25,6 +25,22 @@ const { LEAD_STATUS_ORDER, PLAN_TYPE_ORDER } = require('../utils/leadStatusHelpe
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 
+const resolveCounsellorByReferral = async (referralCode) => {
+  const normalized = referralCode ? String(referralCode).trim().toUpperCase() : '';
+  if (!normalized) return null;
+  const counsellor = await prisma.user.findFirst({
+    where: {
+      ccReferralCode: normalized,
+      role: 'CAREER_COUNSELLOR',
+      isActive: true,
+      deletedAt: null,
+      suspendedAt: null,
+    },
+    select: { id: true },
+  });
+  return counsellor?.id || null;
+};
+
 /**
  * POST /api/v1/leads
  * Public endpoint — creates or upserts a lead.
@@ -52,6 +68,14 @@ const createOrUpdateLead = async (req, res) => {
     let isNew = false;
 
     if (existing) {
+      const effectiveReferral = referralCode || existing.referralCode || null;
+      const referralAssigneeId = (!existing.assignedStaffId && effectiveReferral)
+        ? await resolveCounsellorByReferral(effectiveReferral)
+        : null;
+      const assignmentPayload = (!existing.assignedStaffId && referralAssigneeId)
+        ? { assignedStaffId: referralAssigneeId, assignedAt: new Date() }
+        : {};
+
       // Update attributable fields (don't downgrade plan)
       // Use { id } not { email } — existing may have been found by phone with a different email
       lead = await prisma.lead.update({
@@ -74,9 +98,16 @@ const createOrUpdateLead = async (req, res) => {
           referralCode: existing.referralCode || referralCode || null,
           // Link to user if now authenticated
           userId: req.user?.id || existing.userId || null,
+          ...assignmentPayload,
         },
       });
     } else {
+      const referralAssigneeId = referralCode
+        ? await resolveCounsellorByReferral(referralCode)
+        : null;
+      const assignmentPayload = referralAssigneeId
+        ? { assignedStaffId: referralAssigneeId, assignedAt: new Date() }
+        : {};
       lead = await prisma.lead.create({
         data: {
           id:    crypto.randomUUID(),
@@ -85,6 +116,7 @@ const createOrUpdateLead = async (req, res) => {
           referralCode: referralCode || null,
           leadSource: leadSourceOverride || rest.leadSource,
           userId: req.user?.id || null,
+          ...assignmentPayload,
         },
       });
       isNew = true;
