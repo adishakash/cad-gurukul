@@ -121,6 +121,37 @@ export default function Report() {
     }
   }, [report])
 
+  const isPaid       = report?.accessLevel === 'PAID'
+  const reportType   = report?.reportType || (isPaid ? 'standard' : 'free')
+  const isPremium    = reportType === 'premium'
+  const isStandard   = isPaid && !isPremium
+
+  // ── Plan-type awareness from backend ────────────────────────────────────────
+  // Backend now sends `userPlanType` and `consultationPurchased` on all report responses.
+  const consultationPurchased = report?.consultationPurchased || false
+  const userPlanType          = report?.userPlanType || (isPaid ? reportType : 'free')
+  const upgradeInProgress = !isPaid && ['standard', 'premium'].includes(userPlanType)
+  // Only show upgrade CTAs when upgradeCTA is present (backend suppresses it for paid-plan users)
+  const showUpgradeCTA = !isPaid && Boolean(report?.upgradeCTA)
+  const premiumUpgradePrice = report?.premiumUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'premium'))
+  const consultationUpgradePrice = report?.consultationUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'consultation'))
+  const premiumUpsellCopy = t('report.premiumUpsell', { returnObjects: true })
+  const premiumHeadline = premiumUpsellCopy?.headline || report?.premiumUpsell?.headline || ''
+  const premiumBenefits = Array.isArray(premiumUpsellCopy?.benefits)
+    ? premiumUpsellCopy.benefits
+    : (report?.premiumUpsell?.benefits || [])
+  const consultationNote = isPremium
+    ? t('report.consultation.note')
+    : t('report.premiumUpsell.note')
+
+  useEffect(() => {
+    if (!upgradeInProgress) return
+    const timeout = setTimeout(() => {
+      navigate('/assessment?plan=PAID&resume=1')
+    }, 1200)
+    return () => clearTimeout(timeout)
+  }, [upgradeInProgress, navigate])
+
   const handleDownload = async () => {
     setDownloading(true)
     try {
@@ -183,43 +214,12 @@ export default function Report() {
   }
 
   if (!report) return <div className="text-center py-20 text-gray-400">{t('report.errors.notFound')}</div>
-
-  const isPaid       = report.accessLevel === 'PAID'
-  const reportType   = report.reportType || (isPaid ? 'standard' : 'free')
-  const isPremium    = reportType === 'premium'
-  const isStandard   = isPaid && !isPremium
   const evaluation   = report.evaluation || {}
   const careers      = report.topCareers || report.careers || []
   const roadmaps     = report.roadmaps || report.yearWiseRoadmap || []
   const parentGuidance = report.parentGuidance
   const streamRec    = report.streamRecommendation || report.recommendedStream || evaluation.recommendedStream
   const subjectStrategy = report.subjectStrategy
-
-  // ── Plan-type awareness from backend ────────────────────────────────────────
-  // Backend now sends `userPlanType` and `consultationPurchased` on all report responses.
-  const consultationPurchased = report.consultationPurchased || false
-  const userPlanType          = report.userPlanType || (isPaid ? reportType : 'free')
-  const upgradeInProgress = !isPaid && ['standard', 'premium'].includes(userPlanType)
-  // Only show upgrade CTAs when upgradeCTA is present (backend suppresses it for paid-plan users)
-  const showUpgradeCTA = !isPaid && Boolean(report.upgradeCTA)
-  const premiumUpgradePrice = report.premiumUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'premium'))
-  const consultationUpgradePrice = report.consultationUpsell?.price || formatRupees(getUpgradePrice(userPlanType, 'consultation'))
-  const premiumUpsellCopy = t('report.premiumUpsell', { returnObjects: true })
-  const premiumHeadline = premiumUpsellCopy?.headline || report.premiumUpsell?.headline || ''
-  const premiumBenefits = Array.isArray(premiumUpsellCopy?.benefits)
-    ? premiumUpsellCopy.benefits
-    : (report.premiumUpsell?.benefits || [])
-  const consultationNote = isPremium
-    ? t('report.consultation.note')
-    : t('report.premiumUpsell.note')
-
-  useEffect(() => {
-    if (!upgradeInProgress) return
-    const timeout = setTimeout(() => {
-      navigate('/assessment?plan=PAID&resume=1')
-    }, 1200)
-    return () => clearTimeout(timeout)
-  }, [upgradeInProgress, navigate])
 
   // Header label
   const reportLabel = isPremium
