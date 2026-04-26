@@ -154,7 +154,7 @@ export default function Assessment() {
   const normalizedAccessLevel = String(assessment?.accessLevel || plan || '').toUpperCase()
   const isPaidAssessment = normalizedAccessLevel === 'PAID'
   const redirectingLabel = isPaidAssessment
-    ? t('premiumUpsell.redirecting')
+    ? t('assessment.status.redirectingDashboard')
     : t('assessment.status.redirecting')
 
   // ── Guest mode state ──────────────────────────────────────────────────────

@@ -625,6 +625,7 @@
       "completeTitle": "आकलन पूरा!",
       "completeBody": "आपकी AI करियर रिपोर्ट तैयार की जा रही है...",
       "redirecting": "आपकी रिपोर्ट पर भेज रहे हैं...",
+      "redirectingDashboard": "डैशबोर्ड पर भेज रहे हैं...",
       "completeToast": "आकलन पूरा! आपकी रिपोर्ट तैयार हो रही है..."
     },
     "actions": {

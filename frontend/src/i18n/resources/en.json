@@ -625,6 +625,7 @@
       "completeTitle": "Assessment Complete!",
       "completeBody": "Your AI career report is being generated...",
       "redirecting": "Redirecting to your report...",
+      "redirectingDashboard": "Redirecting to your dashboard...",
       "completeToast": "Assessment complete! Your report is being generated..."
     },
     "actions": {
