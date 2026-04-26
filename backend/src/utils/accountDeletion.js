@@ -4,7 +4,7 @@ const prisma = require('../config/database');
 const resolveLeadIds = async (client, userId, email) => {
   const clauses = [];
   if (userId) clauses.push({ userId });
-  if (email) clauses.push({ email });
+  if (email) clauses.push({ email: { equals: email, mode: 'insensitive' } });
   if (!clauses.length) return [];
 
   const leads = await client.lead.findMany({

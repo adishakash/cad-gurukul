@@ -53,8 +53,22 @@ const createOrUpdateLead = async (req, res) => {
     const referralCode = rest.referralCode ? String(rest.referralCode).trim().toUpperCase() : null;
     const leadSourceOverride = referralCode ? 'referral' : rest.leadSource;
 
+    const dropIfStaleLead = async (lead) => {
+      if (!lead?.userId) return lead;
+      const owner = await prisma.user.findUnique({
+        where: { id: lead.userId },
+        select: { deletedAt: true },
+      });
+      if (!owner || owner.deletedAt) {
+        await prisma.lead.delete({ where: { id: lead.id } });
+        return null;
+      }
+      return lead;
+    };
+
     // Deduplicate by email first, then by phone — upsert
     let existing = await prisma.lead.findUnique({ where: { email } });
+    existing = await dropIfStaleLead(existing);
 
     // If no email match, check phone (handles mid-assessment temp email flow)
     if (!existing && rest.mobileNumber) {
@@ -62,6 +76,7 @@ const createOrUpdateLead = async (req, res) => {
         where: { mobileNumber: rest.mobileNumber },
         orderBy: { createdAt: 'desc' },
       });
+      existing = await dropIfStaleLead(existing);
     }
 
     let lead;
