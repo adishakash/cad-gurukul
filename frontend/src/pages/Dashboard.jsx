@@ -1082,9 +1082,7 @@ export default function Dashboard() {
           ) : (
             // Free user — show upgrade prompt
             <button
-              onClick={() => (upgradeAssessmentId
-                ? navigate(`/payment?plan=standard&assessmentId=${upgradeAssessmentId}`)
-                : navigate('/assessment?plan=FREE&intent=paid'))}
+              onClick={() => navigate(`/payment?plan=standard${upgradeAssessmentId ? `&assessmentId=${upgradeAssessmentId}` : ''}`)}
               className="card hover:shadow-lg transition-shadow text-left border-l-4 border-green-500 cursor-pointer"
             >
               <div className="text-3xl mb-2">💎</div>

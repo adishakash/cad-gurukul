@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { selectAssessment } from '../store/slices/assessmentSlice'
 import { selectUser } from '../store/slices/authSlice'
-import { leadApi, paymentApi, reportApi, trackEvent } from '../services/api'
+import api, { leadApi, paymentApi, reportApi, trackEvent } from '../services/api'
 import toast from 'react-hot-toast'
 import { isPlanIncluded, formatRupees } from '../utils/planPricing'
 import { splitGstFromInclusive } from '../utils/gst'
@@ -206,17 +206,40 @@ export default function Payment() {
     }
   }
 
+  const ensureAssessmentId = async () => {
+    if (planId === 'consultation' || assessmentId) return assessmentId
+
+    try {
+      const { data } = await api.post('/assessments/start', { accessLevel: 'FREE' })
+      const newAssessmentId = data?.data?.id
+      if (newAssessmentId) {
+        setResolvedAssessmentId(newAssessmentId)
+        return newAssessmentId
+      }
+    } catch (err) {
+      const errCode = err?.response?.data?.error?.code
+      const errMessage = err?.response?.data?.error?.message || 'Unable to start your assessment. Please try again.'
+      toast.error(errMessage)
+      if (errCode === 'INCOMPLETE_PROFILE') {
+        navigate('/onboarding')
+      }
+    }
+
+    return ''
+  }
+
   const handlePayment = async () => {
     if (quote?.alreadyIncluded || quote?.alreadyOwned || quote?.canPurchase === false) {
       toast.error(quote?.alreadyOwned ? `You already have the ${plan.label}.` : `${plan.label} is already included in your current plan.`)
       return
     }
 
-    if (planId !== 'consultation' && !assessmentId) {
-      toast.error('Assessment not found. Please start or resume your assessment first.')
-      navigate('/assessment?plan=FREE&intent=paid')
-      return
+    let activeAssessmentId = assessmentId
+    if (planId !== 'consultation' && !activeAssessmentId) {
+      activeAssessmentId = await ensureAssessmentId()
+      if (!activeAssessmentId) return
     }
+
     setLoading(true)
     try {
       // Fire-and-forget: only advance lead status to payment_pending — the backend
@@ -231,7 +254,7 @@ export default function Payment() {
         return
       }
 
-      const { data } = await paymentApi.createOrder(assessmentId, planId, { couponCode })
+      const { data } = await paymentApi.createOrder(activeAssessmentId, planId, { couponCode })
 
       if (data.data?.free) {
         trackEvent('payment_success', { plan: planId, amount: 0, coupon: couponCode || null })
