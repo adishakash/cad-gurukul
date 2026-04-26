@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "password_reset_tokens" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -20,4 +20,3 @@ CREATE INDEX "password_reset_tokens_expiresAt_idx" ON "password_reset_tokens"("e
 
 -- AddForeignKey
 ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
