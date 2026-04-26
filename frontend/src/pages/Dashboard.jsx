@@ -848,6 +848,7 @@ export default function Dashboard() {
     return getPlanRank(paymentPlan) > getPlanRank(highest) ? paymentPlan : highest
   }, 'free')
   const hasCapturedPaidPlan = highestCapturedPlan !== 'free'
+  const hasPaymentHistory = paymentHistory.length > 0
 
   // ── Payment detection ─────────────────────────────────────────────────────
   // IMPORTANT: Lead.planType has a DB-level DEFAULT 'standard', meaning every lead
@@ -860,7 +861,8 @@ export default function Dashboard() {
   // the correct timeline still renders for users who genuinely paid.
   const PAID_STATUSES = ['payment_pending', 'paid', 'premium_report_generating', 'premium_report_ready', 'counselling_interested', 'closed']
   const leadStatus  = lead?.status || 'new_lead'
-  const userHasPaid = PAID_STATUSES.includes(leadStatus)
+  const leadPaidSignal = PAID_STATUSES.includes(leadStatus) && hasPaymentHistory
+  const userHasPaid = leadPaidSignal
     || Boolean(paidReport)
     || Boolean(consultationBooking)
     || hasCapturedPaidPlan
@@ -875,7 +877,7 @@ export default function Dashboard() {
   const hasPremium        = planType === 'premium' || hasConsultation
   const hasStandard       = planType === 'standard'
   const hasAnyPaidPlan    = userHasPaid   // simplest, most reliable
-  const paymentConfirmed  = hasCapturedPaidPlan || PAID_STATUSES.includes(leadStatus)
+  const paymentConfirmed  = hasCapturedPaidPlan || leadPaidSignal
   const needsAssessmentCompletion = !hasConsultation
     && paymentConfirmed
     && !paidReport

@@ -332,7 +332,7 @@ const resolveCurrentPlanForUser = async (userId) => {
   const [lead, consultationBooking, capturedPayments] = await Promise.all([
     prisma.lead.findFirst({
       where: { userId },
-      select: { planType: true, status: true },
+      select: { planType: true, status: true, paymentId: true, reportId: true },
     }),
     prisma.consultationBooking.findFirst({
       where: { userId },
@@ -351,7 +351,8 @@ const resolveCurrentPlanForUser = async (userId) => {
   if (highestCapturedPlan !== 'free') return highestCapturedPlan;
 
   const leadPlanType = normalizePlanType(lead?.planType || 'free');
-  if (lead && PAID_STATUSES.includes(lead.status) && leadPlanType !== 'free') {
+  const leadHasPaymentEvidence = Boolean(lead?.paymentId || lead?.reportId);
+  if (lead && PAID_STATUSES.includes(lead.status) && leadPlanType !== 'free' && leadHasPaymentEvidence) {
     return leadPlanType;
   }
 
