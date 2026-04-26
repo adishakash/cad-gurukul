@@ -151,6 +151,11 @@ export default function Assessment() {
   const reportId = useSelector(selectReportId)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [answeredCount, setAnsweredCount] = useState(0)
+  const normalizedAccessLevel = String(assessment?.accessLevel || plan || '').toUpperCase()
+  const isPaidAssessment = normalizedAccessLevel === 'PAID'
+  const redirectingLabel = isPaidAssessment
+    ? t('premiumUpsell.redirecting')
+    : t('assessment.status.redirecting')
 
   // ── Guest mode state ──────────────────────────────────────────────────────
   const [guestStep, setGuestStep] = useState(0)           // 0..2 = guest questions
@@ -206,10 +211,11 @@ export default function Assessment() {
   }, [dispatch, plan, isAuthenticated])
 
   useEffect(() => {
-    if (isCompleted && reportId) {
-      setTimeout(() => navigate(`/reports/${reportId}`), 2000)
-    }
-  }, [isCompleted, reportId])
+    if (!isCompleted || !reportId) return
+    const destination = isPaidAssessment ? '/dashboard' : `/reports/${reportId}`
+    const timeout = setTimeout(() => navigate(destination), 2000)
+    return () => clearTimeout(timeout)
+  }, [isCompleted, reportId, isPaidAssessment, navigate])
 
   const handleAnswer = async (answerData) => {
     if (!assessment?.id || !currentQuestion?.id) return
@@ -345,7 +351,7 @@ export default function Assessment() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
             </svg>
           </div>
-          <p className="text-xs text-gray-400 mt-3">{t('assessment.status.redirecting')}</p>
+          <p className="text-xs text-gray-400 mt-3">{redirectingLabel}</p>
         </div>
       </div>
     )
