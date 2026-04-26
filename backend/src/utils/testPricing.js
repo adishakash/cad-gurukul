@@ -17,7 +17,7 @@
  * TEST PRICE MAP (paise):
  *   ₹499  plan  (49900 paise)  → ₹1  (100 paise)
  *   ₹1999 plan  (199900 paise) → ₹2  (200 paise)
- *   ₹9999 plan  (999900 paise) → ₹3  (300 paise)
+ *   ₹9999 plan  (999900 paise) → ₹4  (400 paise)
  *
  * IMPORTANT:
  *   - Only the amount sent to Razorpay is reduced.
@@ -42,7 +42,7 @@ const IS_TEST_MODE = process.env.PAYMENT_TEST_MODE === 'true';
 const TEST_PRICE_MAP = {
   49900:  100,   // ₹499 → ₹1
   199900: 200,   // ₹1,999 → ₹2
-  999900: 300,   // ₹9,999 → ₹3
+  999900: 400,   // ₹9,999 → ₹4
 };
 
 /**

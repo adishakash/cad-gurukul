@@ -551,7 +551,7 @@ const createOrder = async (req, res) => {
     }
 
     // ── Test pricing override ─────────────────────────────────────────────────
-    // In PAYMENT_TEST_MODE the charge sent to Razorpay is reduced (₹1/₹2/₹3).
+    // In PAYMENT_TEST_MODE the charge sent to Razorpay is reduced (₹1/₹2/₹4).
     // The DB record always stores the real catalog price (amountPaise).
     const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(orderAmountPaise);
     if (isTestMode) {
