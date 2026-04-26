@@ -9,6 +9,7 @@ import {
   selectAuthError,
   clearError,
 } from '../store/slices/authSlice'
+import { setPlan } from '../store/slices/leadSlice'
 import { useTranslation } from 'react-i18next'
 
 export default function Login() {
@@ -26,6 +27,16 @@ export default function Login() {
 
   // Clear any stale error when this page mounts
   useEffect(() => { dispatch(clearError()) }, [dispatch]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const planParam = (searchParams.get('plan') || '').toLowerCase()
+    const intentParam = (searchParams.get('intent') || '').toLowerCase()
+    if (!planParam && !intentParam) return
+    const selectedPlan = ['paid', 'premium', 'standard'].includes(planParam) || intentParam === 'paid'
+      ? 'paid'
+      : 'free'
+    dispatch(setPlan(selectedPlan))
+  }, [dispatch, searchParams])
 
   const registerHref = searchParams.toString() ? `/register?${searchParams.toString()}` : '/register'
 

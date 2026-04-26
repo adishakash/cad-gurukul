@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { setPlan } from '../store/slices/leadSlice'
-import { leadApi } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
 export default function PlanSelection() {
@@ -14,13 +13,13 @@ export default function PlanSelection() {
     {
       key: 'free',
       color: 'border-gray-200',
-      action: '/assessment?plan=FREE',
+      action: '/register?plan=free',
       actionClass: 'btn-outline',
     },
     {
       key: 'paid',
       color: 'border-brand-red',
-      action: '/assessment?plan=FREE&intent=paid',
+      action: '/register?plan=paid',
       actionClass: 'btn-primary',
     },
   ].map((plan) => {
@@ -28,11 +27,9 @@ export default function PlanSelection() {
     return { ...plan, ...(copy || {}) }
   })
 
-  const handlePlanSelect = async (plan) => {
-    const planKey = plan.key
+  const handlePlanSelect = (plan) => {
+    const planKey = plan.key === 'paid' ? 'paid' : 'free'
     dispatch(setPlan(planKey))
-    // Fire-and-forget lead update so funnel status advances
-    leadApi.update({ selectedPlan: planKey, status: 'plan_selected' }).catch(() => {})
     navigate(plan.action)
   }
 

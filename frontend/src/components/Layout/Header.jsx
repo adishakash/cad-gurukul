@@ -103,7 +103,7 @@ export default function Header() {
                 <Link to="/login" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-brand-red transition-colors">
                   {t('auth.login')}
                 </Link>
-                <Link to="/register" className="btn-primary text-sm px-5 py-2">
+                <Link to="/register?plan=free" className="btn-primary text-sm px-5 py-2">
                   {t('auth.getStartedFree')}
                 </Link>
               </>
@@ -162,7 +162,7 @@ export default function Header() {
             ) : (
               <>
                 <Link to="/login" className="btn-secondary text-center text-sm" onClick={() => setMenuOpen(false)}>{t('auth.login')}</Link>
-                <Link to="/register" className="btn-primary text-center text-sm" onClick={() => setMenuOpen(false)}>{t('auth.getStartedFree')}</Link>
+                <Link to="/register?plan=free" className="btn-primary text-center text-sm" onClick={() => setMenuOpen(false)}>{t('auth.getStartedFree')}</Link>
               </>
             )}
           </div>

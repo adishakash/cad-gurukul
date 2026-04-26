@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
@@ -9,6 +9,7 @@ import {
   selectPendingVerification,
   clearPendingVerification,
 } from '../store/slices/authSlice'
+import { setPlan } from '../store/slices/leadSlice'
 import { leadApi } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
@@ -23,6 +24,16 @@ export default function Register() {
   const { t } = useTranslation()
 
   const { register, handleSubmit, formState: { errors }, watch } = useForm()
+
+  useEffect(() => {
+    const planParam = (searchParams.get('plan') || '').toLowerCase()
+    const intentParam = (searchParams.get('intent') || '').toLowerCase()
+    if (!planParam && !intentParam) return
+    const selectedPlan = ['paid', 'premium', 'standard'].includes(planParam) || intentParam === 'paid'
+      ? 'paid'
+      : 'free'
+    dispatch(setPlan(selectedPlan))
+  }, [dispatch, searchParams])
 
   const loginHref = searchParams.toString() ? `/login?${searchParams.toString()}` : '/login'
 

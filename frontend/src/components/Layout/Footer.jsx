@@ -44,7 +44,7 @@ export default function Footer() {
             <h4 className="font-semibold text-white mb-4">{t('footer.students')}</h4>
             <ul className="space-y-2 text-sm">
               {[
-                ['/register', t('footer.studentsLinks.freeAssessment')],
+                ['/register?plan=free', t('footer.studentsLinks.freeAssessment')],
                 ['/plans', t('footer.studentsLinks.premiumReport', { price: '₹499' })],
                 ['/login', t('footer.studentsLinks.login')],
                 ['/admin/login', t('footer.studentsLinks.adminLogin')],

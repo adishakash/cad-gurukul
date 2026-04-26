@@ -30,6 +30,32 @@ const LEAD_STATUS_ORDER = [
   'counselling_interested', 'closed',
 ]
 
+const CLASS_STANDARD_MAP = {
+  CLASS_8: '8',
+  CLASS_9: '9',
+  CLASS_10: '10',
+  CLASS_11: '11',
+  CLASS_12: '12',
+}
+
+const getStoredUser = () => {
+  try {
+    const raw = localStorage.getItem('cg_user')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+const getStoredPlan = () => {
+  const raw = (localStorage.getItem('cg_selected_plan') || '').toLowerCase()
+  return ['paid', 'premium', 'standard'].includes(raw) ? 'paid' : 'free'
+}
+
+const getLeadClassStandard = (value) => CLASS_STANDARD_MAP[value] || undefined
+
+const getLeadUserType = (role) => (role === 'PARENT' ? 'parent' : 'student')
+
 const ProgressBar = ({ currentStep, totalSteps }) => (
   <div className="mb-8">
     <div className="flex justify-between mb-2">
@@ -94,6 +120,7 @@ export default function Onboarding() {
   const [selectedInterests, setSelectedInterests] = useState([])
   const [selectedLocationPref, setSelectedLocationPref] = useState([])
   const [leadStatus, setLeadStatus] = useState(null)
+  const [leadExists, setLeadExists] = useState(false)
   const navigate = useNavigate()
   const { i18n } = useTranslation()
   const defaultLanguageLabel = getLanguageLabel(getSupportedLanguage(i18n.language))
@@ -120,6 +147,7 @@ export default function Onboarding() {
         const lead    = leadRes.data.data
 
         if (lead?.status) setLeadStatus(lead.status)
+        setLeadExists(Boolean(lead?.id))
 
         if (profile) {
           // Restore all RHF-controlled fields so the user sees their existing data.
@@ -154,7 +182,7 @@ export default function Onboarding() {
         // visiting the Edit Profile page.
         const currentIdx = LEAD_STATUS_ORDER.indexOf(lead?.status)
         const targetIdx  = LEAD_STATUS_ORDER.indexOf('onboarding_started')
-        if (currentIdx <= targetIdx) {
+        if (lead?.id && currentIdx <= targetIdx) {
           leadApi.update({ status: 'onboarding_started' }).catch(() => {})
         }
       } catch {
@@ -206,6 +234,25 @@ export default function Onboarding() {
         interests: selectedInterests,
         locationPreference: selectedLocationPref,
       })
+
+      if (!leadExists) {
+        const storedUser = getStoredUser()
+        const email = storedUser?.email ? storedUser.email.toLowerCase().trim() : ''
+        const fullName = (data.fullName || '').toString().trim()
+        const mobileNumber = (data.mobileNumber || '').toString().trim()
+        if (!email) throw new Error('Missing account email')
+        await leadApi.create({
+          fullName,
+          email,
+          mobileNumber,
+          classStandard: getLeadClassStandard(data.classStandard),
+          city: data.city ? data.city.trim() : undefined,
+          pincode: data.pinCode ? data.pinCode.trim() : undefined,
+          userType: getLeadUserType(storedUser?.role),
+          selectedPlan: getStoredPlan(),
+        })
+        setLeadExists(true)
+      }
       // Advance lead status only if not already past onboarding_started — prevents downgrade.
       const currentIdx = LEAD_STATUS_ORDER.indexOf(leadStatus)
       const targetIdx  = LEAD_STATUS_ORDER.indexOf('onboarding_started')
@@ -231,7 +278,7 @@ export default function Onboarding() {
         if (firstAffectedStep !== null) setStep(firstAffectedStep)
         toast.error(errData.details[0]?.message || 'Please correct the highlighted fields and try again.')
       } else {
-        toast.error(errData?.message || 'Failed to save profile. Please try again.')
+        toast.error(errData?.message || err?.message || 'Failed to save profile. Please try again.')
       }
     } finally {
       setIsLoading(false)

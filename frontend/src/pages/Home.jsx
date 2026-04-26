@@ -1,14 +1,10 @@
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import LeadCaptureForm from '../components/LeadCaptureForm'
 import { useTranslation } from 'react-i18next'
 
 const careers = ['Engineering', 'Medicine', 'Law', 'Commerce & Finance', 'Design & Arts', 'Civil Services', 'Teaching', 'Entrepreneurship', 'IT & Software', 'Media & Journalism', 'Architecture', 'Psychology']
 
 export default function Home() {
   const navigate = useNavigate()
-  const [showLeadModal, setShowLeadModal] = useState(false)
-  const [capturePlan, setCapturePlan] = useState('free')
   const { t } = useTranslation()
 
   const stats = t('home.stats', { returnObjects: true })
@@ -16,9 +12,10 @@ export default function Home() {
   const planCards = t('home.plans.cards', { returnObjects: true })
   const testimonials = t('home.testimonials.items', { returnObjects: true })
 
-  const openLeadModal = (plan = 'free') => {
-    setCapturePlan(plan)
-    setShowLeadModal(true)
+  const startRegistration = (planValue = 'free') => {
+    const normalized = (planValue || '').toString().toLowerCase()
+    const selectedPlan = ['paid', 'premium', 'standard'].includes(normalized) ? 'paid' : 'free'
+    navigate(`/register?plan=${selectedPlan}`)
   }
 
   return (
@@ -42,7 +39,7 @@ export default function Home() {
               {t('home.hero.quotePrefix')} <span className="text-yellow-300 font-semibold not-italic">{t('home.hero.quoteEmphasis')}</span>{t('home.hero.quoteSuffix')}
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <button onClick={() => navigate('/assessment')} className="btn-primary text-center text-lg px-8 py-4">
+              <button onClick={() => startRegistration('free')} className="btn-primary text-center text-lg px-8 py-4">
                 {t('home.hero.ctaPrimary')}
               </button>
               <Link to="/how-it-works" className="border-2 border-white/40 text-white px-8 py-4 rounded-lg font-semibold hover:bg-white/10 transition-all text-center">
@@ -147,7 +144,7 @@ export default function Home() {
                 </ul>
                 <button
                   type="button"
-                  onClick={() => openLeadModal(p.value)}
+                  onClick={() => startRegistration(p.value)}
                   className={p.outline ? 'btn-outline w-full text-center block' : 'btn-primary w-full text-center block'}
                 >
                   {p.cta}
@@ -190,7 +187,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold mb-4">{t('home.finalCta.title')}</h2>
           <p className="text-lg text-red-100 mb-2">{t('home.finalCta.line1')}</p>
           <p className="text-sm text-red-200 mb-8">{t('home.finalCta.line2')}</p>
-          <button onClick={() => navigate('/assessment')} className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
+          <button onClick={() => startRegistration('free')} className="bg-white text-brand-red px-8 py-4 rounded-lg font-bold text-lg hover:bg-red-50 transition-colors inline-block">
             {t('home.finalCta.button')}
           </button>
         </div>
@@ -202,27 +199,10 @@ export default function Home() {
           <div className="font-bold text-brand-dark">{t('home.stickyCta.title')}</div>
           <div className="text-xs text-gray-500">{t('home.stickyCta.subtitle')}</div>
         </div>
-        <button onClick={() => navigate('/assessment')} className="btn-primary text-sm px-5 py-2">
+        <button onClick={() => startRegistration('free')} className="btn-primary text-sm px-5 py-2">
           {t('home.stickyCta.button')}
         </button>
       </div>
-
-      {/* ─── Lead Capture Modal ──────────────────────────────────────────────── */}
-      {showLeadModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowLeadModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b">
-              <h2 className="font-bold text-brand-dark text-lg">
-                {capturePlan === 'paid' ? t('home.leadModal.titlePaid') : t('home.leadModal.titleFree')}
-              </h2>
-              <button onClick={() => setShowLeadModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            <div className="p-6">
-              <LeadCaptureForm selectedPlan={capturePlan} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
