@@ -64,6 +64,11 @@ export default function StaffLogin() {
               />
               {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
             </div>
+            <div className="flex justify-end">
+              <a href="/forgot-password?portal=staff" className="text-xs text-brand-red font-semibold hover:underline">
+                Forgot password?
+              </a>
+            </div>
             <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
               {loading ? 'Signing in…' : 'Sign In to Staff Portal'}
             </button>

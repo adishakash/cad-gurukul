@@ -19,6 +19,8 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Contact from './pages/Contact'
 import PlanSelection from './pages/PlanSelection'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 // Protected pages
 import Dashboard from './pages/Dashboard'
@@ -136,6 +138,8 @@ export default function App() {
         {/* Guest-only routes */}
         <Route path="/login" element={<GuestRoute><PublicLayout><Login /></PublicLayout></GuestRoute>} />
         <Route path="/register" element={<GuestRoute><PublicLayout><Register /></PublicLayout></GuestRoute>} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         {/* Email verification — fully public, accessible from email link */}
         <Route path="/verify-email" element={<PublicLayout><VerifyEmail /></PublicLayout>} />
 

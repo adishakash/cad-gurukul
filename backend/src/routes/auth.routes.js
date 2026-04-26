@@ -11,6 +11,8 @@ const authValidator = require('../validators/auth.validator');
 router.post('/register', authLimiter, validate(authValidator.register), authController.register);
 router.post('/verify-email', authLimiter, validate(authValidator.verifyEmail), authController.verifyEmail);
 router.post('/resend-verification', resendLimiter, validate(authValidator.resendVerification), authController.resendVerification);
+router.post('/forgot-password', resendLimiter, validate(authValidator.forgotPassword), authController.forgotPassword);
+router.post('/reset-password', authLimiter, validate(authValidator.resetPassword), authController.resetPassword);
 router.post('/login', authLimiter, validate(authValidator.login), authController.login);
 router.post('/refresh', validate(authValidator.refreshToken), authController.refresh);
 router.post('/logout', authenticate, authController.logout);

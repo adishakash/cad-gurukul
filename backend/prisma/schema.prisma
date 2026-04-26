@@ -139,6 +139,7 @@ model User {
   aiSessions      AISession[]
   refreshTokens   RefreshToken[]
   emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens PasswordResetToken[]
   leads           Lead[]           @relation("LeadOwner")
   assignedLeads   Lead[]           @relation("AssignedLeads")
 
@@ -205,6 +206,22 @@ model EmailVerificationToken {
   @@index([userId])
   @@index([token])
   @@map("email_verification_tokens")
+}
+
+/// One-time password reset token.
+/// Created on forgot-password; deleted on successful reset.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

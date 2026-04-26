@@ -734,10 +734,58 @@ const sendVerificationEmail = async ({ to, name, token }) => {
   });
 };
 
+/**
+ * Send password reset email.
+ * @param {{ to: string, name: string, token: string, portal?: string }} opts
+ */
+const sendPasswordResetEmail = async ({ to, name, token, portal }) => {
+  const portalParam = portal ? `&portal=${encodeURIComponent(portal)}` : '';
+  const resetUrl = `${config.frontendUrl}/reset-password?token=${token}${portalParam}`;
+  return sendEmail({
+    to,
+    subject: 'Reset your password – CAD Gurukul',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;">
+        ${emailHeader}
+        <div style="padding:32px;">
+          <h2 style="color:#1a1a2e;margin:0 0 12px;">Hi ${name}, reset your password 🔐</h2>
+          <p style="font-size:15px;color:#444;line-height:1.7;margin:0 0 24px;">
+            We received a request to reset your CAD Gurukul password. Click the button below to set a new password.
+          </p>
+
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${resetUrl}"
+               style="display:inline-block;background:#e94560;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;letter-spacing:0.3px;">
+              Reset My Password
+            </a>
+          </div>
+
+          <p style="font-size:13px;color:#666;line-height:1.6;margin:0 0 8px;">
+            If the button doesn't work, copy and paste this link into your browser:
+          </p>
+          <p style="font-size:12px;color:#0f3460;word-break:break-all;background:#f5f7ff;padding:10px 14px;border-radius:6px;margin:0 0 24px;">
+            ${resetUrl}
+          </p>
+
+          <div style="background:#fffbea;border:1px solid #fde68a;border-radius:6px;padding:12px 16px;font-size:13px;color:#92400e;">
+            ⏳ This link expires in <strong>2 hours</strong>. If it expires, you can request a new one from the login page.
+          </div>
+
+          <p style="font-size:12px;color:#aaa;margin:24px 0 0;">
+            If you did not request a password reset, you can safely ignore this email.
+          </p>
+        </div>
+        ${emailFooter}
+      </div>
+    `,
+  });
+};
+
 module.exports = {
   sendEmail,
   sendWelcomeEmail,
   sendVerificationEmail,
+  sendPasswordResetEmail,
   sendReportReadyEmail,
   sendCounsellingReportEmail,
   sendConsultationSlotEmail,

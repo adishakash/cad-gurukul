@@ -11,6 +11,8 @@ const RESERVED_SLUGS = new Set([
   'login',
   'register',
   'verify-email',
+  'forgot-password',
+  'reset-password',
   'dashboard',
   'onboarding',
   'assessment',

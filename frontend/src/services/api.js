@@ -412,6 +412,8 @@ export const authApi = {
    * Returns 200 on success.
    */
   deleteAccount: (password) => api.delete('/auth/account', { data: { password } }),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (data) => api.post('/auth/reset-password', data),
 }
 
 // ─── Admin Staff API (Phase 8) ────────────────────────────────────────────────

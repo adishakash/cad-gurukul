@@ -11,9 +11,12 @@ const {
   generateVerificationToken,
   hashVerificationToken,
   saveVerificationToken,
+  generatePasswordResetToken,
+  hashPasswordResetToken,
+  savePasswordResetToken,
 } = require('../utils/token');
 const logger = require('../utils/logger');
-const { sendWelcomeEmail, sendVerificationEmail } = require('../services/email/emailService');
+const { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } = require('../services/email/emailService');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,10 +37,17 @@ const issueAuthPayload = async (user) => {
 };
 
 const EMAIL_RESEND_GENERIC_MESSAGE = 'If that account exists and is unverified, a new verification link will arrive shortly.';
+const PASSWORD_RESET_GENERIC_MESSAGE = 'If that account exists, a password reset link will arrive shortly.';
 const fallbackVerificationName = (email, fullName) => {
   if (fullName && typeof fullName === 'string' && fullName.trim()) return fullName.trim();
   if (email && typeof email === 'string' && email.includes('@')) return email.split('@')[0];
   return 'there';
+};
+
+const resolvePortalFromRole = (role) => {
+  if (role === 'ADMIN') return 'admin';
+  if (role === 'CAREER_COUNSELLOR' || role === 'CAREER_COUNSELLOR_LEAD' || role === 'COUNSELLOR') return 'staff';
+  return 'student';
 };
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
@@ -284,6 +294,117 @@ const resendVerification = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Password reset
+// ─────────────────────────────────────────────────────────────────────────────
+
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        name: true,
+        isActive: true,
+        deletedAt: true,
+        studentProfile: { select: { fullName: true } },
+      },
+    });
+
+    if (!user || user.deletedAt || !user.isActive) {
+      return successResponse(res, { emailSent: false }, PASSWORD_RESET_GENERIC_MESSAGE);
+    }
+
+    const existingToken = await prisma.passwordResetToken.findFirst({
+      where: { userId: user.id },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingToken) {
+      const ageMs = Date.now() - new Date(existingToken.createdAt).getTime();
+      if (ageMs < 60_000) {
+        return successResponse(res, { emailSent: false }, PASSWORD_RESET_GENERIC_MESSAGE);
+      }
+    }
+
+    const resetToken = generatePasswordResetToken();
+    await savePasswordResetToken(user.id, resetToken);
+
+    let emailSent = false;
+    try {
+      const displayName = user.studentProfile?.fullName || user.name || user.email;
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: displayName,
+        token: resetToken,
+        portal: resolvePortalFromRole(user.role),
+      });
+      emailSent = true;
+      logger.info('[Auth] Password reset email sent', { userId: user.id });
+    } catch (err) {
+      logger.warn('[Auth] Password reset email failed', { userId: user.id, error: err.message });
+    }
+
+    return successResponse(res, { emailSent }, PASSWORD_RESET_GENERIC_MESSAGE);
+  } catch (err) {
+    logger.error('[Auth] forgotPassword error', { error: err.message });
+    throw err;
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    const hashedToken = hashPasswordResetToken(token);
+    const record = await prisma.passwordResetToken.findUnique({
+      where: { token: hashedToken },
+      select: { id: true, userId: true, expiresAt: true },
+    });
+
+    if (!record) {
+      return errorResponse(res, 'Invalid or expired reset link.', 400, 'INVALID_TOKEN');
+    }
+
+    if (record.expiresAt < new Date()) {
+      await prisma.passwordResetToken.delete({ where: { id: record.id } });
+      return errorResponse(res, 'This reset link has expired. Please request a new one.', 400, 'TOKEN_EXPIRED');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { id: true, isActive: true, deletedAt: true },
+    });
+
+    if (!user || user.deletedAt) {
+      return errorResponse(res, 'Account not found', 404, 'NOT_FOUND');
+    }
+
+    if (!user.isActive) {
+      return errorResponse(res, 'Account has been deactivated.', 401, 'ACCOUNT_DISABLED');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
+      prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),
+      prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+    ]);
+
+    logger.info('[Auth] Password reset completed', { userId: user.id });
+    return successResponse(res, null, 'Password reset successful. You can now sign in.');
+  } catch (err) {
+    logger.error('[Auth] resetPassword error', { error: err.message });
+    throw err;
+  }
+};
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -461,6 +582,8 @@ module.exports = {
   register,
   verifyEmail,
   resendVerification,
+  forgotPassword,
+  resetPassword,
   login,
   refresh,
   logout,

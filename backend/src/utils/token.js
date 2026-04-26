@@ -20,6 +20,21 @@ const assertEmailVerificationStoreAvailable = () => {
   throw err;
 };
 
+const assertPasswordResetStoreAvailable = () => {
+  if (prisma.passwordResetToken
+    && typeof prisma.passwordResetToken.deleteMany === 'function'
+    && typeof prisma.passwordResetToken.create === 'function') {
+    return;
+  }
+
+  const err = new Error(
+    'Password reset storage is unavailable. Run Prisma generate/migrations so PasswordResetToken exists.'
+  );
+  err.code = 'PASSWORD_RESET_STORE_UNAVAILABLE';
+  err.statusCode = 503;
+  throw err;
+};
+
 /**
  * Sign a short-lived JWT access token.
  * Payload: { userId, role } — decoded by `authenticate` middleware.
@@ -50,10 +65,21 @@ const saveRefreshToken = async (userId, token) => {
 const generateVerificationToken = () => crypto.randomBytes(32).toString('hex');
 
 /**
+ * Generate a cryptographically secure password reset token (64-char hex).
+ */
+const generatePasswordResetToken = () => crypto.randomBytes(32).toString('hex');
+
+/**
  * Hash a raw verification token with SHA-256 before DB storage/lookup.
  * This way a DB breach does NOT expose usable verification tokens.
  */
 const hashVerificationToken = (rawToken) =>
+  crypto.createHash('sha256').update(rawToken).digest('hex');
+
+/**
+ * Hash a raw password reset token with SHA-256 before DB storage/lookup.
+ */
+const hashPasswordResetToken = (rawToken) =>
   crypto.createHash('sha256').update(rawToken).digest('hex');
 
 /**
@@ -71,6 +97,19 @@ const saveVerificationToken = async (userId, rawToken) => {
   return prisma.emailVerificationToken.create({ data: { userId, token: hashedToken, expiresAt } });
 };
 
+/**
+ * Persist a password reset token with a 2-hour expiry.
+ * Stores only the SHA-256 hash of the raw token — never the raw value.
+ */
+const savePasswordResetToken = async (userId, rawToken) => {
+  assertPasswordResetStoreAvailable();
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 2);
+  await prisma.passwordResetToken.deleteMany({ where: { userId } });
+  const hashedToken = hashPasswordResetToken(rawToken);
+  return prisma.passwordResetToken.create({ data: { userId, token: hashedToken, expiresAt } });
+};
+
 module.exports = {
   signAccessToken,
   signRefreshToken,
@@ -78,4 +117,7 @@ module.exports = {
   generateVerificationToken,
   hashVerificationToken,
   saveVerificationToken,
+  generatePasswordResetToken,
+  hashPasswordResetToken,
+  savePasswordResetToken,
 };
