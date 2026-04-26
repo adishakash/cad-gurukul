@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { selectUser, clearCredentials } from '../store/slices/authSlice'
+import { clearLead } from '../store/slices/leadSlice'
 import api, { leadApi, consultationApi, authApi, paymentApi } from '../services/api'
 import toast from 'react-hot-toast'
 import ThemeToggle from '../components/ThemeToggle'
@@ -817,6 +818,7 @@ export default function Dashboard() {
       await authApi.deleteAccount(deletePassword)
       toast.success('Account deleted. Goodbye!')
       dispatch(clearCredentials())
+      dispatch(clearLead())
       navigate('/', { replace: true })
     } catch (err) {
       const msg = err?.response?.data?.message || 'Failed to delete account. Please try again.'

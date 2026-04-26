@@ -140,7 +140,7 @@ export default function Assessment() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { t } = useTranslation()
-  const plan = searchParams.get('plan') || 'FREE'
+  const plan = (searchParams.get('plan') || 'FREE').toUpperCase()
   const intent = searchParams.get('intent') || ''
 
   const isAuthenticated = useSelector(selectIsAuthenticated)

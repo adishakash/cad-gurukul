@@ -2,7 +2,7 @@
 const Joi = require('joi');
 
 const startAssessmentSchema = Joi.object({
-  accessLevel: Joi.string().valid('FREE','PAID').default('FREE'),
+  accessLevel: Joi.string().valid('FREE','PAID').uppercase().default('FREE'),
 });
 
 const submitAnswerSchema = Joi.object({

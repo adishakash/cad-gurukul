@@ -75,6 +75,7 @@ const prisma = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const { signAccessToken, signRefreshToken, saveRefreshToken } = require('../utils/token');
 const logger = require('../utils/logger');
+const { purgeUserData } = require('../utils/accountDeletion');
 const { triggerAutomation } = require('../services/automation/automationService');
 const { generateReportAsync } = require('./assessment.controller');
 const { generateCcReferralCode } = require('../utils/referralCode');
@@ -590,7 +591,7 @@ const exportPayments = async (req, res) => {
 
 /**
  * DELETE /api/v1/admin/users/:id
- * Soft-delete a user account while preserving relational history.
+ * Soft-delete a user account and purge user-owned records.
  */
 const deleteUser = async (req, res) => {
   try {
@@ -605,15 +606,15 @@ const deleteUser = async (req, res) => {
 
     const anonymisedEmail = `deleted_${user.id}@deleted.cadgurukul.internal`;
 
-    await prisma.$transaction([
-      prisma.user.update({
+    await prisma.$transaction(async (tx) => {
+      await purgeUserData(tx, { userId: req.params.id, email: user.email });
+      await tx.user.update({
         where: { id: req.params.id },
         data: { deletedAt: new Date(), isActive: false, email: anonymisedEmail },
-      }),
-      prisma.refreshToken.deleteMany({ where: { userId: req.params.id } }),
-    ]);
+      });
+    });
 
-    logger.info('[Admin] User soft-deleted', { targetId: req.params.id, originalEmail: user.email, adminId: req.user.id });
+    logger.info('[Admin] User soft-deleted (data purged)', { targetId: req.params.id, originalEmail: user.email, adminId: req.user.id });
     return successResponse(res, null, 'User account deleted. Login access revoked.');
   } catch (err) {
     logger.error('[Admin] deleteUser error', { error: err.message });

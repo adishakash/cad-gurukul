@@ -17,6 +17,7 @@ const {
 } = require('../utils/token');
 const logger = require('../utils/logger');
 const { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } = require('../services/email/emailService');
+const { purgeUserData } = require('../utils/accountDeletion');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -519,18 +520,19 @@ const deleteAccount = async (req, res) => {
 
     const anonymisedEmail = `deleted_${user.id}@deleted.cadgurukul.internal`;
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        isActive: false,
-        deletedAt: new Date(),
-        email: anonymisedEmail,
-      },
+    await prisma.$transaction(async (tx) => {
+      await purgeUserData(tx, { userId: user.id, email: user.email });
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          isActive: false,
+          deletedAt: new Date(),
+          email: anonymisedEmail,
+        },
+      });
     });
 
-    await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
-
-    logger.info('[Auth] Account deleted (soft)', { userId: user.id, originalEmail: user.email });
+    logger.info('[Auth] Account deleted (soft + data purged)', { userId: user.id, originalEmail: user.email });
 
     return successResponse(res, null, 'Your account has been deleted. We\'re sorry to see you go.');
   } catch (err) {
