@@ -11,6 +11,7 @@ import {
 } from '../store/slices/authSlice'
 import { setPlan } from '../store/slices/leadSlice'
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
 
 export default function Login() {
   const dispatch = useDispatch()
@@ -77,6 +78,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
+      <Seo
+        title="Sign In | CAD Gurukul"
+        description="Access your CAD Gurukul student account."
+        noIndex
+      />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center space-x-2 mb-6">

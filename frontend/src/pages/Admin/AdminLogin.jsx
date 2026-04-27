@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import api from '../../services/api'
 import toast from 'react-hot-toast'
+import Seo from '../../components/SEO/Seo'
 
 export default function AdminLogin() {
   const navigate = useNavigate()
@@ -28,6 +29,11 @@ export default function AdminLogin() {
 
   return (
     <div className="min-h-screen bg-brand-dark flex items-center justify-center px-4">
+      <Seo
+        title="Admin Login | CAD Gurukul"
+        description="Sign in to the CAD Gurukul admin panel."
+        noIndex
+      />
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">🛡️</div>

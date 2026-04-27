@@ -1,6 +1,12 @@
+import Seo from '../components/SEO/Seo'
+
 export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-white">
+      <Seo
+        title="Privacy Policy | CAD Gurukul"
+        description="Read how CAD Gurukul collects, uses, and protects student information."
+      />
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Privacy Policy</h1>
         <p className="text-lg text-gray-300 max-w-2xl mx-auto">

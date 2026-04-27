@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { joiningApi } from '../../services/api'
 import { splitGstFromInclusive } from '../../utils/gst'
+import Seo from '../../components/SEO/Seo'
 
 const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js'
 
@@ -27,6 +28,13 @@ export default function JoinPage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
   const [formErr, setFormErr] = useState({})
   const [paying, setPaying] = useState(false)
+  const seo = (
+    <Seo
+      title="Enrolment Link | CAD Gurukul"
+      description="Complete your CAD Gurukul enrolment from a secure counsellor link."
+      noIndex
+    />
+  )
 
   const razorpayRef = useRef(null)
 
@@ -125,37 +133,46 @@ export default function JoinPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-500 animate-pulse">Loading joining link…</div>
-      </div>
+      <>
+        {seo}
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-gray-500 animate-pulse">Loading joining link…</div>
+        </div>
+      </>
     )
   }
 
   if (status === 'expired' || status === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="bg-white rounded-2xl shadow-md p-8 max-w-md w-full text-center">
-          <div className="text-5xl mb-4">🔗</div>
-          <h1 className="text-xl font-semibold text-gray-800 mb-2">
-            {status === 'expired' ? 'Link Expired or Inactive' : 'Invalid Link'}
-          </h1>
-          <p className="text-gray-500">{errMsg || 'This joining link is no longer valid. Please contact your counsellor.'}</p>
+      <>
+        {seo}
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+          <div className="bg-white rounded-2xl shadow-md p-8 max-w-md w-full text-center">
+            <div className="text-5xl mb-4">🔗</div>
+            <h1 className="text-xl font-semibold text-gray-800 mb-2">
+              {status === 'expired' ? 'Link Expired or Inactive' : 'Invalid Link'}
+            </h1>
+            <p className="text-gray-500">{errMsg || 'This joining link is no longer valid. Please contact your counsellor.'}</p>
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
   if (status === 'success') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="bg-white rounded-2xl shadow-md p-8 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">🎉</div>
-          <h1 className="text-2xl font-bold text-green-600 mb-2">Payment Successful!</h1>
-          <p className="text-gray-600">
-            Welcome to CAD Gurukul. Your enrolment has been confirmed. You will receive further details on your email.
-          </p>
+      <>
+        {seo}
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+          <div className="bg-white rounded-2xl shadow-md p-8 max-w-md w-full text-center">
+            <div className="text-6xl mb-4">🎉</div>
+            <h1 className="text-2xl font-bold text-green-600 mb-2">Payment Successful!</h1>
+            <p className="text-gray-600">
+              Welcome to CAD Gurukul. Your enrolment has been confirmed. You will receive further details on your email.
+            </p>
+          </div>
         </div>
-      </div>
+      </>
     )
   }
 
@@ -170,80 +187,83 @@ export default function JoinPage() {
   const fmt = (paise) => `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
   return (
-    <div className="min-h-screen bg-indigo-50 flex items-center justify-center px-4 py-10">
-      <div className="bg-white rounded-2xl shadow-lg max-w-md w-full overflow-hidden">
-        {/* Header */}
-        <div className="bg-indigo-600 px-6 py-5 text-white">
-          <p className="text-xs uppercase tracking-widest opacity-75">CAD Gurukul</p>
-          <h1 className="text-xl font-bold mt-1">{link?.label || 'Enrol Now'}</h1>
-          {link?.counsellorName && (
-            <p className="text-sm opacity-80 mt-1">via {link.counsellorName}</p>
-          )}
-        </div>
-
-        {/* Fee summary */}
-        <div className="px-6 py-4 border-b border-gray-100 bg-indigo-50">
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>Course Fee</span>
-            <span>{fmt(link?.feeAmountPaise)}</span>
+    <>
+      {seo}
+      <div className="min-h-screen bg-indigo-50 flex items-center justify-center px-4 py-10">
+        <div className="bg-white rounded-2xl shadow-lg max-w-md w-full overflow-hidden">
+          {/* Header */}
+          <div className="bg-indigo-600 px-6 py-5 text-white">
+            <p className="text-xs uppercase tracking-widest opacity-75">CAD Gurukul</p>
+            <h1 className="text-xl font-bold mt-1">{link?.label || 'Enrol Now'}</h1>
+            {link?.counsellorName && (
+              <p className="text-sm opacity-80 mt-1">via {link.counsellorName}</p>
+            )}
           </div>
-          {discountAmount > 0 && (
-            <div className="flex justify-between text-sm text-green-600 mt-1">
-              <span>Discount ({link?.discountPct}%)</span>
-              <span>− {fmt(discountAmount)}</span>
+
+          {/* Fee summary */}
+          <div className="px-6 py-4 border-b border-gray-100 bg-indigo-50">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Course Fee</span>
+              <span>{fmt(link?.feeAmountPaise)}</span>
             </div>
-          )}
-          {gstIncluded && gstAmount > 0 && (
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>GST ({gstRate}%) included</span>
-              <span>{fmt(gstAmount)}</span>
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sm text-green-600 mt-1">
+                <span>Discount ({link?.discountPct}%)</span>
+                <span>− {fmt(discountAmount)}</span>
+              </div>
+            )}
+            {gstIncluded && gstAmount > 0 && (
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>GST ({gstRate}%) included</span>
+                <span>{fmt(gstAmount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-semibold text-gray-800 mt-2 text-base">
+              <span>You Pay</span>
+              <span>{fmt(netPaise)}</span>
             </div>
-          )}
-          <div className="flex justify-between font-semibold text-gray-800 mt-2 text-base">
-            <span>You Pay</span>
-            <span>{fmt(netPaise)}</span>
           </div>
-        </div>
 
-        {/* Candidate form */}
-        <div className="px-6 py-5 space-y-4">
-          {[
-            { id: 'name',  label: 'Full Name',    type: 'text',  placeholder: 'Your name' },
-            { id: 'email', label: 'Email',         type: 'email', placeholder: 'you@example.com' },
-            { id: 'phone', label: 'Mobile Number', type: 'tel',   placeholder: '10-digit number' },
-          ].map(({ id, label, type, placeholder }) => (
-            <div key={id}>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-              <input
-                type={type}
-                value={form[id]}
-                onChange={(e) => setForm((f) => ({ ...f, [id]: e.target.value }))}
-                placeholder={placeholder}
-                className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                  formErr[id] ? 'border-red-400' : 'border-gray-300'
-                }`}
-              />
-              {formErr[id] && <p className="text-xs text-red-500 mt-1">{formErr[id]}</p>}
-            </div>
-          ))}
+          {/* Candidate form */}
+          <div className="px-6 py-5 space-y-4">
+            {[
+              { id: 'name',  label: 'Full Name',    type: 'text',  placeholder: 'Your name' },
+              { id: 'email', label: 'Email',         type: 'email', placeholder: 'you@example.com' },
+              { id: 'phone', label: 'Mobile Number', type: 'tel',   placeholder: '10-digit number' },
+            ].map(({ id, label, type, placeholder }) => (
+              <div key={id}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                <input
+                  type={type}
+                  value={form[id]}
+                  onChange={(e) => setForm((f) => ({ ...f, [id]: e.target.value }))}
+                  placeholder={placeholder}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                    formErr[id] ? 'border-red-400' : 'border-gray-300'
+                  }`}
+                />
+                {formErr[id] && <p className="text-xs text-red-500 mt-1">{formErr[id]}</p>}
+              </div>
+            ))}
 
-          {errMsg && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{errMsg}</p>
-          )}
+            {errMsg && (
+              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{errMsg}</p>
+            )}
 
-          <button
-            onClick={handlePay}
-            disabled={paying}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition"
-          >
-            {paying ? 'Processing…' : `Pay ${fmt(netPaise)}`}
-          </button>
+            <button
+              onClick={handlePay}
+              disabled={paying}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-lg transition"
+            >
+              {paying ? 'Processing…' : `Pay ${fmt(netPaise)}`}
+            </button>
 
-          <p className="text-xs text-gray-400 text-center">
-            Secured by Razorpay · Payments go directly to CAD Gurukul
-          </p>
+            <p className="text-xs text-gray-400 text-center">
+              Secured by Razorpay · Payments go directly to CAD Gurukul
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

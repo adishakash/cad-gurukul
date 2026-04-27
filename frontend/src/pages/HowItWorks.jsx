@@ -1,12 +1,32 @@
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
 
 export default function HowItWorks() {
   const { t } = useTranslation()
   const steps = t('howItWorks.steps', { returnObjects: true })
   const faqs = t('howItWorks.faq.items', { returnObjects: true })
+  const faqStructuredData = Array.isArray(faqs) && faqs.length
+    ? {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqs.map((faq) => ({
+        '@type': 'Question',
+        name: faq.q,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: faq.a,
+        },
+      })),
+    }
+    : null
 
   return (
     <div className="min-h-screen bg-white">
+      <Seo
+        title="How CAD Gurukul Works | AI Career Guidance Steps"
+        description="See how our assessment, stream mapping, and counselling workflow builds a personalized career roadmap."
+        structuredData={faqStructuredData}
+      />
       {/* Hero */}
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">{t('howItWorks.hero.title')}</h1>

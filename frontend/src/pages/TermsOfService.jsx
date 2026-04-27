@@ -1,6 +1,12 @@
+import Seo from '../components/SEO/Seo'
+
 export default function TermsOfService() {
   return (
     <div className="min-h-screen bg-white">
+      <Seo
+        title="Terms of Service | CAD Gurukul"
+        description="Review the terms and conditions for using CAD Gurukul's career guidance platform."
+      />
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Terms of Service</h1>
         <p className="text-lg text-gray-300 max-w-2xl mx-auto">

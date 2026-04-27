@@ -1,6 +1,12 @@
+import Seo from '../components/SEO/Seo'
+
 export default function RefundPolicy() {
   return (
     <div className="min-h-screen bg-white">
+      <Seo
+        title="Refund Policy | CAD Gurukul"
+        description="Understand refund eligibility and timelines for CAD Gurukul's paid plans."
+      />
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Refund Policy</h1>
         <p className="text-lg text-gray-300 max-w-2xl mx-auto">

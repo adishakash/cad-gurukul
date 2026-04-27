@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
 
 export default function About() {
   const { t } = useTranslation()
@@ -7,6 +8,10 @@ export default function About() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Seo
+        title="About CAD Gurukul | Our Mission and Team"
+        description="Learn how CAD Gurukul helps Indian students choose the right stream and career path through AI-driven assessments and counselling."
+      />
       {/* Hero */}
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">{t('about.hero.title')}</h1>

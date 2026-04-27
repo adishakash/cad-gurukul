@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { authApi } from '../services/api'
+import Seo from '../components/SEO/Seo'
 
 const PORTAL_CONFIG = {
   student: { label: 'Student', loginPath: '/login' },
@@ -38,6 +39,11 @@ export default function ForgotPassword() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
+      <Seo
+        title="Forgot Password | CAD Gurukul"
+        description="Request a password reset link for your CAD Gurukul account."
+        noIndex
+      />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center space-x-2 mb-6">

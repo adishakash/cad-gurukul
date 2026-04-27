@@ -1,11 +1,31 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
+import { getSiteUrl, withSiteUrl } from '../config/siteUrl'
 
 const careers = ['Engineering', 'Medicine', 'Law', 'Commerce & Finance', 'Design & Arts', 'Civil Services', 'Teaching', 'Entrepreneurship', 'IT & Software', 'Media & Journalism', 'Architecture', 'Psychology']
 
 export default function Home() {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const siteUrl = getSiteUrl()
+  const structuredData = siteUrl
+    ? [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'CAD Gurukul',
+        url: siteUrl,
+        logo: withSiteUrl('/logo.svg'),
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'CAD Gurukul',
+        url: siteUrl,
+      },
+    ]
+    : null
 
   const stats = t('home.stats', { returnObjects: true })
   const steps = t('home.howItWorks.steps', { returnObjects: true })
@@ -20,6 +40,11 @@ export default function Home() {
 
   return (
     <div className="animate-fade-in">
+      <Seo
+        title="CAD Gurukul | AI Career Guidance for Indian Students"
+        description="AI-powered career guidance for Indian students in Classes 8-12. Discover the right stream, subjects, and career path."
+        structuredData={structuredData}
+      />
       {/* ─── Hero ─────────────────────────────────────────────────────────────── */}
       <section className="relative bg-gradient-to-br from-brand-dark via-brand-navy to-blue-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5" />

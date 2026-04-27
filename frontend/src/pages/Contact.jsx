@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import api from '../services/api'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
 
 export default function Contact() {
   const [sent, setSent] = useState(false)
@@ -32,6 +33,10 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Seo
+        title="Contact CAD Gurukul | Career Guidance Support"
+        description="Reach the CAD Gurukul team for student guidance, consultations, or partnership questions."
+      />
       {/* Hero */}
       <section className="bg-brand-dark text-white py-16 px-4 text-center">
         <h1 className="text-4xl font-extrabold mb-3">{t('contact.hero.title')}</h1>

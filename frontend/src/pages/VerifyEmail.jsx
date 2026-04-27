@@ -7,6 +7,7 @@ import {
   selectAuthLoading,
 } from '../store/slices/authSlice'
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
 
 const STATUS = {
   VERIFYING: 'verifying',
@@ -89,6 +90,11 @@ export default function VerifyEmail() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
+      <Seo
+        title="Verify Your Email | CAD Gurukul"
+        description="Verify your email to activate your CAD Gurukul account."
+        noIndex
+      />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Logo />

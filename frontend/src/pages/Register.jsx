@@ -12,6 +12,7 @@ import {
 import { setPlan } from '../store/slices/leadSlice'
 import { leadApi } from '../services/api'
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
 
 export default function Register() {
   const dispatch = useDispatch()
@@ -22,6 +23,13 @@ export default function Register() {
   const [resendCooldown, setResendCooldown] = useState(false)
   const [submittedEmail, setSubmittedEmail] = useState(null)
   const { t } = useTranslation()
+  const seo = (
+    <Seo
+      title="Create an Account | CAD Gurukul"
+      description="Create your CAD Gurukul account to start your career assessment."
+      noIndex
+    />
+  )
 
   const { register, handleSubmit, formState: { errors }, watch } = useForm()
 
@@ -63,6 +71,7 @@ export default function Register() {
   if (pendingVerification) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
+        {seo}
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center space-x-2 mb-6">
@@ -134,6 +143,7 @@ export default function Register() {
   // ── Registration form ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center py-12 px-4">
+      {seo}
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">

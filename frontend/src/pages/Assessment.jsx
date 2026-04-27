@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import { leadApi } from '../services/api'
 import LeadCaptureForm from '../components/LeadCaptureForm'
 import { useTranslation } from 'react-i18next'
+import Seo from '../components/SEO/Seo'
 
 const buildGuestQuestions = (t) => ([
   {
@@ -142,6 +143,12 @@ export default function Assessment() {
   const { t } = useTranslation()
   const plan = (searchParams.get('plan') || 'FREE').toUpperCase()
   const intent = searchParams.get('intent') || ''
+  const seo = (
+    <Seo
+      title="Career Assessment | CAD Gurukul"
+      description="Start your career assessment and get personalized guidance for students in Classes 8-12."
+    />
+  )
 
   const isAuthenticated = useSelector(selectIsAuthenticated)
   const assessment = useSelector(selectAssessment)
@@ -186,54 +193,57 @@ export default function Assessment() {
       plan: plan.toLowerCase(),
       next: 'assessment',
     })
+          <>
+            {seo}
+            <div className="min-h-screen bg-gradient-to-br from-brand-dark via-brand-navy to-blue-900 text-white">
+              <div className="max-w-2xl mx-auto px-4 py-14">
+                <div className="mb-10 text-center">
+                  <h1 className="text-3xl md:text-4xl font-bold mb-3">{t('assessment.guest.title')}</h1>
+                  <p className="text-gray-200 text-sm md:text-base">{t('assessment.guest.subtitle')}</p>
+                </div>
 
-    if (leadId) params.set('leadId', leadId)
-    if (intent) params.set('intent', intent)
+                {showLeadCapture ? (
+                  <LeadCaptureForm onSuccess={handleLeadCaptured} showInAssessment />
+                ) : (
+                  <div className="bg-white/10 border border-white/20 rounded-2xl p-6 shadow-xl">
+                    <div className="text-xs uppercase tracking-widest text-orange-200 font-semibold mb-2">
+                      {t('assessment.guest.stepLabel', { current: guestStep + 1, total: guestQuestions.length })}
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-bold mb-5">
+                      {guestQuestions[guestStep].questionText}
+                    </h2>
 
-    // Navigate to register; after registration the full assessment starts
-    navigate(`/register?${params.toString()}`)
-  }
-
-  // ── Authenticated assessment flow ─────────────────────────────────────────
-  useEffect(() => {
-    if (!isAuthenticated) return // guest mode — skip real assessment init
-    dispatch(resetAssessment())
-    dispatch(startAssessment(plan)).then((action) => {
-      if (startAssessment.fulfilled.match(action)) {
-        const seededCount = Number(action.payload?.currentStep || 0)
-        if (!Number.isNaN(seededCount) && seededCount > 0) {
-          setAnsweredCount(seededCount)
-        }
-        leadApi.update({ status: 'assessment_started' }).catch(() => {})
-        dispatch(fetchNextQuestion(action.payload.id))
-      }
-    })
-  }, [dispatch, plan, isAuthenticated])
-
-  useEffect(() => {
-    if (!isCompleted || !reportId) return
-    const destination = isPaidAssessment ? '/dashboard' : `/reports/${reportId}`
-    const timeout = setTimeout(() => navigate(destination), 2000)
-    return () => clearTimeout(timeout)
-  }, [isCompleted, reportId, isPaidAssessment, navigate])
-
-  const handleAnswer = async (answerData) => {
-    if (!assessment?.id || !currentQuestion?.id) return
-    setIsSubmitting(true)
-
-    const answerResult = await dispatch(submitAnswer({
-      assessmentId: assessment.id,
-      answerData: { questionId: currentQuestion.id, ...answerData },
-    }))
-
-    if (submitAnswer.fulfilled.match(answerResult)) {
-      const newAnsweredCount = answeredCount + 1
-      setAnsweredCount(newAnsweredCount)
-      if (newAnsweredCount >= 1) {
-        leadApi.update({ status: 'assessment_in_progress' }).catch(() => {})
-      }
-
-      if (newAnsweredCount >= assessment.totalQuestions) {
+                    <div className="space-y-3 mb-6">
+                      {guestQuestions[guestStep].options.map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setGuestSelected(opt.value)}
+                          className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                            guestSelected === opt.value
+                              ? 'border-brand-red bg-white/20 text-white'
+                              : 'border-white/20 bg-white/5 hover:border-white/40 text-gray-100'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={handleGuestAnswer}
+                      className="btn-primary w-full flex items-center justify-center gap-2"
+                    >
+                      {guestStep < guestQuestions.length - 1
+                        ? t('assessment.guest.nextQuestion')
+                        : t('assessment.guest.seeResults')}
+                    </button>
+                  </div>
+                )}
+                <p className="text-center text-xs text-gray-400 mt-6">
+                  {t('assessment.privacyNote')}
+                </p>
+              </div>
+            </div>
+          </>
         dispatch(completeAssessment(assessment.id))
       } else {
         dispatch(fetchNextQuestion(assessment.id))
@@ -340,92 +350,98 @@ export default function Assessment() {
 
   if (isCompleted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center card max-w-md mx-4">
-          <div className="text-6xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-brand-dark mb-2">{t('assessment.status.completeTitle')}</h2>
-          <p className="text-gray-500 mb-2">{t('assessment.status.completeBody')}</p>
-          <div className="flex justify-center mt-4">
-            <svg className="animate-spin w-8 h-8 text-brand-red" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
+      <>
+        {seo}
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center card max-w-md mx-4">
+            <div className="text-6xl mb-4">🎉</div>
+            <h2 className="text-2xl font-bold text-brand-dark mb-2">{t('assessment.status.completeTitle')}</h2>
+            <p className="text-gray-500 mb-2">{t('assessment.status.completeBody')}</p>
+            <div className="flex justify-center mt-4">
+              <svg className="animate-spin w-8 h-8 text-brand-red" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">{redirectingLabel}</p>
           </div>
-          <p className="text-xs text-gray-400 mt-3">{redirectingLabel}</p>
         </div>
-      </div>
+      </>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-lg font-bold text-brand-dark">{t('assessment.title')}</h1>
-            <p className="text-xs text-gray-500">
-              {plan === 'PAID' ? `💎 ${t('assessment.plan.premium')}` : `🆓 ${t('assessment.plan.free')}`} {t('assessment.plan.label')} ·{' '}
-              {t('assessment.progress.answered', { count: answeredCount, total: assessment?.totalQuestions || 0 })}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-brand-red">{progressPercent}%</div>
-            <div className="text-xs text-gray-500">{t('assessment.progress.complete')}</div>
-          </div>
-        </div>
-
-        {intent === 'paid' && (
-          <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-            <span className="font-semibold">{t('assessment.premiumPath.title')}</span> {t('assessment.premiumPath.body')}
-          </div>
-        )}
-
-        {/* Progress */}
-        <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-          <div
-            className="bg-brand-red h-2 rounded-full transition-all duration-500"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-        <p className="text-xs text-brand-red font-medium mb-6">{getMotivationalText(t, progressPercent)}</p>
-
-        {/* Question Card */}
-        <div className="card shadow-xl">
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full mx-auto mb-4" />
-              <p className="text-gray-500 text-sm">{t('assessment.status.aiGenerating')}</p>
+    <>
+      {seo}
+      <div className="min-h-screen bg-gray-50 py-10 px-4">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-lg font-bold text-brand-dark">{t('assessment.title')}</h1>
+              <p className="text-xs text-gray-500">
+                {plan === 'PAID' ? `💎 ${t('assessment.plan.premium')}` : `🆓 ${t('assessment.plan.free')}`} {t('assessment.plan.label')} ·{' '}
+                {t('assessment.progress.answered', { count: answeredCount, total: assessment?.totalQuestions || 0 })}
+              </p>
             </div>
-          ) : currentQuestion ? (
-            <QuestionCard
-              question={currentQuestion}
-              onAnswer={handleAnswer}
-              isSubmitting={isSubmitting}
-            />
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-400">{t('assessment.status.loadingQuestion')}</p>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-brand-red">{progressPercent}%</div>
+              <div className="text-xs text-gray-500">{t('assessment.progress.complete')}</div>
+            </div>
+          </div>
+
+          {intent === 'paid' && (
+            <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
+              <span className="font-semibold">{t('assessment.premiumPath.title')}</span> {t('assessment.premiumPath.body')}
             </div>
           )}
-        </div>
 
-        {/* Complete early option */}
-        {answeredCount >= Math.ceil((assessment?.totalQuestions || 10) * 0.7) && !isCompleted && (
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => dispatch(completeAssessment(assessment.id))}
-              className="text-sm text-gray-500 hover:text-brand-red underline transition-colors"
-            >
-              {t('assessment.actions.generateReportNow')}
-            </button>
+          {/* Progress */}
+          <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+            <div
+              className="bg-brand-red h-2 rounded-full transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
           </div>
-        )}
+          <p className="text-xs text-brand-red font-medium mb-6">{getMotivationalText(t, progressPercent)}</p>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          {t('assessment.privacyNote')}
-        </p>
+          {/* Question Card */}
+          <div className="card shadow-xl">
+            {isLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin w-10 h-10 border-4 border-brand-red border-t-transparent rounded-full mx-auto mb-4" />
+                <p className="text-gray-500 text-sm">{t('assessment.status.aiGenerating')}</p>
+              </div>
+            ) : currentQuestion ? (
+              <QuestionCard
+                question={currentQuestion}
+                onAnswer={handleAnswer}
+                isSubmitting={isSubmitting}
+              />
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-400">{t('assessment.status.loadingQuestion')}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Complete early option */}
+          {answeredCount >= Math.ceil((assessment?.totalQuestions || 10) * 0.7) && !isCompleted && (
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => dispatch(completeAssessment(assessment.id))}
+                className="text-sm text-gray-500 hover:text-brand-red underline transition-colors"
+              >
+                {t('assessment.actions.generateReportNow')}
+              </button>
+            </div>
+          )}
+
+          <p className="text-center text-xs text-gray-400 mt-6">
+            {t('assessment.privacyNote')}
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   )
 }

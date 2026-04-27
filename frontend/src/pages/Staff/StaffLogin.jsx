@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { staffApiClient } from '../../services/api'
 import toast from 'react-hot-toast'
+import Seo from '../../components/SEO/Seo'
 
 export default function StaffLogin() {
   const navigate = useNavigate()
@@ -33,6 +34,11 @@ export default function StaffLogin() {
 
   return (
     <div className="min-h-screen bg-brand-dark flex items-center justify-center px-4">
+      <Seo
+        title="Staff Login | CAD Gurukul"
+        description="Sign in to the CAD Gurukul staff portal."
+        noIndex
+      />
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">🎓</div>
