@@ -9,7 +9,6 @@ const config = require('../config');
 const { triggerAutomation } = require('../services/automation/automationService');
 const analytics = require('../services/analytics/analyticsService');
 const { sendConsultationSlotEmail } = require('../services/email/emailService');
-const { getEffectiveChargeAmount } = require('../utils/testPricing');
 const { safeLeadUpdate } = require('../utils/leadStatusHelper');
 const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
 const {
@@ -550,20 +549,10 @@ const createOrder = async (req, res) => {
       }, 'Free purchase recorded', 201);
     }
 
-    // ── Test pricing override ─────────────────────────────────────────────────
-    // In PAYMENT_TEST_MODE the charge sent to Razorpay is reduced (₹1/₹2/₹4).
-    // The DB record always stores the real catalog price (amountPaise).
-    const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(orderAmountPaise);
-    if (isTestMode) {
-      logger.warn('[Payment] TEST MODE — charging reduced amount', {
-        planType, originalPaise: amountPaise, chargePaise: chargeAmountPaise,
-      });
-    }
-
     // Create Razorpay order
     const receiptBase = assessmentId ? assessmentId.slice(0, 12) : req.user.id.slice(0, 12);
     const order = await razorpayService.createOrder({
-      amount: chargeAmountPaise,   // ← test amount in test mode, full amount in prod
+      amount: orderAmountPaise,
       currency: 'INR',
       receipt: `cg_${planType[0]}_${receiptBase}`,
       notes: { userId: req.user.id, assessmentId: assessmentId || null, planType },
@@ -577,10 +566,7 @@ const createOrder = async (req, res) => {
         currency: 'INR',
         status: 'CREATED',
         razorpayOrderId: order.id,
-        metadata: {
-          ...baseMetadata,
-          ...(isTestMode ? { testMode: true, chargeAmountPaise } : {}),
-        },
+        metadata: baseMetadata,
       },
     });
 
@@ -599,7 +585,7 @@ const createOrder = async (req, res) => {
 
     return successResponse(res, {
       orderId:  order.id,
-      amount:   chargeAmountPaise,   // actual Razorpay charge (test or catalog)
+      amount:   orderAmountPaise,
       currency: 'INR',
       keyId:    config.razorpay.keyId,
       paymentId: payment.id,
