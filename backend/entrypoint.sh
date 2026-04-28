@@ -10,7 +10,16 @@ if [ -z "${DIRECT_DATABASE_URL}" ]; then
 fi
 
 echo "▶ Running database migrations..."
-DATABASE_URL="$DIRECT_DATABASE_URL" DATABASE_DIRECT_URL="$DIRECT_DATABASE_URL" node_modules/.bin/prisma migrate deploy
+if ! DATABASE_URL="$DIRECT_DATABASE_URL" DATABASE_DIRECT_URL="$DIRECT_DATABASE_URL" node_modules/.bin/prisma migrate deploy; then
+	echo "⚠ prisma migrate deploy failed. Checking for known recoverable migration state..."
+	if DATABASE_URL="$DIRECT_DATABASE_URL" DATABASE_DIRECT_URL="$DIRECT_DATABASE_URL" node_modules/.bin/prisma migrate resolve --rolled-back "20260428_fix_cc_standard_discount_policy"; then
+		echo "▶ Retrying database migrations after resolving failed migration 20260428_fix_cc_standard_discount_policy..."
+		DATABASE_URL="$DIRECT_DATABASE_URL" DATABASE_DIRECT_URL="$DIRECT_DATABASE_URL" node_modules/.bin/prisma migrate deploy
+	else
+		echo "❌ Migration recovery failed. Manual intervention required." >&2
+		exit 1
+	fi
+fi
 
 if [ "${ENABLE_SCHEMA_HOTFIXES:-true}" = "true" ]; then
 	echo "▶ Applying schema hotfixes (idempotent)..."

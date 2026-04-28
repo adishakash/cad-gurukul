@@ -1,6 +1,6 @@
 -- Fix 1: DiscountPolicy for CAREER_COUNSELLOR / standard plan must allow 100% off.
 -- The default maxPct of 20 was incorrectly applied to the ₹499 plan.
-UPDATE "DiscountPolicy"
+UPDATE "discount_policies"
 SET    "maxPct" = 100,
        "minPct" = 0,
        "updatedAt" = NOW()
