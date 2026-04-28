@@ -519,11 +519,16 @@ export default function CounsellorDashboard() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Discount %</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Discount %{' '}
+                        <span className="text-gray-400 font-normal">
+                          (max {couponForm.planType === 'standard' ? '100' : '20'}%)
+                        </span>
+                      </label>
                       <input
                         type="number"
                         min="0"
-                        max="100"
+                        max={couponForm.planType === 'standard' ? 100 : 20}
                         value={couponForm.discountPct}
                         onChange={(e) => setCouponForm((f) => ({ ...f, discountPct: e.target.value }))}
                         className="input-field text-sm w-full"

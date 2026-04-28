@@ -55,9 +55,16 @@ async function resolveCouponPolicy(planType) {
   const policy = await prisma.discountPolicy.findUnique({
     where: { role_planType: { role: 'CAREER_COUNSELLOR', planType } },
   });
+  // Business rules (hard limits — non-negotiable regardless of DB policy):
+  //   standard (₹499)      → up to 100% off
+  //   premium (₹1,999)     → up to 20% off
+  //   consultation (₹9,999)→ up to 20% off
   const absoluteMax = planType === 'standard' ? 100 : 20;
+  // For the standard plan, always use absoluteMax (100) — the DB policy must
+  // never reduce what a counsellor is allowed to give on the ₹499 plan.
+  // For other plans, admin-configurable policy can restrict within [0, absoluteMax].
   const policyMax = policy ? policy.maxPct : absoluteMax;
-  const maxPct = Math.min(policyMax, absoluteMax);
+  const maxPct = planType === 'standard' ? absoluteMax : Math.min(policyMax, absoluteMax);
   const minPct = policy ? Math.min(policy.minPct, maxPct) : 0;
   return {
     minPct,
