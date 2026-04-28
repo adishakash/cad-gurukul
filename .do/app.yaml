@@ -31,7 +31,7 @@ services:
   health_check:
     http_path: /api/v1/health
     # Allow extra time for `prisma migrate deploy` on cold starts.
-    initial_delay_seconds: 90
+    initial_delay_seconds: 150
     period_seconds: 30
     timeout_seconds: 10
     failure_threshold: 3
@@ -124,7 +124,7 @@ services:
     value: contact@cadgurukul.com
   - key: EMAIL_VERIFY_ON_STARTUP
     scope: RUN_TIME
-    value: "true"
+    value: "false"
   - key: PUPPETEER_EXECUTABLE_PATH
     scope: RUN_TIME
     value: /usr/bin/chromium-browser
@@ -157,7 +157,7 @@ services:
     value: "25"
   - key: DB_WRITE_PROBE_TIMEOUT_MS
     scope: RUN_TIME
-    value: "8000"
+    value: "20000"
   # WhatsApp — omit WHATSAPP_PROVIDER (or set to "stub") to disable sending
   - key: WHATSAPP_PROVIDER
     scope: RUN_TIME
