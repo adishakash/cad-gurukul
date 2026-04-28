@@ -91,6 +91,7 @@ export default function CounsellorDashboard() {
   const [couponsLoading, setCouponsLoading] = useState(false)
   const [couponSaving, setCouponSaving] = useState(false)
   const [couponForm, setCouponForm] = useState({ code: '', planType: 'standard', discountPct: 0, maxRedemptions: '', expiresAt: '', isActive: true })
+  const [editingCoupon, setEditingCoupon] = useState(null) // { id, discountPct }
   const [consultations, setConsultations] = useState([])
   const [consultationsLoading, setConsultationsLoading] = useState(false)
   // Assigned Prospects
@@ -286,6 +287,18 @@ export default function CounsellorDashboard() {
       await loadCoupons()
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to deactivate coupon.')
+    }
+  }
+
+  const saveEditCouponDiscount = async () => {
+    if (!editingCoupon) return
+    try {
+      await counsellorBizApi.updateCoupon(editingCoupon.id, { discountPct: Number(editingCoupon.discountPct) })
+      toast.success('Discount updated.')
+      setEditingCoupon(null)
+      await loadCoupons()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to update discount.')
     }
   }
 
@@ -572,7 +585,22 @@ export default function CounsellorDashboard() {
                       rows={coupons.map((c) => [
                         <code key="code" className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{c.code}</code>,
                         c.planType,
-                        `${c.discountPct}%`,
+                        editingCoupon?.id === c.id ? (
+                          <div key="disc-edit" className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max={c.planType === 'standard' ? 100 : 20}
+                              className="input-field text-xs w-16 py-0.5 px-1"
+                              value={editingCoupon.discountPct}
+                              onChange={(e) => setEditingCoupon((p) => ({ ...p, discountPct: e.target.value }))}
+                              autoFocus
+                            />
+                            <span className="text-xs">%</span>
+                            <button onClick={saveEditCouponDiscount} className="text-xs text-green-600 hover:underline">Save</button>
+                            <button onClick={() => setEditingCoupon(null)} className="text-xs text-gray-400 hover:underline">✕</button>
+                          </div>
+                        ) : `${c.discountPct}%`,
                         `${c.usageCount || 0}${c.maxRedemptions ? ` / ${c.maxRedemptions}` : ''}`,
                         c.isActive ? 'Active' : 'Inactive',
                         c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('en-IN') : '—',
@@ -580,6 +608,10 @@ export default function CounsellorDashboard() {
                           <button onClick={() => toggleCouponStatus(c)} className="text-xs text-indigo-600 hover:underline">
                             {c.isActive ? 'Disable' : 'Enable'}
                           </button>
+                          <button
+                            onClick={() => setEditingCoupon({ id: c.id, discountPct: c.discountPct })}
+                            className="text-xs text-yellow-600 hover:underline"
+                          >Edit %</button>
                           <button onClick={() => deactivateCoupon(c)} className="text-xs text-red-600 hover:underline">Deactivate</button>
                         </div>,
                       ])}
