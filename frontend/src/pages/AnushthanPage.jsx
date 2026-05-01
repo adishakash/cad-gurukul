@@ -1,426 +1,693 @@
-import { useEffect, useRef, useState } from 'react'
-import './anushthan.css'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-const WHATSAPP_NUMBER = import.meta.env.VITE_ANUSHTHAN_WHATSAPP_NUMBER || '919055451499'
-const WHATSAPP_TEXT = 'Namaste mujhe Kuber Anushthan ke baare mein jaankari chahiye'
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_TEXT)}`
+const WHATSAPP_LINK =
+  'https://wa.me/91XXXXXXXXXX?text=Namaste%20mujhe%20Kuber%20Anushthan%20ke%20baare%20mein%20jaankari%20chahiye'
 
-const PROBLEMS = [
-  'पैसा आता है, लेकिन महीने के बीच में खत्म हो जाता है',
-  'कर्ज कम होने की जगह हर महीने बढ़ रहा है',
-  'कमाई के मौके बनते हैं, लेकिन आखिरी समय में रुक जाते हैं',
-]
+const PRICE_RUPEES = 399
+const PRICE_PAISE = 39900
 
-const TRUST_BADGES = [
-  'अनुभवी ब्राह्मण',
-  'सैकड़ों लोगों ने करवाया',
-  'पूजा की फोटो/वीडियो साझा की जाती है',
-]
-
-const BENEFITS = [
+const testimonials = [
   {
-    title: 'धन प्रबंधन में स्थिरता',
-    desc: 'आमदनी आती रहे और घर से अनावश्यक खर्च कम हो, इसी लक्ष्य से विधि की जाती है।',
+    name: 'Rohit S.',
+    time: '10:24 AM',
+    text: 'Namaste ji 🙏\nमैंने अनुष्ठान करवाया था\nअब पैसा थोड़ा रुकने लगा है\nधन्यवाद',
   },
   {
-    title: 'कर्ज के दबाव में राहत',
-    desc: 'नियमित साधना से निर्णय स्पष्ट होते हैं और वित्तीय अनुशासन में मदद मिलती है।',
+    name: 'Pooja M.',
+    time: '7:42 PM',
+    text: 'प्रक्रिया बहुत स्पष्ट थी,\nपूजा की फोटो भी मिली,\nमन को संतोष मिला।',
   },
   {
-    title: 'काम और बिज़नेस में गति',
-    desc: 'रुके हुए कार्य पूरे करने और नए अवसर पकड़ने में मानसिक स्थिरता मिलती है।',
+    name: 'Vivek K.',
+    time: '9:11 AM',
+    text: 'धीरे-धीरे आर्थिक स्थिति में फर्क दिख रहा है,\nनियमित अपडेट के लिए धन्यवाद।',
   },
 ]
 
-const TESTIMONIALS = [
-  {
-    name: 'Rakesh G., Indore',
-    time: 'आज 10:42 AM',
-    text: '2 महीने से EMI लेट हो रही थी। अनुष्ठान के बाद काम में स्थिरता आई और लगातार पेमेंट क्लियर होने लगी।',
-  },
-  {
-    name: 'Pooja T., Jaipur',
-    time: 'कल 8:10 PM',
-    text: 'हमने पहले WhatsApp पर पूरी जानकारी ली, फिर बुक किया। हर दिन पूजा की फोटो मिली, भरोसा बना रहा।',
-  },
-  {
-    name: 'Nitin S., Pune',
-    time: '3 दिन पहले',
-    text: 'कर्ज का दबाव बहुत था। 40 दिनों में सबसे बड़ा फर्क यह हुआ कि खर्च नियंत्रण में आया और आय टिकने लगी।',
-  },
+const problemPoints = [
+  'पैसा आते ही खत्म हो जाता है',
+  'कर्ज कम नहीं हो रहा',
+  'मेहनत के बाद भी पैसा नहीं रुकता',
+  'व्यापार/नौकरी में रुकावट',
 ]
 
-const FAQS = [
-  {
-    q: 'क्या पहले WhatsApp पर बात करके समझ सकते हैं?',
-    a: 'हाँ, यही बेहतर है। आपकी स्थिति समझकर ही बुकिंग की सलाह दी जाती है।',
-  },
-  {
-    q: 'भुगतान के बाद आगे क्या होता है?',
-    a: 'टीम WhatsApp पर संपर्क करके नाम, गोत्र (यदि उपलब्ध) और आरंभ तिथि कन्फर्म करती है।',
-  },
-  {
-    q: 'क्या पूजा का प्रमाण मिलता है?',
-    a: 'हाँ, पूजा की फोटो/वीडियो साझा की जाती है ताकि प्रक्रिया पारदर्शी रहे।',
-  },
-]
+const solutionPoints = ['व्यक्तिगत संकल्प', 'नियमित मंत्र जाप', 'पूरी विधि']
 
-function loadRazorpay() {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true)
-    const script = document.createElement('script')
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.onload = () => resolve(true)
-    script.onerror = () => resolve(false)
-    document.body.appendChild(script)
-  })
-}
+const benefitPoints = ['पैसा धीरे-धीरे रुकने लगता है', 'आर्थिक स्थिति में सुधार', 'मन में शांति']
 
-async function handlePayment() {
-  const key = import.meta.env.VITE_RAZORPAY_KEY_ID || ''
-  if (!key) {
-    alert('भुगतान अस्थायी रूप से उपलब्ध नहीं है। पहले WhatsApp पर जानकारी लें।')
-    return
-  }
+function AnushthanPage() {
+  const [activeTestimonial, setActiveTestimonial] = useState(0)
+  const [razorpayLoading, setRazorpayLoading] = useState(false)
 
-  const loaded = await loadRazorpay()
-  if (!loaded) {
-    alert('Payment gateway लोड नहीं हो पाया। कृपया WhatsApp पर संपर्क करें।')
-    return
-  }
+  const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID
 
-  const options = {
-    key,
-    amount: 39900,
-    currency: 'INR',
-    name: 'Kuber Anushthan',
-    description: '40 Days Kuber Anushthan Booking',
-    handler: () => {
-      alert('Payment Successful! हमारी टीम WhatsApp पर संपर्क करेगी।')
-    },
-    prefill: {},
-    notes: { source: 'anushthan_landing' },
-    theme: { color: '#D5A028' },
-  }
-
-  const rzp = new window.Razorpay(options)
-  rzp.open()
-}
-
-function useFadeIn() {
-  const ref = useRef(null)
+  const observerOptions = useMemo(
+    () => ({
+      threshold: 0.12,
+      root: null,
+      rootMargin: '0px 0px -40px 0px',
+    }),
+    []
+  )
 
   useEffect(() => {
-    const el = ref.current
-    if (!el) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) return
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
+    const nodes = document.querySelectorAll('[data-animate]')
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          el.classList.add('an-visible')
-          observer.disconnect()
+          entry.target.classList.add('show')
+          observer.unobserve(entry.target)
         }
-      },
-      { threshold: 0.15 }
-    )
+      })
+    }, observerOptions)
 
-    observer.observe(el)
+    nodes.forEach((node) => observer.observe(node))
     return () => observer.disconnect()
+  }, [observerOptions])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setActiveTestimonial((prev) => (prev + 1) % testimonials.length)
+    }, 3200)
+    return () => window.clearInterval(id)
   }, [])
 
-  return ref
-}
+  const scrollToPricing = useCallback(() => {
+    const pricing = document.getElementById('pricing-section')
+    if (pricing) {
+      pricing.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
 
-function FadeSection({ className = '', children }) {
-  const ref = useFadeIn()
+  const scrollToNext = useCallback(() => {
+    const problem = document.getElementById('problem-section')
+    if (problem) {
+      problem.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
+
+  const loadRazorpayScript = useCallback(() => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true)
+        return
+      }
+
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')
+      if (existing) {
+        existing.addEventListener('load', () => resolve(true), { once: true })
+        existing.addEventListener('error', () => resolve(false), { once: true })
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }, [])
+
+  const handlePayment = useCallback(async () => {
+    if (!razorpayKey) {
+      alert('Payment setup incomplete. Please contact support on WhatsApp.')
+      return
+    }
+
+    setRazorpayLoading(true)
+    const loaded = await loadRazorpayScript()
+    setRazorpayLoading(false)
+
+    if (!loaded || !window.Razorpay) {
+      alert('Payment service is temporarily unavailable. Please continue on WhatsApp.')
+      return
+    }
+
+    const options = {
+      key: razorpayKey,
+      amount: PRICE_PAISE,
+      currency: 'INR',
+      name: 'Kuber Anushthan',
+      description: '40 Days Anushthan Booking',
+      handler: function () {
+        alert('Payment Successful! We will contact you.')
+      },
+      theme: {
+        color: '#d4af37',
+      },
+      modal: {
+        ondismiss: function () {},
+      },
+    }
+
+    const paymentObject = new window.Razorpay(options)
+    paymentObject.open()
+  }, [loadRazorpayScript, razorpayKey])
+
   return (
-    <div ref={ref} className={`an-fade ${className}`}>
-      {children}
-    </div>
-  )
-}
+    <div className="anushthan-page">
+      <style>{`
+        :root {
+          --bg: #0b0f1a;
+          --card: #12192b;
+          --gold: #d4af37;
+          --text: #ffffff;
+          --muted: #b8c2d9;
+          --line: rgba(212, 175, 55, 0.25);
+        }
 
-function GoldDivider() {
-  return <div className="an-divider" />
-}
+        .anushthan-page {
+          background:
+            radial-gradient(1200px 500px at 0% -10%, rgba(212,175,55,0.12), transparent 60%),
+            radial-gradient(900px 500px at 100% 10%, rgba(212,175,55,0.08), transparent 55%),
+            var(--bg);
+          color: var(--text);
+          min-height: 100vh;
+          font-family: "Noto Sans Devanagari", "Hind", "Mukta", sans-serif;
+          scroll-behavior: smooth;
+          padding-bottom: 96px;
+        }
 
-function HeroSection() {
-  return (
-    <section className="an-hero">
-      <div className="an-hero-inner">
-        <p className="an-top-urgency">हर दिन सीमित लोगों के लिए</p>
-        <h1 className="an-hero-h1">क्या आपके घर में पैसा टिकता नहीं?</h1>
-        <p className="an-hero-sub">कर्ज बढ़ता जा रहा है या आमदनी रुक गई है?</p>
-        <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="an-btn-primary an-pulse">
-          WhatsApp पर जानकारी लें
-        </a>
-        <p className="an-hero-caption">पहले बात करें, फिर निर्णय लें</p>
-      </div>
-      <div className="an-hero-glow" />
-    </section>
-  )
-}
+        .wrap {
+          width: min(980px, 92%);
+          margin: 0 auto;
+        }
 
-function ProblemSection() {
-  return (
-    <section className="an-section">
-      <FadeSection>
-        <h2 className="an-section-title">अगर ये बातें आपकी जिंदगी में हैं...</h2>
-        <ul className="an-problems">
-          {PROBLEMS.map((item) => (
-            <li key={item} className="an-problem-card">
-              <span className="an-problem-dot" aria-hidden>
-                •
-              </span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </FadeSection>
-    </section>
-  )
-}
+        .section {
+          padding: 48px 0;
+        }
 
-function SolutionSection() {
-  return (
-    <section className="an-section an-section-dark">
-      <FadeSection>
-        <h2 className="an-section-title">कुबेर अनुष्ठान कैसे मदद करता है?</h2>
-        <p className="an-section-para">
-          यह 40 दिनों की अनुशासित वैदिक प्रक्रिया है, जिसमें अनुभवी ब्राह्मण आपके नाम से मंत्र जाप और पूजन करते
-          हैं। इसका उद्देश्य घर की आर्थिक अस्थिरता, बढ़ते कर्ज और रुकी हुई आमदनी के चक्र को तोड़ना है।
+        .hero {
+          padding: 72px 0 48px;
+          text-align: left;
+        }
+
+        .kicker {
+          display: inline-block;
+          border: 1px solid var(--line);
+          color: var(--gold);
+          padding: 8px 12px;
+          border-radius: 999px;
+          font-size: 13px;
+          background: rgba(212,175,55,0.08);
+          margin-bottom: 16px;
+        }
+
+        h1 {
+          font-size: clamp(30px, 8vw, 52px);
+          line-height: 1.15;
+          margin: 0 0 14px;
+          letter-spacing: 0.2px;
+        }
+
+        .sub {
+          color: var(--muted);
+          font-size: clamp(16px, 4.5vw, 21px);
+          margin-bottom: 16px;
+        }
+
+        .trust-line {
+          border-left: 3px solid var(--gold);
+          padding-left: 12px;
+          color: #fff;
+          opacity: 0.95;
+          margin-bottom: 24px;
+        }
+
+        .cta-row {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .btn {
+          border: 0;
+          text-decoration: none;
+          cursor: pointer;
+          border-radius: 14px;
+          padding: 14px 18px;
+          font-size: 16px;
+          font-weight: 700;
+          transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+          min-height: 48px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+        }
+
+        .btn:hover {
+          transform: translateY(-1px);
+        }
+
+        .btn-main {
+          background: linear-gradient(180deg, #e4c15f, #d4af37);
+          color: #111;
+          box-shadow: 0 8px 24px rgba(212, 175, 55, 0.28);
+          min-width: 220px;
+        }
+
+        .btn-main:hover {
+          box-shadow: 0 10px 28px rgba(212, 175, 55, 0.38);
+        }
+
+        .btn-ghost {
+          background: rgba(255, 255, 255, 0.04);
+          color: #fff;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          min-width: 150px;
+        }
+
+        .grid-2 {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 16px;
+        }
+
+        .card {
+          background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)), var(--card);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 16px;
+          padding: 18px;
+        }
+
+        .card h2 {
+          margin: 0 0 14px;
+          font-size: clamp(23px, 5.8vw, 34px);
+        }
+
+        .points {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 10px;
+        }
+
+        .point {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          color: #eef3ff;
+        }
+
+        .dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          margin-top: 9px;
+          background: var(--gold);
+          box-shadow: 0 0 10px rgba(212,175,55,0.7);
+          flex: 0 0 auto;
+        }
+
+        .note {
+          margin-top: 12px;
+          color: #ffe7a8;
+          font-weight: 600;
+        }
+
+        .trust-media {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 14px;
+        }
+
+        .trust-media img {
+          width: 100%;
+          height: 140px;
+          object-fit: cover;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .trust-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .tag {
+          font-size: 14px;
+          border: 1px solid var(--line);
+          color: #f7e3a3;
+          background: rgba(212,175,55,0.08);
+          padding: 7px 10px;
+          border-radius: 999px;
+        }
+
+        .chat-wrap {
+          display: grid;
+          gap: 12px;
+          margin-top: 12px;
+        }
+
+        .chat-card {
+          background: #0f1f1a;
+          border: 1px solid rgba(31, 168, 85, 0.32);
+          border-radius: 14px;
+          padding: 12px;
+        }
+
+        .chat-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 13px;
+          color: #b8efca;
+          margin-bottom: 8px;
+        }
+
+        .chat-bubble {
+          background: #1a3327;
+          border: 1px solid rgba(127, 237, 170, 0.24);
+          border-radius: 10px;
+          padding: 10px 12px;
+          white-space: pre-line;
+          line-height: 1.5;
+          font-size: 15px;
+          color: #f2fff7;
+        }
+
+        .carousel-dots {
+          display: flex;
+          gap: 8px;
+          margin-top: 10px;
+        }
+
+        .carousel-dots button {
+          width: 9px;
+          height: 9px;
+          border-radius: 99px;
+          border: none;
+          cursor: pointer;
+          background: rgba(255,255,255,0.22);
+        }
+
+        .carousel-dots button.active {
+          width: 24px;
+          background: var(--gold);
+        }
+
+        .price-box {
+          text-align: center;
+          border: 1px solid var(--line);
+          background: linear-gradient(180deg, rgba(212,175,55,0.08), rgba(255,255,255,0.02));
+          border-radius: 16px;
+          padding: 22px 16px;
+        }
+
+        .price {
+          font-size: clamp(34px, 8vw, 52px);
+          color: var(--gold);
+          font-weight: 800;
+          margin: 8px 0 6px;
+        }
+
+        .urgency {
+          color: #ffe39a;
+          font-weight: 700;
+          margin-bottom: 16px;
+        }
+
+        .sticky-bar {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          background: rgba(6, 9, 15, 0.94);
+          border-top: 1px solid rgba(255,255,255,0.14);
+          padding: 10px;
+          z-index: 60;
+          backdrop-filter: blur(6px);
+        }
+
+        .sticky-bar .btn {
+          width: 100%;
+          min-width: 0;
+          font-size: 14px;
+        }
+
+        .floating-wa {
+          position: fixed;
+          right: 14px;
+          bottom: 82px;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: #25d366;
+          color: #081b10;
+          font-weight: 800;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 8px 24px rgba(37,211,102,0.35);
+          z-index: 70;
+          transition: transform 0.22s ease;
+        }
+
+        .floating-wa:hover {
+          transform: scale(1.05);
+        }
+
+        [data-animate] {
+          opacity: 0;
+          transform: translateY(20px);
+          transition: opacity 0.55s ease, transform 0.55s ease;
+        }
+
+        [data-animate].show {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        @media (min-width: 760px) {
+          .section {
+            padding: 64px 0;
+          }
+
+          .hero {
+            padding: 92px 0 54px;
+          }
+
+          .grid-2 {
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+          }
+
+          .trust-media img {
+            height: 180px;
+          }
+
+          .sticky-bar {
+            max-width: 620px;
+            margin: 0 auto;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 12px 12px 0 0;
+          }
+
+          .floating-wa {
+            bottom: 94px;
+          }
+        }
+      `}</style>
+
+      <section className="hero wrap">
+        <div className="kicker" data-animate>
+          40 दिनों का कुबेर अनुष्ठान
+        </div>
+        <h1 data-animate>क्या आपके घर में पैसा टिकता नहीं?</h1>
+        <p className="sub" data-animate>
+          कर्ज बढ़ता जा रहा है या आमदनी रुक गई है?
         </p>
-      </FadeSection>
-    </section>
-  )
-}
-
-function TrustSection() {
-  return (
-    <section className="an-section">
-      <FadeSection>
-        <h2 className="an-section-title">पहले भरोसा, फिर बुकिंग</h2>
-        <div className="an-trust-badges">
-          {TRUST_BADGES.map((badge) => (
-            <span key={badge} className="an-trust-chip">
-              {badge}
-            </span>
-          ))}
-        </div>
-        <div className="an-puja-proof">
-          <div className="an-puja-image">
-            <img
-              src="/assets/anushthan/pandit-ji.png"
-              alt="Pandit Ji performing puja"
-              className="an-puja-photo"
-              loading="lazy"
-            />
-            <div className="an-puja-overlay">
-              {/* <p>Pandit Ji Performing Puja</p> */}
-              {/* <small>Live puja setup image</small> */}
-            </div>
-          </div>
-          <div className="an-puja-copy">
-            <h3>पूजा प्रक्रिया पारदर्शी रहती है</h3>
-            <p>पूजा शुरू होने के बाद टीम WhatsApp पर अपडेट देती है और फोटो/वीडियो साझा किए जाते हैं।</p>
-          </div>
-        </div>
-      </FadeSection>
-    </section>
-  )
-}
-
-function TestimonialSection() {
-  const [active, setActive] = useState(0)
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActive((prev) => (prev + 1) % TESTIMONIALS.length)
-    }, 4500)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  const t = TESTIMONIALS[active]
-
-  return (
-    <section className="an-section an-section-dark">
-      <FadeSection>
-        <h2 className="an-section-title">लोग क्या कह रहे हैं</h2>
-        <div className="an-testimonial-card" aria-live="polite">
-          <div className="an-wa-header">
-            <div className="an-wa-avatar">{t.name[0]}</div>
-            <div>
-              <p className="an-wa-name">{t.name}</p>
-              <p className="an-wa-time">{t.time}</p>
-            </div>
-          </div>
-          <p className="an-wa-msg">{t.text}</p>
-          <div className="an-carousel-dots" role="tablist" aria-label="Testimonials carousel">
-            {TESTIMONIALS.map((item, index) => (
-              <button
-                key={item.name}
-                className={`an-dot ${index === active ? 'an-dot-active' : ''}`}
-                onClick={() => setActive(index)}
-                aria-label={`Testimonial ${index + 1}`}
-                aria-pressed={index === active}
-              />
-            ))}
-          </div>
-        </div>
-      </FadeSection>
-    </section>
-  )
-}
-
-function BenefitsSection() {
-  return (
-    <section className="an-section">
-      <FadeSection>
-        <h2 className="an-section-title">इस अनुष्ठान से आपको क्या मिलेगा</h2>
-        <div className="an-benefits">
-          {BENEFITS.map((item) => (
-            <article key={item.title} className="an-benefit-card">
-              <h3>{item.title}</h3>
-              <p>{item.desc}</p>
-            </article>
-          ))}
-        </div>
-      </FadeSection>
-    </section>
-  )
-}
-
-function PricingSection() {
-  return (
-    <section className="an-section an-section-dark" id="book">
-      <FadeSection>
-        <div className="an-pricing-card">
-          <p className="an-slot-badge">हर दिन सीमित लोगों के लिए</p>
-          <h2 className="an-pricing-title">40 दिन कुबेर अनुष्ठान</h2>
-          <div className="an-pricing-price">₹399</div>
-          <p className="an-pricing-sub">एक बार बुकिंग, पूरी प्रक्रिया टीम के मार्गदर्शन में</p>
-          <button className="an-btn-secondary an-btn-full" onClick={handlePayment}>
-            ₹399 में बुक करें
-          </button>
-          <p className="an-secure-note">भुगतान सुरक्षित है (Razorpay)</p>
-        </div>
-      </FadeSection>
-    </section>
-  )
-}
-
-function CtaSection() {
-  return (
-    <section className="an-section">
-      <FadeSection className="an-cta-wrap">
-        <h2 className="an-section-title">आज ही बुक करें</h2>
-        <p className="an-section-para">पहले WhatsApp पर अपनी स्थिति बताएं, फिर सही विकल्प के साथ आगे बढ़ें।</p>
-        <div className="an-cta-actions">
-          <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="an-btn-primary an-btn-full">
-            WhatsApp करें
+        <p className="trust-line" data-animate>
+          आपकी समस्या के अनुसार 40 दिनों का कुबेर अनुष्ठान किया जाता है
+        </p>
+        <div className="cta-row" data-animate>
+          <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
+            WhatsApp पर जानकारी लें
           </a>
-          <button className="an-btn-secondary an-btn-full" onClick={handlePayment}>
-            ₹399 में बुक करें
+          <button className="btn btn-ghost" onClick={scrollToNext}>
+            नीचे देखें
           </button>
         </div>
-      </FadeSection>
-    </section>
-  )
-}
+      </section>
 
-function FAQSection() {
-  const [open, setOpen] = useState(null)
-
-  return (
-    <section className="an-section an-section-dark">
-      <FadeSection>
-        <h2 className="an-section-title">अक्सर पूछे जाने वाले सवाल</h2>
-        <div className="an-faq-list">
-          {FAQS.map((faq, index) => (
-            <div key={faq.q} className="an-faq-item">
-              <button
-                className="an-faq-q"
-                onClick={() => setOpen(open === index ? null : index)}
-                aria-expanded={open === index}
-              >
-                <span>{faq.q}</span>
-                <span className={`an-faq-arrow ${open === index ? 'an-faq-open' : ''}`}>▼</span>
-              </button>
-              <div className={`an-faq-a ${open === index ? 'an-faq-a-open' : ''}`}>
-                <p>{faq.a}</p>
-              </div>
-            </div>
-          ))}
+      <section id="problem-section" className="section wrap">
+        <div className="card" data-animate>
+          <h2>क्या यह आपकी स्थिति है?</h2>
+          <ul className="points">
+            {problemPoints.map((point) => (
+              <li className="point" key={point}>
+                <span className="dot" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="note">अगर यह आपकी समस्या है, तो यह आपके लिए है</p>
         </div>
-      </FadeSection>
-    </section>
-  )
-}
+      </section>
 
-function WhatsAppButton() {
-  return (
-    <a
-      href={WHATSAPP_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="an-wa-float"
-      aria-label="WhatsApp पर संपर्क करें"
-    >
-      <svg viewBox="0 0 32 32" fill="currentColor" className="an-wa-icon">
-        <path d="M16 0C7.163 0 0 7.163 0 16c0 2.827.737 5.48 2.027 7.786L0 32l8.43-2.008A15.93 15.93 0 0 0 16 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm0 29.333a13.28 13.28 0 0 1-6.77-1.853l-.486-.288-5.003 1.193 1.214-4.868-.317-.499A13.267 13.267 0 0 1 2.667 16C2.667 8.636 8.636 2.667 16 2.667S29.333 8.636 29.333 16 23.364 29.333 16 29.333zm7.27-9.878c-.399-.2-2.36-1.164-2.726-1.297-.366-.133-.632-.2-.899.2-.267.4-1.031 1.297-1.264 1.563-.233.267-.466.3-.865.1-.4-.2-1.688-.622-3.215-1.984-1.188-1.06-1.99-2.369-2.223-2.769-.233-.4-.025-.616.175-.815.18-.179.4-.466.6-.699.2-.233.267-.4.4-.666.133-.267.067-.5-.033-.699-.1-.2-.9-2.169-1.232-2.969-.325-.779-.655-.674-.9-.686l-.765-.013c-.267 0-.699.1-1.065.5s-1.398 1.365-1.398 3.33 1.431 3.863 1.631 4.13c.2.266 2.816 4.3 6.824 6.031.954.412 1.698.658 2.279.842.957.305 1.828.262 2.517.159.768-.114 2.36-.966 2.693-1.898.333-.933.333-1.733.233-1.9-.1-.166-.366-.266-.765-.466z" />
-      </svg>
-    </a>
-  )
-}
+      <section className="section wrap">
+        <div className="card" data-animate>
+          <h2>समाधान</h2>
+          <p style={{ color: '#dbe6ff', lineHeight: 1.7, marginTop: 0 }}>
+            यह 40 दिनों का कुबेर मंत्र जाप अनुष्ठान है
+            <br />
+            जो अनुभवी सरस्वत ब्राह्मण द्वारा विधि-विधान से किया जाता है
+          </p>
+          <ul className="points" style={{ marginTop: 10 }}>
+            {solutionPoints.map((point) => (
+              <li className="point" key={point}>
+                <span className="dot" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="cta-row" style={{ marginTop: 18 }}>
+            <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
+              WhatsApp पर बात शुरू करें
+            </a>
+          </div>
+        </div>
+      </section>
 
-function StickyCTA({ visible }) {
-  return (
-    <div className={`an-sticky-cta ${visible ? 'an-sticky-visible' : ''}`}>
-      <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="an-btn-primary an-sticky-btn">
-        WhatsApp करें
+      <section className="section wrap">
+        <div className="grid-2">
+          <div className="card" data-animate>
+            <h2>विश्वास</h2>
+            <div className="trust-media">
+              <img
+                src="https://images.unsplash.com/photo-1604605801370-339ab8669284?q=80&w=900&auto=format&fit=crop"
+                alt="Pandit placeholder"
+                loading="lazy"
+              />
+              <img
+                src="https://images.unsplash.com/photo-1599661046289-e31897846e41?q=80&w=900&auto=format&fit=crop"
+                alt="Puja placeholder"
+                loading="lazy"
+              />
+            </div>
+            <div className="trust-tags">
+              <span className="tag">अनुभवी ब्राह्मण</span>
+              <span className="tag">सैकड़ों लोगों ने करवाया</span>
+              <span className="tag">पूजा की फोटो/वीडियो साझा की जाती है</span>
+            </div>
+          </div>
+
+          <div className="card" data-animate>
+            <h2>अनुभव साझा</h2>
+            <div className="chat-wrap">
+              {testimonials.map((item, index) => {
+                const active = index === activeTestimonial
+                return (
+                  <article
+                    key={item.name + item.time}
+                    className="chat-card"
+                    style={{
+                      opacity: active ? 1 : 0.6,
+                      transform: active ? 'scale(1)' : 'scale(0.99)',
+                      transition: 'all 250ms ease',
+                    }}
+                  >
+                    <div className="chat-head">
+                      <span>{item.name}</span>
+                      <span>{item.time}</span>
+                    </div>
+                    <div className="chat-bubble">{item.text}</div>
+                  </article>
+                )
+              })}
+            </div>
+            <div className="carousel-dots" aria-label="testimonial indicators">
+              {testimonials.map((item, idx) => (
+                <button
+                  key={item.name}
+                  className={idx === activeTestimonial ? 'active' : ''}
+                  onClick={() => setActiveTestimonial(idx)}
+                  aria-label={`Show testimonial ${idx + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section wrap">
+        <div className="card" data-animate>
+          <h2>लाभ</h2>
+          <ul className="points">
+            {benefitPoints.map((point) => (
+              <li className="point" key={point}>
+                <span className="dot" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section id="pricing-section" className="section wrap">
+        <div className="price-box" data-animate>
+          <h2 style={{ margin: '0 0 6px' }}>इस अनुष्ठान का शुल्क</h2>
+          <div className="price">₹{PRICE_RUPEES}</div>
+          <div className="urgency">सीमित लोगों के लिए</div>
+          <div className="cta-row" style={{ justifyContent: 'center' }}>
+            <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
+              WhatsApp पर बात करें
+            </a>
+            <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
+              {razorpayLoading ? 'लोड हो रहा है...' : '₹399 में अनुष्ठान शुरू करें'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="section wrap">
+        <div className="card" data-animate>
+          <h2>अगला कदम</h2>
+          <p style={{ color: '#dbe6ff', lineHeight: 1.7 }}>
+            पहले WhatsApp पर अपनी स्थिति बताएं। आपकी समस्या समझकर प्रक्रिया बताई जाएगी। उसके बाद ही ₹399 में अनुष्ठान
+            शुरू किया जाएगा।
+          </p>
+          <div className="cta-row" style={{ marginTop: 14 }}>
+            <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
+              WhatsApp पर बात करें
+            </a>
+            <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
+              ₹399 में अनुष्ठान शुरू करें
+            </button>
+            <button className="btn btn-ghost" onClick={scrollToPricing}>
+              शुल्क देखें
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <a className="floating-wa" href={WHATSAPP_LINK} target="_blank" rel="noreferrer" aria-label="WhatsApp">
+        WA
       </a>
-      <button className="an-btn-secondary an-sticky-btn" onClick={handlePayment}>
-        ₹399 में बुक करें
-      </button>
+
+      <div className="sticky-bar">
+        <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
+          WhatsApp करें
+        </a>
+        <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
+          ₹399 में बुक करें
+        </button>
+      </div>
     </div>
   )
 }
 
-export default function AnushthanPage() {
-  const [stickyVisible, setStickyVisible] = useState(false)
-
-  useEffect(() => {
-    const onScroll = () => setStickyVisible(window.scrollY > 950)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  return (
-    <div className="an-root">
-      <HeroSection />
-      <GoldDivider />
-      <ProblemSection />
-      <GoldDivider />
-      <SolutionSection />
-      <GoldDivider />
-      <TrustSection />
-      <GoldDivider />
-      <TestimonialSection />
-      <GoldDivider />
-      <BenefitsSection />
-      <GoldDivider />
-      <PricingSection />
-      <GoldDivider />
-      <CtaSection />
-      <GoldDivider />
-      <FAQSection />
-
-      <footer className="an-footer">
-        <p>© 2026 कुबेर अनुष्ठान सेवा | सभी अधिकार सुरक्षित</p>
-      </footer>
-
-      <WhatsAppButton />
-      <StickyCTA visible={stickyVisible} />
-    </div>
-  )
-}
+export default AnushthanPage
