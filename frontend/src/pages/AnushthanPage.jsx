@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 const WHATSAPP_LINK =
-  'https://wa.me/91XXXXXXXXXX?text=Namaste%20mujhe%20Kuber%20Anushthan%20ke%20baare%20mein%20jaankari%20chahiye'
+  'https://wa.me/919055451499?text=Namaste%20mujhe%20Kuber%20Anushthan%20ke%20baare%20mein%20jaankari%20chahiye'
 
 const PRICE_RUPEES = 399
 const PRICE_PAISE = 39900
