@@ -193,57 +193,53 @@ export default function Assessment() {
       plan: plan.toLowerCase(),
       next: 'assessment',
     })
-          <>
-            {seo}
-            <div className="min-h-screen bg-gradient-to-br from-brand-dark via-brand-navy to-blue-900 text-white">
-              <div className="max-w-2xl mx-auto px-4 py-14">
-                <div className="mb-10 text-center">
-                  <h1 className="text-3xl md:text-4xl font-bold mb-3">{t('assessment.guest.title')}</h1>
-                  <p className="text-gray-200 text-sm md:text-base">{t('assessment.guest.subtitle')}</p>
-                </div>
+    if (leadId) params.set('leadId', leadId)
+    if (intent) params.set('intent', intent)
 
-                {showLeadCapture ? (
-                  <LeadCaptureForm onSuccess={handleLeadCaptured} showInAssessment />
-                ) : (
-                  <div className="bg-white/10 border border-white/20 rounded-2xl p-6 shadow-xl">
-                    <div className="text-xs uppercase tracking-widest text-orange-200 font-semibold mb-2">
-                      {t('assessment.guest.stepLabel', { current: guestStep + 1, total: guestQuestions.length })}
-                    </div>
-                    <h2 className="text-xl md:text-2xl font-bold mb-5">
-                      {guestQuestions[guestStep].questionText}
-                    </h2>
+    // Navigate to register; after registration the full assessment starts
+    navigate(`/register?${params.toString()}`)
+  }
 
-                    <div className="space-y-3 mb-6">
-                      {guestQuestions[guestStep].options.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setGuestSelected(opt.value)}
-                          className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
-                            guestSelected === opt.value
-                              ? 'border-brand-red bg-white/20 text-white'
-                              : 'border-white/20 bg-white/5 hover:border-white/40 text-gray-100'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={handleGuestAnswer}
-                      className="btn-primary w-full flex items-center justify-center gap-2"
-                    >
-                      {guestStep < guestQuestions.length - 1
-                        ? t('assessment.guest.nextQuestion')
-                        : t('assessment.guest.seeResults')}
-                    </button>
-                  </div>
-                )}
-                <p className="text-center text-xs text-gray-400 mt-6">
-                  {t('assessment.privacyNote')}
-                </p>
-              </div>
-            </div>
-          </>
+  // Authenticated assessment flow
+  useEffect(() => {
+    if (!isAuthenticated) return // guest mode - skip real assessment init
+    dispatch(resetAssessment())
+    dispatch(startAssessment(plan)).then((action) => {
+      if (startAssessment.fulfilled.match(action)) {
+        const seededCount = Number(action.payload?.currentStep || 0)
+        if (!Number.isNaN(seededCount) && seededCount > 0) {
+          setAnsweredCount(seededCount)
+        }
+        leadApi.update({ status: 'assessment_started' }).catch(() => {})
+        dispatch(fetchNextQuestion(action.payload.id))
+      }
+    })
+  }, [dispatch, plan, isAuthenticated])
+
+  useEffect(() => {
+    if (!isCompleted || !reportId) return
+    const destination = isPaidAssessment ? '/dashboard' : `/reports/${reportId}`
+    const timeout = setTimeout(() => navigate(destination), 2000)
+    return () => clearTimeout(timeout)
+  }, [isCompleted, reportId, isPaidAssessment, navigate])
+
+  const handleAnswer = async (answerData) => {
+    if (!assessment?.id || !currentQuestion?.id) return
+    setIsSubmitting(true)
+
+    const answerResult = await dispatch(submitAnswer({
+      assessmentId: assessment.id,
+      answerData: { questionId: currentQuestion.id, ...answerData },
+    }))
+
+    if (submitAnswer.fulfilled.match(answerResult)) {
+      const newAnsweredCount = answeredCount + 1
+      setAnsweredCount(newAnsweredCount)
+      if (newAnsweredCount >= 1) {
+        leadApi.update({ status: 'assessment_in_progress' }).catch(() => {})
+      }
+
+      if (newAnsweredCount >= assessment.totalQuestions) {
         dispatch(completeAssessment(assessment.id))
       } else {
         dispatch(fetchNextQuestion(assessment.id))
