@@ -66,6 +66,9 @@ import TestLinkPage from './pages/Public/TestLinkPage'
 // Public counsellor referral redirect (no auth required)
 import ReferralRedirect from './pages/Public/ReferralRedirect'
 
+// Standalone spiritual landing page (no auth, no layout)
+import AnushthanPage from './pages/AnushthanPage'
+
 // Guards
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated)
@@ -189,6 +192,9 @@ export default function App() {
         <Route path="/privacy" element={<PublicLayout><PrivacyPolicy /></PublicLayout>} />
         <Route path="/terms" element={<PublicLayout><TermsOfService /></PublicLayout>} />
         <Route path="/refund" element={<PublicLayout><RefundPolicy /></PublicLayout>} />
+
+        {/* Standalone spiritual landing page — no auth/layout wrapper */}
+        <Route path="/anushthan" element={<AnushthanPage />} />
 
         {/* Counsellor referral short link */}
         <Route path="/:referralCode" element={<ReferralRedirect />} />

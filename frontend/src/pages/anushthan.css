@@ -1,0 +1,549 @@
+/* ═══════════════════════════════════════════════
+   Anushthan Page — Isolated Styles
+   Scope: .an-* prefix — zero conflict with app styles
+═══════════════════════════════════════════════ */
+
+/* ── Variables ──────────────────────────────── */
+:root {
+  --an-bg: #0b0f1a;
+  --an-bg2: #0f1525;
+  --an-gold: #d4af37;
+  --an-gold-light: #f0d060;
+  --an-gold-dim: rgba(212, 175, 55, 0.15);
+  --an-text: #e8e8e8;
+  --an-muted: #9aa0b4;
+  --an-card: #141929;
+  --an-border: rgba(212, 175, 55, 0.25);
+  --an-green: #25d366;
+  --an-radius: 14px;
+  --an-shadow: 0 4px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Reset / Base ───────────────────────────── */
+.an-root {
+  background: var(--an-bg);
+  color: var(--an-text);
+  font-family: 'Segoe UI', 'Noto Sans Devanagari', Arial, sans-serif;
+  min-height: 100vh;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+.an-root * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Scroll-fade animation ─────────────────── */
+.an-fade {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.65s ease, transform 0.65s ease;
+}
+.an-fade.an-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Gold divider ───────────────────────────── */
+.an-divider {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--an-gold), transparent);
+  margin: 0 auto;
+  max-width: 560px;
+}
+
+/* ── Gold text ──────────────────────────────── */
+.an-gold { color: var(--an-gold); }
+.an-gold-light { color: var(--an-gold-light); }
+
+/* ══════════════════════════════════════════════
+   1. HERO
+══════════════════════════════════════════════ */
+.an-hero {
+  position: relative;
+  text-align: center;
+  padding: 72px 20px 64px;
+  background: radial-gradient(ellipse at 50% 0%, #1a2540 0%, var(--an-bg) 70%);
+  overflow: hidden;
+}
+
+.an-hero-glow {
+  position: absolute;
+  top: -80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, rgba(212,175,55,0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.an-hero-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.an-badge {
+  display: inline-block;
+  background: var(--an-gold-dim);
+  border: 1px solid var(--an-border);
+  color: var(--an-gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 6px 16px;
+  border-radius: 999px;
+  margin-bottom: 24px;
+}
+
+.an-hero-h1 {
+  font-size: clamp(1.9rem, 6vw, 2.8rem);
+  font-weight: 800;
+  line-height: 1.25;
+  margin-bottom: 20px;
+  color: #fff;
+}
+
+.an-hero-sub {
+  font-size: clamp(1rem, 3.5vw, 1.2rem);
+  color: var(--an-muted);
+  margin-bottom: 36px;
+  line-height: 1.7;
+}
+
+.an-hero-trust {
+  font-size: 0.78rem;
+  color: var(--an-muted);
+  margin-top: 14px;
+}
+
+/* ══════════════════════════════════════════════
+   Buttons
+══════════════════════════════════════════════ */
+.an-btn-primary {
+  display: inline-block;
+  background: linear-gradient(135deg, #c9a227, #f0d060, #c9a227);
+  background-size: 200% 100%;
+  color: #0b0f1a;
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 16px 36px;
+  border: none;
+  border-radius: var(--an-radius);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background-position 0.4s ease, box-shadow 0.3s, transform 0.2s;
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.35);
+}
+.an-btn-primary:hover {
+  background-position: right;
+  box-shadow: 0 6px 28px rgba(212, 175, 55, 0.55);
+  transform: translateY(-2px);
+}
+.an-btn-primary:active {
+  transform: translateY(0);
+}
+.an-btn-full {
+  width: 100%;
+  text-align: center;
+}
+
+/* Pulse ring animation */
+.an-pulse {
+  position: relative;
+}
+.an-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: calc(var(--an-radius) + 4px);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  animation: anPulseRing 2s ease-in-out infinite;
+}
+@keyframes anPulseRing {
+  0%   { opacity: 0.7; transform: scale(1); }
+  50%  { opacity: 0;   transform: scale(1.07); }
+  100% { opacity: 0.7; transform: scale(1); }
+}
+
+/* ══════════════════════════════════════════════
+   Sections
+══════════════════════════════════════════════ */
+.an-section {
+  padding: 60px 20px;
+}
+.an-section-dark {
+  background: var(--an-bg2);
+}
+
+.an-section-title {
+  font-size: clamp(1.3rem, 4.5vw, 1.8rem);
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 32px;
+  color: #fff;
+}
+.an-section-title::after {
+  content: '';
+  display: block;
+  width: 48px;
+  height: 3px;
+  background: var(--an-gold);
+  margin: 10px auto 0;
+  border-radius: 2px;
+}
+
+.an-section-para {
+  font-size: 1rem;
+  color: var(--an-muted);
+  text-align: center;
+  max-width: 580px;
+  margin: 0 auto 32px;
+  line-height: 1.75;
+}
+
+/* ══════════════════════════════════════════════
+   2. PROBLEM
+══════════════════════════════════════════════ */
+.an-problems {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 560px;
+  margin: 0 auto 24px;
+}
+
+.an-problem-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--an-card);
+  border: 1px solid var(--an-border);
+  border-radius: var(--an-radius);
+  padding: 18px 20px;
+}
+.an-problem-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+.an-problem-card p {
+  font-size: 1rem;
+  color: var(--an-text);
+}
+
+.an-problem-note {
+  text-align: center;
+  color: var(--an-muted);
+  font-size: 0.95rem;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ══════════════════════════════════════════════
+   3. BENEFITS
+══════════════════════════════════════════════ */
+.an-benefits {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+@media (min-width: 600px) {
+  .an-benefits { grid-template-columns: repeat(3, 1fr); }
+}
+
+.an-benefit-card {
+  background: var(--an-card);
+  border: 1px solid var(--an-border);
+  border-radius: var(--an-radius);
+  padding: 24px 18px;
+  text-align: center;
+}
+.an-benefit-icon { font-size: 2.2rem; margin-bottom: 12px; }
+.an-benefit-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--an-gold);
+  margin-bottom: 8px;
+}
+.an-benefit-desc { font-size: 0.88rem; color: var(--an-muted); line-height: 1.5; }
+
+/* ══════════════════════════════════════════════
+   4. TESTIMONIALS (WhatsApp-style)
+══════════════════════════════════════════════ */
+.an-testimonials {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.an-testimonial-card {
+  background: #1a2a1a;
+  border: 1px solid rgba(37, 211, 102, 0.25);
+  border-radius: var(--an-radius);
+  padding: 18px;
+}
+.an-wa-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.an-wa-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--an-green);
+  color: #0b0f1a;
+  font-weight: 800;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.an-wa-name { font-weight: 700; font-size: 0.9rem; color: #fff; }
+.an-wa-time { font-size: 0.75rem; color: var(--an-muted); }
+.an-wa-msg { font-size: 0.95rem; color: var(--an-text); line-height: 1.65; }
+
+/* ══════════════════════════════════════════════
+   5. TRUST
+══════════════════════════════════════════════ */
+.an-trust-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+@media (min-width: 600px) {
+  .an-trust-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.an-trust-card {
+  background: var(--an-card);
+  border: 1px solid var(--an-border);
+  border-radius: var(--an-radius);
+  padding: 24px 18px;
+  text-align: center;
+}
+.an-trust-icon { font-size: 2.2rem; margin-bottom: 10px; }
+.an-trust-title { font-size: 0.95rem; font-weight: 700; color: var(--an-gold); margin-bottom: 6px; }
+.an-trust-desc { font-size: 0.85rem; color: var(--an-muted); }
+
+/* ══════════════════════════════════════════════
+   6. PRICING
+══════════════════════════════════════════════ */
+.an-pricing-card {
+  background: linear-gradient(145deg, #141929, #1a2040);
+  border: 2px solid var(--an-gold);
+  border-radius: 20px;
+  padding: 36px 28px;
+  text-align: center;
+  max-width: 440px;
+  margin: 0 auto;
+  box-shadow: 0 0 48px rgba(212, 175, 55, 0.15);
+}
+
+.an-slot-badge {
+  display: inline-block;
+  background: rgba(255, 90, 40, 0.15);
+  border: 1px solid rgba(255, 90, 40, 0.4);
+  color: #ff8060;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 999px;
+  margin-bottom: 18px;
+  animation: anBlink 2s ease-in-out infinite;
+}
+@keyframes anBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.an-pricing-label {
+  font-size: 1rem;
+  color: var(--an-muted);
+  margin-bottom: 16px;
+}
+
+.an-pricing-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.an-price-strike {
+  font-size: 1.2rem;
+  color: var(--an-muted);
+  text-decoration: line-through;
+}
+.an-price-main {
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--an-gold);
+  line-height: 1;
+}
+
+.an-pricing-list {
+  list-style: none;
+  text-align: left;
+  margin: 0 auto 28px;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.an-pricing-list li {
+  font-size: 0.95rem;
+  color: var(--an-text);
+}
+
+.an-secure-note {
+  font-size: 0.78rem;
+  color: var(--an-muted);
+  margin-top: 14px;
+}
+
+/* ══════════════════════════════════════════════
+   7. FAQ
+══════════════════════════════════════════════ */
+.an-faq-list {
+  max-width: 580px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.an-faq-item {
+  background: var(--an-card);
+  border: 1px solid var(--an-border);
+  border-radius: var(--an-radius);
+  overflow: hidden;
+}
+
+.an-faq-q {
+  width: 100%;
+  background: none;
+  border: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  font-size: 0.97rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.an-faq-arrow {
+  color: var(--an-gold);
+  font-size: 0.75rem;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+.an-faq-arrow.an-faq-open {
+  transform: rotate(180deg);
+}
+
+.an-faq-a {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease, padding 0.35s ease;
+}
+.an-faq-a.an-faq-a-open {
+  max-height: 200px;
+  padding: 0 20px 18px;
+}
+.an-faq-a p {
+  font-size: 0.9rem;
+  color: var(--an-muted);
+  line-height: 1.7;
+}
+
+/* ══════════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════════ */
+.an-footer {
+  text-align: center;
+  padding: 28px 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.8rem;
+  color: var(--an-muted);
+  background: var(--an-bg);
+}
+
+/* ══════════════════════════════════════════════
+   FLOATING WHATSAPP BUTTON
+══════════════════════════════════════════════ */
+.an-wa-float {
+  position: fixed;
+  bottom: 88px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  background: var(--an-green);
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(37, 211, 102, 0.45);
+  z-index: 999;
+  transition: transform 0.2s, box-shadow 0.2s;
+  text-decoration: none;
+}
+.an-wa-float:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 28px rgba(37, 211, 102, 0.65);
+}
+.an-wa-icon {
+  width: 28px;
+  height: 28px;
+}
+
+/* ══════════════════════════════════════════════
+   STICKY BOTTOM CTA (mobile)
+══════════════════════════════════════════════ */
+.an-sticky-cta {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, transparent 0%, rgba(11,15,26,0.95) 30%);
+  z-index: 998;
+  transform: translateY(100%);
+  transition: transform 0.4s ease;
+  pointer-events: none;
+}
+.an-sticky-cta.an-sticky-visible {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Push WhatsApp button above sticky CTA */
+.an-sticky-cta.an-sticky-visible ~ .an-wa-float,
+.an-wa-float {
+  bottom: 88px;
+}
+
+/* ══════════════════════════════════════════════
+   Responsive tweaks
+══════════════════════════════════════════════ */
+@media (min-width: 768px) {
+  .an-wa-float { bottom: 32px; }
+  .an-sticky-cta { display: none; }
+}
