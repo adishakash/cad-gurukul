@@ -210,7 +210,7 @@ function TrustSection() {
         <div className="an-puja-proof">
           <div className="an-puja-image">
             <img
-              src="/anushthan/pandit-ji.png"
+              src="/assets/anushthan/pandit-ji.png"
               alt="Pandit Ji performing puja"
               className="an-puja-photo"
               loading="lazy"
