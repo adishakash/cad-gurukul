@@ -208,10 +208,16 @@ function TrustSection() {
           ))}
         </div>
         <div className="an-puja-proof">
-          <div className="an-puja-image" role="img" aria-label="Pandit performing puja image placeholder">
+          <div className="an-puja-image">
+            <img
+              src="/anushthan/pandit-ji.png"
+              alt="Pandit Ji performing puja"
+              className="an-puja-photo"
+              loading="lazy"
+            />
             <div className="an-puja-overlay">
               <p>Pandit Ji Performing Puja</p>
-              <small>image placeholder</small>
+              <small>Live puja setup image</small>
             </div>
           </div>
           <div className="an-puja-copy">
