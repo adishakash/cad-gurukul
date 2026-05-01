@@ -216,8 +216,8 @@ function TrustSection() {
               loading="lazy"
             />
             <div className="an-puja-overlay">
-              <p>Pandit Ji Performing Puja</p>
-              <small>Live puja setup image</small>
+              {/* <p>Pandit Ji Performing Puja</p> */}
+              {/* <small>Live puja setup image</small> */}
             </div>
           </div>
           <div className="an-puja-copy">
