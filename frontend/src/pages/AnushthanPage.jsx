@@ -1,9 +1,70 @@
 import { useEffect, useRef, useState } from 'react'
 import './anushthan.css'
 
-/* ─────────────────────────────────────────────
-   Razorpay helper
-───────────────────────────────────────────── */
+const WHATSAPP_NUMBER = import.meta.env.VITE_ANUSHTHAN_WHATSAPP_NUMBER || '919055451499'
+const WHATSAPP_TEXT = 'Namaste mujhe Kuber Anushthan ke baare mein jaankari chahiye'
+const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_TEXT)}`
+
+const PROBLEMS = [
+  'पैसा आता है, लेकिन महीने के बीच में खत्म हो जाता है',
+  'कर्ज कम होने की जगह हर महीने बढ़ रहा है',
+  'कमाई के मौके बनते हैं, लेकिन आखिरी समय में रुक जाते हैं',
+]
+
+const TRUST_BADGES = [
+  'अनुभवी ब्राह्मण',
+  'सैकड़ों लोगों ने करवाया',
+  'पूजा की फोटो/वीडियो साझा की जाती है',
+]
+
+const BENEFITS = [
+  {
+    title: 'धन प्रबंधन में स्थिरता',
+    desc: 'आमदनी आती रहे और घर से अनावश्यक खर्च कम हो, इसी लक्ष्य से विधि की जाती है।',
+  },
+  {
+    title: 'कर्ज के दबाव में राहत',
+    desc: 'नियमित साधना से निर्णय स्पष्ट होते हैं और वित्तीय अनुशासन में मदद मिलती है।',
+  },
+  {
+    title: 'काम और बिज़नेस में गति',
+    desc: 'रुके हुए कार्य पूरे करने और नए अवसर पकड़ने में मानसिक स्थिरता मिलती है।',
+  },
+]
+
+const TESTIMONIALS = [
+  {
+    name: 'Rakesh G., Indore',
+    time: 'आज 10:42 AM',
+    text: '2 महीने से EMI लेट हो रही थी। अनुष्ठान के बाद काम में स्थिरता आई और लगातार पेमेंट क्लियर होने लगी।',
+  },
+  {
+    name: 'Pooja T., Jaipur',
+    time: 'कल 8:10 PM',
+    text: 'हमने पहले WhatsApp पर पूरी जानकारी ली, फिर बुक किया। हर दिन पूजा की फोटो मिली, भरोसा बना रहा।',
+  },
+  {
+    name: 'Nitin S., Pune',
+    time: '3 दिन पहले',
+    text: 'कर्ज का दबाव बहुत था। 40 दिनों में सबसे बड़ा फर्क यह हुआ कि खर्च नियंत्रण में आया और आय टिकने लगी।',
+  },
+]
+
+const FAQS = [
+  {
+    q: 'क्या पहले WhatsApp पर बात करके समझ सकते हैं?',
+    a: 'हाँ, यही बेहतर है। आपकी स्थिति समझकर ही बुकिंग की सलाह दी जाती है।',
+  },
+  {
+    q: 'भुगतान के बाद आगे क्या होता है?',
+    a: 'टीम WhatsApp पर संपर्क करके नाम, गोत्र (यदि उपलब्ध) और आरंभ तिथि कन्फर्म करती है।',
+  },
+  {
+    q: 'क्या पूजा का प्रमाण मिलता है?',
+    a: 'हाँ, पूजा की फोटो/वीडियो साझा की जाती है ताकि प्रक्रिया पारदर्शी रहे।',
+  },
+]
+
 function loadRazorpay() {
   return new Promise((resolve) => {
     if (window.Razorpay) return resolve(true)
@@ -16,35 +77,43 @@ function loadRazorpay() {
 }
 
 async function handlePayment() {
-  const ok = await loadRazorpay()
-  if (!ok) {
-    alert('Payment gateway लोड नहीं हो सका। कृपया पुनः प्रयास करें।')
+  const key = import.meta.env.VITE_RAZORPAY_KEY_ID || ''
+  if (!key) {
+    alert('भुगतान अस्थायी रूप से उपलब्ध नहीं है। पहले WhatsApp पर जानकारी लें।')
     return
   }
+
+  const loaded = await loadRazorpay()
+  if (!loaded) {
+    alert('Payment gateway लोड नहीं हो पाया। कृपया WhatsApp पर संपर्क करें।')
+    return
+  }
+
   const options = {
-    key: import.meta.env.VITE_RAZORPAY_KEY_ID || '',
+    key,
     amount: 39900,
     currency: 'INR',
     name: 'Kuber Anushthan',
-    description: '40 Days Kuber Mantra Jap',
-    handler: function () {
-      alert('Payment Successful! We will contact you.')
+    description: '40 Days Kuber Anushthan Booking',
+    handler: () => {
+      alert('Payment Successful! हमारी टीम WhatsApp पर संपर्क करेगी।')
     },
     prefill: {},
-    theme: { color: '#d4af37' },
+    notes: { source: 'anushthan_landing' },
+    theme: { color: '#D5A028' },
   }
+
   const rzp = new window.Razorpay(options)
   rzp.open()
 }
 
-/* ─────────────────────────────────────────────
-   Scroll-fade hook
-───────────────────────────────────────────── */
 function useFadeIn() {
   const ref = useRef(null)
+
   useEffect(() => {
     const el = ref.current
     if (!el) return
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -52,19 +121,17 @@ function useFadeIn() {
           observer.disconnect()
         }
       },
-      { threshold: 0.12 }
+      { threshold: 0.15 }
     )
+
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
+
   return ref
 }
 
-/* ─────────────────────────────────────────────
-   Sub-components
-───────────────────────────────────────────── */
-
-function FadeSection({ children, className = '' }) {
+function FadeSection({ className = '', children }) {
   const ref = useFadeIn()
   return (
     <div ref={ref} className={`an-fade ${className}`}>
@@ -77,256 +144,277 @@ function GoldDivider() {
   return <div className="an-divider" />
 }
 
-const WHATSAPP_URL =
-  'https://wa.me/9055451499?text=Namaste%20Kuber%20Anushthan%20ke%20baare%20mein%20jaankari%20chahiye'
+function HeroSection() {
+  return (
+    <section className="an-hero">
+      <div className="an-hero-inner">
+        <p className="an-top-urgency">हर दिन सीमित लोगों के लिए</p>
+        <h1 className="an-hero-h1">क्या आपके घर में पैसा टिकता नहीं?</h1>
+        <p className="an-hero-sub">कर्ज बढ़ता जा रहा है या आमदनी रुक गई है?</p>
+        <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="an-btn-primary an-pulse">
+          WhatsApp पर जानकारी लें
+        </a>
+        <p className="an-hero-caption">पहले बात करें, फिर निर्णय लें</p>
+      </div>
+      <div className="an-hero-glow" />
+    </section>
+  )
+}
 
-/* ─────────────────────────────────────────────
-   Main Page
-───────────────────────────────────────────── */
+function ProblemSection() {
+  return (
+    <section className="an-section">
+      <FadeSection>
+        <h2 className="an-section-title">अगर ये बातें आपकी जिंदगी में हैं...</h2>
+        <ul className="an-problems">
+          {PROBLEMS.map((item) => (
+            <li key={item} className="an-problem-card">
+              <span className="an-problem-dot" aria-hidden>
+                •
+              </span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </FadeSection>
+    </section>
+  )
+}
+
+function SolutionSection() {
+  return (
+    <section className="an-section an-section-dark">
+      <FadeSection>
+        <h2 className="an-section-title">कुबेर अनुष्ठान कैसे मदद करता है?</h2>
+        <p className="an-section-para">
+          यह 40 दिनों की अनुशासित वैदिक प्रक्रिया है, जिसमें अनुभवी ब्राह्मण आपके नाम से मंत्र जाप और पूजन करते
+          हैं। इसका उद्देश्य घर की आर्थिक अस्थिरता, बढ़ते कर्ज और रुकी हुई आमदनी के चक्र को तोड़ना है।
+        </p>
+      </FadeSection>
+    </section>
+  )
+}
+
+function TrustSection() {
+  return (
+    <section className="an-section">
+      <FadeSection>
+        <h2 className="an-section-title">पहले भरोसा, फिर बुकिंग</h2>
+        <div className="an-trust-badges">
+          {TRUST_BADGES.map((badge) => (
+            <span key={badge} className="an-trust-chip">
+              {badge}
+            </span>
+          ))}
+        </div>
+        <div className="an-puja-proof">
+          <div className="an-puja-image" role="img" aria-label="Pandit performing puja image placeholder">
+            <div className="an-puja-overlay">
+              <p>Pandit Ji Performing Puja</p>
+              <small>image placeholder</small>
+            </div>
+          </div>
+          <div className="an-puja-copy">
+            <h3>पूजा प्रक्रिया पारदर्शी रहती है</h3>
+            <p>पूजा शुरू होने के बाद टीम WhatsApp पर अपडेट देती है और फोटो/वीडियो साझा किए जाते हैं।</p>
+          </div>
+        </div>
+      </FadeSection>
+    </section>
+  )
+}
+
+function TestimonialSection() {
+  const [active, setActive] = useState(0)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActive((prev) => (prev + 1) % TESTIMONIALS.length)
+    }, 4500)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const t = TESTIMONIALS[active]
+
+  return (
+    <section className="an-section an-section-dark">
+      <FadeSection>
+        <h2 className="an-section-title">लोग क्या कह रहे हैं</h2>
+        <div className="an-testimonial-card" aria-live="polite">
+          <div className="an-wa-header">
+            <div className="an-wa-avatar">{t.name[0]}</div>
+            <div>
+              <p className="an-wa-name">{t.name}</p>
+              <p className="an-wa-time">{t.time}</p>
+            </div>
+          </div>
+          <p className="an-wa-msg">{t.text}</p>
+          <div className="an-carousel-dots" role="tablist" aria-label="Testimonials carousel">
+            {TESTIMONIALS.map((item, index) => (
+              <button
+                key={item.name}
+                className={`an-dot ${index === active ? 'an-dot-active' : ''}`}
+                onClick={() => setActive(index)}
+                aria-label={`Testimonial ${index + 1}`}
+                aria-pressed={index === active}
+              />
+            ))}
+          </div>
+        </div>
+      </FadeSection>
+    </section>
+  )
+}
+
+function BenefitsSection() {
+  return (
+    <section className="an-section">
+      <FadeSection>
+        <h2 className="an-section-title">इस अनुष्ठान से आपको क्या मिलेगा</h2>
+        <div className="an-benefits">
+          {BENEFITS.map((item) => (
+            <article key={item.title} className="an-benefit-card">
+              <h3>{item.title}</h3>
+              <p>{item.desc}</p>
+            </article>
+          ))}
+        </div>
+      </FadeSection>
+    </section>
+  )
+}
+
+function PricingSection() {
+  return (
+    <section className="an-section an-section-dark" id="book">
+      <FadeSection>
+        <div className="an-pricing-card">
+          <p className="an-slot-badge">हर दिन सीमित लोगों के लिए</p>
+          <h2 className="an-pricing-title">40 दिन कुबेर अनुष्ठान</h2>
+          <div className="an-pricing-price">₹399</div>
+          <p className="an-pricing-sub">एक बार बुकिंग, पूरी प्रक्रिया टीम के मार्गदर्शन में</p>
+          <button className="an-btn-secondary an-btn-full" onClick={handlePayment}>
+            ₹399 में बुक करें
+          </button>
+          <p className="an-secure-note">भुगतान सुरक्षित है (Razorpay)</p>
+        </div>
+      </FadeSection>
+    </section>
+  )
+}
+
+function CtaSection() {
+  return (
+    <section className="an-section">
+      <FadeSection className="an-cta-wrap">
+        <h2 className="an-section-title">आज ही बुक करें</h2>
+        <p className="an-section-para">पहले WhatsApp पर अपनी स्थिति बताएं, फिर सही विकल्प के साथ आगे बढ़ें।</p>
+        <div className="an-cta-actions">
+          <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="an-btn-primary an-btn-full">
+            WhatsApp करें
+          </a>
+          <button className="an-btn-secondary an-btn-full" onClick={handlePayment}>
+            ₹399 में बुक करें
+          </button>
+        </div>
+      </FadeSection>
+    </section>
+  )
+}
+
+function FAQSection() {
+  const [open, setOpen] = useState(null)
+
+  return (
+    <section className="an-section an-section-dark">
+      <FadeSection>
+        <h2 className="an-section-title">अक्सर पूछे जाने वाले सवाल</h2>
+        <div className="an-faq-list">
+          {FAQS.map((faq, index) => (
+            <div key={faq.q} className="an-faq-item">
+              <button
+                className="an-faq-q"
+                onClick={() => setOpen(open === index ? null : index)}
+                aria-expanded={open === index}
+              >
+                <span>{faq.q}</span>
+                <span className={`an-faq-arrow ${open === index ? 'an-faq-open' : ''}`}>▼</span>
+              </button>
+              <div className={`an-faq-a ${open === index ? 'an-faq-a-open' : ''}`}>
+                <p>{faq.a}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </FadeSection>
+    </section>
+  )
+}
+
+function WhatsAppButton() {
+  return (
+    <a
+      href={WHATSAPP_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="an-wa-float"
+      aria-label="WhatsApp पर संपर्क करें"
+    >
+      <svg viewBox="0 0 32 32" fill="currentColor" className="an-wa-icon">
+        <path d="M16 0C7.163 0 0 7.163 0 16c0 2.827.737 5.48 2.027 7.786L0 32l8.43-2.008A15.93 15.93 0 0 0 16 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm0 29.333a13.28 13.28 0 0 1-6.77-1.853l-.486-.288-5.003 1.193 1.214-4.868-.317-.499A13.267 13.267 0 0 1 2.667 16C2.667 8.636 8.636 2.667 16 2.667S29.333 8.636 29.333 16 23.364 29.333 16 29.333zm7.27-9.878c-.399-.2-2.36-1.164-2.726-1.297-.366-.133-.632-.2-.899.2-.267.4-1.031 1.297-1.264 1.563-.233.267-.466.3-.865.1-.4-.2-1.688-.622-3.215-1.984-1.188-1.06-1.99-2.369-2.223-2.769-.233-.4-.025-.616.175-.815.18-.179.4-.466.6-.699.2-.233.267-.4.4-.666.133-.267.067-.5-.033-.699-.1-.2-.9-2.169-1.232-2.969-.325-.779-.655-.674-.9-.686l-.765-.013c-.267 0-.699.1-1.065.5s-1.398 1.365-1.398 3.33 1.431 3.863 1.631 4.13c.2.266 2.816 4.3 6.824 6.031.954.412 1.698.658 2.279.842.957.305 1.828.262 2.517.159.768-.114 2.36-.966 2.693-1.898.333-.933.333-1.733.233-1.9-.1-.166-.366-.266-.765-.466z" />
+      </svg>
+    </a>
+  )
+}
+
+function StickyCTA({ visible }) {
+  return (
+    <div className={`an-sticky-cta ${visible ? 'an-sticky-visible' : ''}`}>
+      <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="an-btn-primary an-sticky-btn">
+        WhatsApp करें
+      </a>
+      <button className="an-btn-secondary an-sticky-btn" onClick={handlePayment}>
+        ₹399 में बुक करें
+      </button>
+    </div>
+  )
+}
+
 export default function AnushthanPage() {
   const [stickyVisible, setStickyVisible] = useState(false)
 
   useEffect(() => {
-    const onScroll = () => setStickyVisible(window.scrollY > 400)
+    const onScroll = () => setStickyVisible(window.scrollY > 950)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   return (
     <div className="an-root">
-      {/* ── 1. HERO ─────────────────────────────── */}
-      <section className="an-hero">
-        <div className="an-hero-inner">
-          <div className="an-badge">🔱 विशेष अनुष्ठान – सीमित स्लॉट</div>
-          <h1 className="an-hero-h1">
-            क्या आपके घर में<br />
-            <span className="an-gold">पैसा टिकता नहीं?</span>
-          </h1>
-          <p className="an-hero-sub">
-            40 दिनों का कुबेर मंत्र जाप अनुष्ठान<br />
-            <span className="an-gold-light">– अनुभवी सरस्वत ब्राह्मण द्वारा –</span>
-          </p>
-          <button className="an-btn-primary an-pulse" onClick={handlePayment}>
-            अभी बुक करें &nbsp;₹399
-          </button>
-          <p className="an-hero-trust">🔒 100% सुरक्षित भुगतान &nbsp;|&nbsp; ✅ तुरंत पुष्टि</p>
-        </div>
-        <div className="an-hero-glow" />
-      </section>
-
+      <HeroSection />
       <GoldDivider />
-
-      {/* ── 2. PROBLEM ──────────────────────────── */}
-      <section className="an-section">
-        <FadeSection>
-          <h2 className="an-section-title">क्या आप इन समस्याओं से जूझ रहे हैं?</h2>
-          <div className="an-problems">
-            {[
-              { icon: '💸', text: 'पैसा आता है, लेकिन टिकता नहीं' },
-              { icon: '📉', text: 'कर्ज बढ़ता जा रहा है, राहत नहीं मिल रही' },
-              { icon: '🚧', text: 'बिज़नेस या नौकरी में लगातार रुकावट' },
-            ].map((item) => (
-              <div key={item.text} className="an-problem-card">
-                <span className="an-problem-icon">{item.icon}</span>
-                <p>{item.text}</p>
-              </div>
-            ))}
-          </div>
-          <p className="an-problem-note">
-            इन सभी समस्याओं का एक आध्यात्मिक समाधान है — <span className="an-gold">कुबेर मंत्र अनुष्ठान।</span>
-          </p>
-        </FadeSection>
-      </section>
-
+      <ProblemSection />
       <GoldDivider />
-
-      {/* ── 3. SOLUTION ─────────────────────────── */}
-      <section className="an-section an-section-dark">
-        <FadeSection>
-          <h2 className="an-section-title">40 दिन का अनुष्ठान क्या है?</h2>
-          <p className="an-section-para">
-            हमारे अनुभवी <strong className="an-gold">सरस्वत ब्राह्मण</strong> 40 दिनों तक प्रतिदिन निश्चित
-            समय पर आपकी ओर से कुबेर मंत्र का जाप करते हैं। यह अनुष्ठान वैदिक परंपरा के अनुसार पूर्ण
-            विधि-विधान से संपन्न होता है।
-          </p>
-          <div className="an-benefits">
-            {[
-              { icon: '🪙', title: 'धन स्थिरता', desc: 'घर में धन का प्रवाह और संचय सुनिश्चित होता है' },
-              { icon: '🙏', title: 'कर्ज राहत', desc: 'नकारात्मक वित्तीय ऊर्जा दूर होती है' },
-              { icon: '🌟', title: 'नए अवसर', desc: 'व्यापार और करियर में नए द्वार खुलते हैं' },
-            ].map((b) => (
-              <div key={b.title} className="an-benefit-card">
-                <div className="an-benefit-icon">{b.icon}</div>
-                <h3 className="an-benefit-title">{b.title}</h3>
-                <p className="an-benefit-desc">{b.desc}</p>
-              </div>
-            ))}
-          </div>
-        </FadeSection>
-      </section>
-
+      <SolutionSection />
       <GoldDivider />
-
-      {/* ── 4. TESTIMONIALS ─────────────────────── */}
-      <section className="an-section">
-        <FadeSection>
-          <h2 className="an-section-title">लोगों के अनुभव</h2>
-          <div className="an-testimonials">
-            {[
-              {
-                name: 'Ramesh S., Mumbai',
-                time: 'आज दोपहर 2:14 बजे',
-                msg: 'भाई साहब, 40 दिन पूरे होने के बाद से घर में पैसों की तंगी काफी कम हो गई है। सच में बहुत फर्क पड़ा। 🙏',
-              },
-              {
-                name: 'Sunita D., Jaipur',
-                time: 'कल रात 9:03 बजे',
-                msg: 'मेरे पति का बिज़नेस 2 साल से ठप था। अनुष्ठान के बाद एक बड़ा ऑर्डर आया। माँ लक्ष्मी की कृपा है। 🪔',
-              },
-              {
-                name: 'Vijay K., Pune',
-                time: '3 दिन पहले',
-                msg: 'पहले तो मुझे भरोसा नहीं था, लेकिन अब मैं खुद recommend करता हूँ। कर्ज से बहुत राहत मिली। ✅',
-              },
-            ].map((t) => (
-              <div key={t.name} className="an-testimonial-card">
-                <div className="an-wa-header">
-                  <div className="an-wa-avatar">{t.name[0]}</div>
-                  <div>
-                    <p className="an-wa-name">{t.name}</p>
-                    <p className="an-wa-time">{t.time}</p>
-                  </div>
-                </div>
-                <p className="an-wa-msg">{t.msg}</p>
-              </div>
-            ))}
-          </div>
-        </FadeSection>
-      </section>
-
+      <TrustSection />
       <GoldDivider />
-
-      {/* ── 5. TRUST ────────────────────────────── */}
-      <section className="an-section an-section-dark">
-        <FadeSection>
-          <h2 className="an-section-title">हम पर भरोसा क्यों करें?</h2>
-          <div className="an-trust-grid">
-            {[
-              { icon: '📿', title: 'अनुभवी सरस्वत ब्राह्मण', desc: 'वैदिक परंपरा में दशकों का अनुभव' },
-              { icon: '👥', title: 'सैकड़ों परिवारों का विश्वास', desc: '500+ परिवार अब तक लाभान्वित' },
-              { icon: '📸', title: 'पूजा का प्रमाण', desc: 'प्रतिदिन पूजा की फोटो/वीडियो साझा की जाती है' },
-            ].map((t) => (
-              <div key={t.title} className="an-trust-card">
-                <div className="an-trust-icon">{t.icon}</div>
-                <h3 className="an-trust-title">{t.title}</h3>
-                <p className="an-trust-desc">{t.desc}</p>
-              </div>
-            ))}
-          </div>
-        </FadeSection>
-      </section>
-
+      <TestimonialSection />
       <GoldDivider />
-
-      {/* ── 6. PRICING + CTA ────────────────────── */}
-      <section className="an-section" id="book">
-        <FadeSection>
-          <div className="an-pricing-card">
-            <div className="an-slot-badge">⚡ सीमित स्लॉट उपलब्ध</div>
-            <p className="an-pricing-label">40 दिन कुबेर मंत्र जाप अनुष्ठान</p>
-            <div className="an-pricing-price">
-              <span className="an-price-strike">₹1,999</span>
-              <span className="an-price-main">₹399</span>
-            </div>
-            <ul className="an-pricing-list">
-              <li>✅ 40 दिन नियमित जाप</li>
-              <li>✅ प्रतिदिन पूजा फोटो/वीडियो</li>
-              <li>✅ वैदिक विधि-विधान</li>
-              <li>✅ WhatsApp पर पुष्टि</li>
-            </ul>
-            <button className="an-btn-primary an-btn-full an-pulse" onClick={handlePayment}>
-              अभी बुक करें — ₹399
-            </button>
-            <p className="an-secure-note">🔒 100% Secure Payment via Razorpay</p>
-          </div>
-        </FadeSection>
-      </section>
-
+      <BenefitsSection />
       <GoldDivider />
+      <PricingSection />
+      <GoldDivider />
+      <CtaSection />
+      <GoldDivider />
+      <FAQSection />
 
-      {/* ── 7. FAQ ──────────────────────────────── */}
-      <section className="an-section an-section-dark">
-        <FadeSection>
-          <h2 className="an-section-title">अक्सर पूछे जाने वाले प्रश्न</h2>
-          <FaqList />
-        </FadeSection>
-      </section>
-
-      {/* ── FOOTER ──────────────────────────────── */}
       <footer className="an-footer">
-        <p>© 2026 कुबेर अनुष्ठान सेवा &nbsp;|&nbsp; सभी अधिकार सुरक्षित</p>
+        <p>© 2026 कुबेर अनुष्ठान सेवा | सभी अधिकार सुरक्षित</p>
       </footer>
 
-      {/* ── FLOATING WHATSAPP ───────────────────── */}
-      <a
-        href={WHATSAPP_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="an-wa-float"
-        aria-label="WhatsApp पर संपर्क करें"
-      >
-        <svg viewBox="0 0 32 32" fill="currentColor" className="an-wa-icon">
-          <path d="M16 0C7.163 0 0 7.163 0 16c0 2.827.737 5.48 2.027 7.786L0 32l8.43-2.008A15.93 15.93 0 0 0 16 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm0 29.333a13.28 13.28 0 0 1-6.77-1.853l-.486-.288-5.003 1.193 1.214-4.868-.317-.499A13.267 13.267 0 0 1 2.667 16C2.667 8.636 8.636 2.667 16 2.667S29.333 8.636 29.333 16 23.364 29.333 16 29.333zm7.27-9.878c-.399-.2-2.36-1.164-2.726-1.297-.366-.133-.632-.2-.899.2-.267.4-1.031 1.297-1.264 1.563-.233.267-.466.3-.865.1-.4-.2-1.688-.622-3.215-1.984-1.188-1.06-1.99-2.369-2.223-2.769-.233-.4-.025-.616.175-.815.18-.179.4-.466.6-.699.2-.233.267-.4.4-.666.133-.267.067-.5-.033-.699-.1-.2-.9-2.169-1.232-2.969-.325-.779-.655-.674-.9-.686l-.765-.013c-.267 0-.699.1-1.065.5s-1.398 1.365-1.398 3.33 1.431 3.863 1.631 4.13c.2.266 2.816 4.3 6.824 6.031.954.412 1.698.658 2.279.842.957.305 1.828.262 2.517.159.768-.114 2.36-.966 2.693-1.898.333-.933.333-1.733.233-1.9-.1-.166-.366-.266-.765-.466z" />
-        </svg>
-      </a>
-
-      {/* ── STICKY BOTTOM CTA (mobile) ───────────── */}
-      <div className={`an-sticky-cta ${stickyVisible ? 'an-sticky-visible' : ''}`}>
-        <button className="an-btn-primary an-btn-full" onClick={handlePayment}>
-          अभी बुक करें — ₹399 &nbsp;⚡
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────
-   FAQ accordion
-───────────────────────────────────────────── */
-const FAQS = [
-  {
-    q: 'क्या यह अनुष्ठान सच में काम करता है?',
-    a: 'हाँ। यह वैदिक परंपरा पर आधारित है। 500+ परिवारों ने सकारात्मक परिणाम अनुभव किए हैं। परिणाम आस्था और निरंतरता पर निर्भर करते हैं।',
-  },
-  {
-    q: 'भुगतान के बाद क्या होगा?',
-    a: 'भुगतान के 24 घंटे के भीतर हमारे प्रतिनिधि WhatsApp पर संपर्क करेंगे और अनुष्ठान प्रारंभ की तिथि व विवरण देंगे।',
-  },
-  {
-    q: 'क्या Refund मिलेगा?',
-    a: 'एक बार अनुष्ठान प्रारंभ होने के बाद refund संभव नहीं है। अनुष्ठान शुरू होने से पहले किसी समस्या के लिए WhatsApp पर संपर्क करें।',
-  },
-]
-
-function FaqList() {
-  const [open, setOpen] = useState(null)
-  return (
-    <div className="an-faq-list">
-      {FAQS.map((faq, i) => (
-        <div key={i} className="an-faq-item">
-          <button
-            className="an-faq-q"
-            onClick={() => setOpen(open === i ? null : i)}
-            aria-expanded={open === i}
-          >
-            <span>{faq.q}</span>
-            <span className={`an-faq-arrow ${open === i ? 'an-faq-open' : ''}`}>▼</span>
-          </button>
-          <div className={`an-faq-a ${open === i ? 'an-faq-a-open' : ''}`}>
-            <p>{faq.a}</p>
-          </div>
-        </div>
-      ))}
+      <WhatsAppButton />
+      <StickyCTA visible={stickyVisible} />
     </div>
   )
 }
