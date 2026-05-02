@@ -610,7 +610,7 @@ function AnushthanPage() {
               })} */}
               <img src='./assets/anushthan/5.png' alt='testimonial placeholder' style={{ width: '100%', borderRadius: 12, marginTop: 10 }} loading="lazy" />
             </div>
-            <div className="carousel-dots" aria-label="testimonial indicators">
+            {/* <div className="carousel-dots" aria-label="testimonial indicators">
               {testimonials.map((item, idx) => (
                 <button
                   key={item.name}
@@ -619,7 +619,7 @@ function AnushthanPage() {
                   aria-label={`Show testimonial ${idx + 1}`}
                 />
               ))}
-            </div>
+            </div> */}
           </div>
         </div>
       </section>
