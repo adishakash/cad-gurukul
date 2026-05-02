@@ -513,6 +513,9 @@ function AnushthanPage() {
         <p className="trust-line" data-animate>
           आपकी समस्या के अनुसार 40 दिनों का कुबेर अनुष्ठान किया जाता है
         </p>
+        <p className="trust-line" data-animate>
+            “हम हर व्यक्ति के लिए अलग संकल्प लेकर अनुष्ठान करते हैं”
+        </p>
         <div className="cta-row" data-animate>
           <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
             WhatsApp पर अपनी समस्या बताएं
