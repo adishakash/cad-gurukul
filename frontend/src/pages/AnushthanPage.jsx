@@ -207,7 +207,20 @@ function AnushthanPage() {
         .sub {
           color: var(--muted);
           font-size: clamp(16px, 4.5vw, 21px);
-          margin-bottom: 16px;
+          margin-bottom: 8px;
+        }
+
+        .hero-social-proof {
+          color: #ffe39a;
+          font-size: 14px;
+          font-weight: 700;
+          margin: 0 0 8px;
+        }
+
+        .hero-extra-pain {
+          color: #dbe6ff;
+          font-size: 16px;
+          margin: 0 0 16px;
         }
 
         .trust-line {
@@ -224,6 +237,12 @@ function AnushthanPage() {
           color: var(--gold);
           margin-bottom: 10px;
           letter-spacing: 0.2px;
+        }
+
+        .process-line {
+          color: rgba(255, 255, 255, 0.72);
+          font-size: 13px;
+          margin-top: 10px;
         }
 
         .cta-row {
@@ -634,6 +653,8 @@ function AnushthanPage() {
         <p className="sub" data-animate>
           कर्ज बढ़ता जा रहा है या आमदनी रुक गई है?
         </p>
+        <p className="hero-social-proof" data-animate>500+ लोगों ने करवाया</p>
+        <p className="hero-extra-pain" data-animate>बार-बार कोशिश के बाद भी पैसा नहीं टिकता?</p>
         <p className="trust-line" data-animate>
           आपकी समस्या के अनुसार 40 दिनों का कुबेर अनुष्ठान किया जाता है
         </p>
@@ -651,6 +672,7 @@ function AnushthanPage() {
             नीचे देखें
           </button>
         </div>
+        <p className="process-line" data-animate>(पूरी प्रक्रिया WhatsApp पर समझाई जाएगी)</p>
       </section>
 
       <section className="intro-section wrap">
@@ -809,7 +831,7 @@ function AnushthanPage() {
         <div className="price-box" data-animate>
           <h2 style={{ margin: '0 0 6px' }}>इस अनुष्ठान का शुल्क</h2>
           <div className="price">₹{PRICE_RUPEES}</div>
-          <div className="urgency">सीमित लोगों के लिए</div>
+          <div className="urgency">हर दिन सीमित लोगों के लिए ही किया जाता है</div>
           <div className="cta-row" style={{ justifyContent: 'center' }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
               WhatsApp पर अपनी समस्या बताकर सलाह लें
@@ -840,7 +862,7 @@ function AnushthanPage() {
       </section>
 
       <a className="floating-wa" href={WHATSAPP_LINK} target="_blank" rel="noreferrer" aria-label="WhatsApp">
-        WA
+        🟢
       </a>
 
       <div className="sticky-bar">
