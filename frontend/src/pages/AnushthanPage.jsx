@@ -218,6 +218,14 @@ function AnushthanPage() {
           margin-bottom: 24px;
         }
 
+        .micro-prompt {
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--gold);
+          margin-bottom: 10px;
+          letter-spacing: 0.2px;
+        }
+
         .cta-row {
           display: flex;
           gap: 12px;
@@ -508,6 +516,18 @@ function AnushthanPage() {
           margin-bottom: 16px;
         }
 
+        .risk-reversal {
+          margin-top: 16px;
+          font-size: 14px;
+          color: #a8c4a2;
+          border: 1px solid rgba(100, 200, 120, 0.2);
+          background: rgba(100, 200, 120, 0.05);
+          border-radius: 10px;
+          padding: 10px 14px;
+          text-align: center;
+          line-height: 1.6;
+        }
+
         .sticky-bar {
           position: fixed;
           left: 0;
@@ -609,9 +629,12 @@ function AnushthanPage() {
         <p className="trust-line" data-animate>
             “हम हर व्यक्ति के लिए अलग संकल्प लेकर अनुष्ठान करते हैं”
         </p>
+        <p className="micro-prompt" data-animate>
+          👇 अपनी समस्या WhatsApp पर लिखें
+        </p>
         <div className="cta-row" data-animate>
           <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-            WhatsApp पर अपनी समस्या बताएं
+            WhatsApp पर अपनी समस्या बताकर सलाह लें
           </a>
           <button className="btn btn-ghost" onClick={scrollToNext}>
             नीचे देखें
@@ -684,7 +707,7 @@ function AnushthanPage() {
           </ul>
           <div className="cta-row" style={{ marginTop: 18 }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-              WhatsApp पर अपनी समस्या बताएं
+              WhatsApp पर अपनी समस्या बताकर सलाह लें
             </a>
           </div>
         </div>
@@ -707,16 +730,18 @@ function AnushthanPage() {
               />
             </div>
             <div className="trust-tags">
-              <span className="tag">अनुभवी ब्राह्मण</span>
-              <span className="tag">सैकड़ों लोगों ने करवाया</span>
-              <span className="tag">पूजा की फोटो/वीडियो साझा की जाती है</span>
+              <span className="tag">18+ वर्ष वैदिक अनुभव</span>
+              <span className="tag">500+ परिवारों का अनुष्ठान किया</span>
+              <span className="tag">हर दिन पूजा की फोटो WhatsApp पर</span>
+              <span className="tag">नाम + गोत्र से व्यक्तिगत संकल्प</span>
+              {/* <span className="tag">किसी ने भी बीच में नहीं छोड़ा</span> */}
             </div>
           </div>
 
           <div className="card" data-animate>
             <h2>अनुभव साझा</h2>
             <div className="chat-wrap">
-              {/* {testimonials.map((item, index) => {
+              {testimonials.map((item, index) => {
                 const active = index === activeTestimonial
                 return (
                   <article
@@ -735,10 +760,9 @@ function AnushthanPage() {
                     <div className="chat-bubble">{item.text}</div>
                   </article>
                 )
-              })} */}
-              <img src='./assets/anushthan/5.png' alt='testimonial placeholder' style={{ width: '100%', borderRadius: 12, marginTop: 10 }} loading="lazy" />
+              })}
             </div>
-            {/* <div className="carousel-dots" aria-label="testimonial indicators">
+            <div className="carousel-dots" aria-label="testimonial indicators">
               {testimonials.map((item, idx) => (
                 <button
                   key={item.name}
@@ -747,7 +771,10 @@ function AnushthanPage() {
                   aria-label={`Show testimonial ${idx + 1}`}
                 />
               ))}
-            </div> */}
+            </div>
+            <div className="carousel-dots" aria-label="testimonial indicators">
+              <img src='/assets/anushthan/5.png' alt='testimonial placeholder' style={{ width: '100%', borderRadius: 12, marginTop: 10 }} loading="lazy" />
+            </div>
           </div>
         </div>
       </section>
@@ -773,12 +800,12 @@ function AnushthanPage() {
           <div className="urgency">सीमित लोगों के लिए</div>
           <div className="cta-row" style={{ justifyContent: 'center' }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-              WhatsApp पर अपनी समस्या बताएं
+              WhatsApp पर अपनी समस्या बताकर सलाह लें
             </a>
-            <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
-              {razorpayLoading ? 'लोड हो रहा है...' : '₹399 में अनुष्ठान शुरू करें'}
-            </button>
           </div>
+          <p className="risk-reversal">
+            🛡️ अगर प्रक्रिया समझ में न आए तो आगे बढ़ने की कोई बाध्यता नहीं है
+          </p>
         </div>
       </section>
 
@@ -791,7 +818,7 @@ function AnushthanPage() {
           </p>
           <div className="cta-row" style={{ marginTop: 14 }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-              WhatsApp पर अपनी समस्या बताएं
+              WhatsApp पर अपनी समस्या बताकर सलाह लें
             </a>
             <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
               ₹399 में अनुष्ठान शुरू करें
@@ -805,11 +832,17 @@ function AnushthanPage() {
       </a>
 
       <div className="sticky-bar">
-        <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-          WhatsApp अपनी समस्या बताएं
+        <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer" style={{ gridColumn: 'span 2' }}>
+          WhatsApp पर अपनी समस्या बताकर सलाह लें
         </a>
-        <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
-          ₹399 में बुक करें
+      </div>
+      <div style={{ textAlign: 'center', paddingBottom: '6px', background: 'rgba(6,9,15,0.94)' }}>
+        <button
+          onClick={handlePayment}
+          disabled={razorpayLoading}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.38)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', padding: '4px 0 10px' }}
+        >
+          {razorpayLoading ? 'लोड हो रहा है...' : 'या सीधे ₹399 में बुक करें'}
         </button>
       </div>
     </div>
