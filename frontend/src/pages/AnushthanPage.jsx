@@ -749,7 +749,7 @@ function AnushthanPage() {
         <div className="intro-card" data-animate>
           <div className="intro-photo-wrap">
             <img
-              src="/assets/anushthan/pandit-ji.png"
+              src="/assets/anushthan/panditji-img.png"
               alt="Pandit Ji"
               className="intro-photo"
               loading="lazy"
