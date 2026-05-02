@@ -568,12 +568,12 @@ function AnushthanPage() {
             <h2>विश्वास</h2>
             <div className="trust-media">
               <img
-                src="./assets/pandit-ji.png"
+                src="/assets/anushthan/pandit-ji.png"
                 alt="Pandit placeholder"
                 loading="lazy"
               />
               <img
-                src="./assets/4.png"
+                src="/assets/anushthan/4.png"
                 alt="Puja placeholder"
                 loading="lazy"
               />
