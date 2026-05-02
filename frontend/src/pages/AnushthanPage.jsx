@@ -568,12 +568,12 @@ function AnushthanPage() {
             <h2>विश्वास</h2>
             <div className="trust-media">
               <img
-                src="https://images.unsplash.com/photo-1604605801370-339ab8669284?q=80&w=900&auto=format&fit=crop"
+                src="./assets/pandit-ji.png"
                 alt="Pandit placeholder"
                 loading="lazy"
               />
               <img
-                src="https://images.unsplash.com/photo-1599661046289-e31897846e41?q=80&w=900&auto=format&fit=crop"
+                src="./assets/4.png"
                 alt="Puja placeholder"
                 loading="lazy"
               />
@@ -666,9 +666,6 @@ function AnushthanPage() {
             </a>
             <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
               ₹399 में अनुष्ठान शुरू करें
-            </button>
-            <button className="btn btn-ghost" onClick={scrollToPricing}>
-              शुल्क देखें
             </button>
           </div>
         </div>
