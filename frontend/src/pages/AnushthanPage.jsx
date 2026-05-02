@@ -570,7 +570,7 @@ function AnushthanPage() {
             <h2>विश्वास</h2>
             <div className="trust-media">
               <img
-                src="/assets/anushthan/Pandit-ji.jpg"
+                src="/assets/anushthan/Pandit-Ji.jpg"
                 alt="Pandit placeholder"
                 loading="lazy"
               />
