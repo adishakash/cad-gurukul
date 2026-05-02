@@ -311,6 +311,99 @@ function AnushthanPage() {
           font-weight: 600;
         }
 
+        /* ── Human Intro ── */
+        .intro-section {
+          padding: 40px 0 0;
+        }
+
+        .intro-card {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          background: linear-gradient(135deg, rgba(212,175,55,0.06), rgba(255,255,255,0.01)), var(--card);
+          border: 1px solid rgba(212,175,55,0.22);
+          border-radius: 20px;
+          padding: 24px;
+        }
+
+        .intro-photo-wrap {
+          flex: 0 0 auto;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .intro-photo {
+          width: 110px;
+          height: 110px;
+          border-radius: 50%;
+          object-fit: cover;
+          object-position: top;
+          border: 3px solid var(--gold);
+          box-shadow: 0 0 24px rgba(212,175,55,0.35);
+        }
+
+        .intro-name {
+          font-weight: 700;
+          font-size: 17px;
+          color: var(--gold);
+          text-align: center;
+        }
+
+        .intro-title {
+          font-size: 13px;
+          color: var(--muted);
+          text-align: center;
+          margin-top: -6px;
+        }
+
+        .intro-body {
+          flex: 1;
+        }
+
+        .intro-body h2 {
+          font-size: clamp(20px, 5vw, 26px);
+          margin: 0 0 10px;
+          color: #fff;
+        }
+
+        .intro-quote {
+          border-left: 3px solid var(--gold);
+          padding-left: 12px;
+          color: #dbe6ff;
+          line-height: 1.75;
+          font-size: 15px;
+          margin: 0 0 14px;
+        }
+
+        .intro-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .intro-chip {
+          font-size: 13px;
+          background: rgba(212,175,55,0.1);
+          border: 1px solid rgba(212,175,55,0.28);
+          color: #ffe7a8;
+          padding: 5px 10px;
+          border-radius: 999px;
+        }
+
+        @media (min-width: 560px) {
+          .intro-card {
+            flex-direction: row;
+            align-items: flex-start;
+          }
+
+          .intro-photo {
+            width: 130px;
+            height: 130px;
+          }
+        }
+
         .trust-media {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -523,6 +616,36 @@ function AnushthanPage() {
           <button className="btn btn-ghost" onClick={scrollToNext}>
             नीचे देखें
           </button>
+        </div>
+      </section>
+
+      <section className="intro-section wrap">
+        <div className="intro-card" data-animate>
+          <div className="intro-photo-wrap">
+            <img
+              src="/assets/anushthan/pandit-ji.png"
+              alt="Pandit Ji"
+              className="intro-photo"
+              loading="lazy"
+            />
+            <p className="intro-name">पं. राजेश शर्मा</p>
+            <p className="intro-title">सरस्वत ब्राह्मण | 18+ वर्ष अनुभव</p>
+          </div>
+          <div className="intro-body">
+            <h2>मैं कौन हूँ और यह क्यों करता हूँ</h2>
+            <p className="intro-quote">
+              "मेरे खुद के परिवार में एक समय आर्थिक संकट आया था। तब मेरे गुरु जी ने मुझे कुबेर साधना की विधि सिखाई।
+              उसके बाद से मैंने सैकड़ों परिवारों के लिए यह अनुष्ठान किया है।
+              <br /><br />
+              मेरा उद्देश्य सिर्फ पैसा कमाना नहीं — मेरा काम आपकी समस्या को समझकर सही विधि से अनुष्ठान करना है।"
+            </p>
+            <div className="intro-chips">
+              <span className="intro-chip">18+ वर्ष अनुभव</span>
+              <span className="intro-chip">सैकड़ों परिवारों की मदद</span>
+              <span className="intro-chip">व्यक्तिगत संकल्प</span>
+              <span className="intro-chip">पारदर्शी प्रक्रिया</span>
+            </div>
+          </div>
         </div>
       </section>
 
