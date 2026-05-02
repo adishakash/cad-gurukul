@@ -588,7 +588,7 @@ function AnushthanPage() {
           <div className="card" data-animate>
             <h2>अनुभव साझा</h2>
             <div className="chat-wrap">
-              {testimonials.map((item, index) => {
+              {/* {testimonials.map((item, index) => {
                 const active = index === activeTestimonial
                 return (
                   <article
@@ -607,7 +607,8 @@ function AnushthanPage() {
                     <div className="chat-bubble">{item.text}</div>
                   </article>
                 )
-              })}
+              })} */}
+              <img src='./assets/anushthan/5.png' alt='testimonial placeholder' style={{ width: '100%', borderRadius: 12, marginTop: 10 }} loading="lazy" />
             </div>
             <div className="carousel-dots" aria-label="testimonial indicators">
               {testimonials.map((item, idx) => (
