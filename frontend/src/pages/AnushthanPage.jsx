@@ -37,6 +37,7 @@ const benefitPoints = ['पैसा धीरे-धीरे रुकने �
 
 function AnushthanPage() {
   const [activeTestimonial, setActiveTestimonial] = useState(0)
+  const [isTypingSimulation, setIsTypingSimulation] = useState(false)
   const [razorpayLoading, setRazorpayLoading] = useState(false)
 
   const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID
@@ -69,10 +70,19 @@ function AnushthanPage() {
   }, [observerOptions])
 
   useEffect(() => {
+    let revealId
     const id = window.setInterval(() => {
-      setActiveTestimonial((prev) => (prev + 1) % testimonials.length)
+      setIsTypingSimulation(true)
+      revealId = window.setTimeout(() => {
+        setActiveTestimonial((prev) => (prev + 1) % testimonials.length)
+        setIsTypingSimulation(false)
+      }, 500)
     }, 6000)
-    return () => window.clearInterval(id)
+
+    return () => {
+      window.clearInterval(id)
+      if (revealId) window.clearTimeout(revealId)
+    }
   }, [])
 
   const scrollToPricing = useCallback(() => {
@@ -494,6 +504,53 @@ function AnushthanPage() {
           color: #f2fff7;
         }
 
+        .chat-bubble.show {
+          animation: bubbleFade 240ms ease;
+        }
+
+        @keyframes bubbleFade {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .chat-typing {
+          min-height: 104px;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px dashed rgba(255, 255, 255, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 14px;
+        }
+
+        .chat-meta {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 6px;
+          margin-top: 8px;
+          font-size: 12px;
+        }
+
+        .chat-ticks {
+          color: #40a9ff;
+          font-weight: 800;
+          letter-spacing: -1px;
+        }
+
+        .chat-seen {
+          color: #8ab9e0;
+          text-transform: lowercase;
+        }
+
         .carousel-dots {
           display: flex;
           gap: 8px;
@@ -544,6 +601,13 @@ function AnushthanPage() {
           color: #ffe39a;
           font-weight: 700;
           margin-bottom: 16px;
+        }
+
+        .scarcity-anchor {
+          margin: -6px 0 14px;
+          color: #ffd77a;
+          font-size: 14px;
+          font-weight: 600;
         }
 
         .risk-reversal {
@@ -659,7 +723,7 @@ function AnushthanPage() {
         <p className="sub" data-animate>
           कर्ज बढ़ता जा रहा है या आमदनी रुक गई है?
         </p>
-        <p className="hero-social-proof" data-animate>500+ लोगों ने करवाया</p>
+        <p className="hero-social-proof" data-animate>500+ लोगों ने पिछले कुछ वर्षों में करवाया</p>
         <p className="hero-extra-pain" data-animate>बार-बार कोशिश के बाद भी पैसा नहीं टिकता?</p>
         <p className="trust-line" data-animate>
           आपकी समस्या के अनुसार 40 दिनों का कुबेर अनुष्ठान किया जाता है
@@ -780,26 +844,23 @@ function AnushthanPage() {
           <div className="card" data-animate>
             <h2>अनुभव साझा</h2>
             <div className="chat-wrap">
-              {testimonials.map((item, index) => {
-                const active = index === activeTestimonial
-                return (
-                  <article
-                    key={item.name + item.time}
-                    className="chat-card"
-                    style={{
-                      opacity: active ? 1 : 0.6,
-                      transform: active ? 'scale(1)' : 'scale(0.99)',
-                      transition: 'all 250ms ease',
-                    }}
-                  >
-                    <div className="chat-head">
-                      <span>{item.name}</span>
-                      <span>{item.time}</span>
+              <article className="chat-card">
+                <div className="chat-head">
+                  <span>{testimonials[activeTestimonial].name}</span>
+                  <span>{testimonials[activeTestimonial].time}</span>
+                </div>
+                {isTypingSimulation ? (
+                  <div className="chat-typing">Typing...</div>
+                ) : (
+                  <>
+                    <div className="chat-bubble show">{testimonials[activeTestimonial].text}</div>
+                    <div className="chat-meta">
+                      <span className="chat-ticks">✔✔</span>
+                      <span className="chat-seen">seen</span>
                     </div>
-                    <div className="chat-bubble">{item.text}</div>
-                  </article>
-                )
-              })}
+                  </>
+                )}
+              </article>
             </div>
             <div className="carousel-dots" aria-label="testimonial indicators">
               {testimonials.map((item, idx) => (
@@ -838,6 +899,7 @@ function AnushthanPage() {
           <h2 style={{ margin: '0 0 6px' }}>इस अनुष्ठान का शुल्क</h2>
           <div className="price">₹{PRICE_RUPEES}</div>
           <div className="urgency">हर दिन सीमित लोगों के लिए ही किया जाता है</div>
+          <p className="scarcity-anchor">आज के लिए सीमित स्लॉट उपलब्ध</p>
           <div className="cta-row" style={{ justifyContent: 'center' }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
               WhatsApp पर अपनी समस्या बताकर सलाह लें
