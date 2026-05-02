@@ -515,7 +515,7 @@ function AnushthanPage() {
         </p>
         <div className="cta-row" data-animate>
           <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-            WhatsApp पर जानकारी लें
+            WhatsApp पर अपनी समस्या बताएं
           </a>
           <button className="btn btn-ghost" onClick={scrollToNext}>
             नीचे देखें
@@ -545,6 +545,8 @@ function AnushthanPage() {
             यह 40 दिनों का कुबेर मंत्र जाप अनुष्ठान है
             <br />
             जो अनुभवी सरस्वत ब्राह्मण द्वारा विधि-विधान से किया जाता है
+            <br />
+             आपकी समस्या के अनुसार अनुष्ठान की विधि अलग हो सकती है
           </p>
           <ul className="points" style={{ marginTop: 10 }}>
             {solutionPoints.map((point) => (
@@ -556,7 +558,7 @@ function AnushthanPage() {
           </ul>
           <div className="cta-row" style={{ marginTop: 18 }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-              WhatsApp पर बात शुरू करें
+              WhatsApp पर अपनी समस्या बताएं
             </a>
           </div>
         </div>
@@ -568,7 +570,7 @@ function AnushthanPage() {
             <h2>विश्वास</h2>
             <div className="trust-media">
               <img
-                src="/assets/anushthan/pandit-ji.png"
+                src="/assets/anushthan/Pandit-ji.jpg"
                 alt="Pandit placeholder"
                 loading="lazy"
               />
@@ -645,7 +647,7 @@ function AnushthanPage() {
           <div className="urgency">सीमित लोगों के लिए</div>
           <div className="cta-row" style={{ justifyContent: 'center' }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-              WhatsApp पर बात करें
+              WhatsApp पर अपनी समस्या बताएं
             </a>
             <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
               {razorpayLoading ? 'लोड हो रहा है...' : '₹399 में अनुष्ठान शुरू करें'}
@@ -663,7 +665,7 @@ function AnushthanPage() {
           </p>
           <div className="cta-row" style={{ marginTop: 14 }}>
             <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-              WhatsApp पर बात करें
+              WhatsApp पर अपनी समस्या बताएं
             </a>
             <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
               ₹399 में अनुष्ठान शुरू करें
@@ -678,7 +680,7 @@ function AnushthanPage() {
 
       <div className="sticky-bar">
         <a className="btn btn-main" href={WHATSAPP_LINK} target="_blank" rel="noreferrer">
-          WhatsApp करें
+          WhatsApp अपनी समस्या बताएं
         </a>
         <button className="btn btn-ghost" onClick={handlePayment} disabled={razorpayLoading}>
           ₹399 में बुक करें
