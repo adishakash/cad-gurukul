@@ -8,17 +8,17 @@ const PRICE_PAISE = 39900
 
 const testimonials = [
   {
-    name: 'Rohit S.',
+    name: 'Rohit Sharma (Jaipur)',
     time: '10:24 AM',
     text: 'Namaste ji 🙏\nमैंने अनुष्ठान करवाया था\nअब पैसा थोड़ा रुकने लगा है\nधन्यवाद',
   },
   {
-    name: 'Pooja M.',
+    name: 'Pooja Verma (Delhi)',
     time: '7:42 PM',
     text: 'प्रक्रिया बहुत स्पष्ट थी,\nपूजा की फोटो भी मिली,\nमन को संतोष मिला।',
   },
   {
-    name: 'Vivek K.',
+    name: 'Vivek Kumar (Mumbai)',
     time: '9:11 AM',
     text: 'धीरे-धीरे आर्थिक स्थिति में फर्क दिख रहा है,\nनियमित अपडेट के लिए धन्यवाद।',
   },
@@ -71,7 +71,7 @@ function AnushthanPage() {
   useEffect(() => {
     const id = window.setInterval(() => {
       setActiveTestimonial((prev) => (prev + 1) % testimonials.length)
-    }, 3200)
+    }, 6000)
     return () => window.clearInterval(id)
   }, [])
 
@@ -495,6 +495,17 @@ function AnushthanPage() {
           background: var(--gold);
         }
 
+        .live-feeling {
+          margin-top: 12px;
+          font-size: 14px;
+          color: #c9f7d8;
+          background: rgba(37, 211, 102, 0.08);
+          border: 1px solid rgba(37, 211, 102, 0.26);
+          border-radius: 10px;
+          padding: 9px 12px;
+          text-align: center;
+        }
+
         .price-box {
           text-align: center;
           border: 1px solid var(--line);
@@ -627,7 +638,7 @@ function AnushthanPage() {
           आपकी समस्या के अनुसार 40 दिनों का कुबेर अनुष्ठान किया जाता है
         </p>
         <p className="trust-line" data-animate>
-            “हम हर व्यक्ति के लिए अलग संकल्प लेकर अनुष्ठान करते हैं”
+          हर व्यक्ति के लिए अलग विधि से अनुष्ठान किया जाता है
         </p>
         <p className="micro-prompt" data-animate>
           👇 अपनी समस्या WhatsApp पर लिखें
@@ -775,6 +786,7 @@ function AnushthanPage() {
             <div className="carousel-dots" aria-label="testimonial indicators">
               <img src='/assets/anushthan/5.png' alt='testimonial placeholder' style={{ width: '100%', borderRadius: 12, marginTop: 10 }} loading="lazy" />
             </div>
+            <p className="live-feeling">हर दिन नए लोगों के लिए अनुष्ठान किया जाता है</p>
           </div>
         </div>
       </section>
@@ -842,7 +854,7 @@ function AnushthanPage() {
           disabled={razorpayLoading}
           style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.38)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', padding: '4px 0 10px' }}
         >
-          {razorpayLoading ? 'लोड हो रहा है...' : 'या सीधे ₹399 में बुक करें'}
+          {razorpayLoading ? 'लोड हो रहा है...' : '(यदि आप पहले से आश्वस्त हैं)'}
         </button>
       </div>
     </div>
