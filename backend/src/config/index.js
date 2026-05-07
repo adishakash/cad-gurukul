@@ -119,7 +119,7 @@ const config = {
   },
 
   counsellorJoin: {
-    feeRupees: parseFloatValue(process.env.COUNSELLOR_JOIN_FEE_RUPEES, 49999),
+    feeRupees: parseFloatValue(process.env.COUNSELLOR_JOIN_FEE_RUPEES, 4),
   },
 
   email: {
