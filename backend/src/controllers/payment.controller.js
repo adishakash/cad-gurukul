@@ -11,6 +11,7 @@ const analytics = require('../services/analytics/analyticsService');
 const { sendConsultationSlotEmail } = require('../services/email/emailService');
 const { safeLeadUpdate } = require('../utils/leadStatusHelper');
 const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
+const { getEffectiveChargeAmount } = require('../utils/testPricing');
 const {
   PLAN_PRICES,
   normalizePlanType,
@@ -549,10 +550,11 @@ const createOrder = async (req, res) => {
       }, 'Free purchase recorded', 201);
     }
 
-    // Create Razorpay order
+    // Create Razorpay order — apply test pricing if PAYMENT_TEST_MODE=true
     const receiptBase = assessmentId ? assessmentId.slice(0, 12) : req.user.id.slice(0, 12);
+    const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(orderAmountPaise);
     const order = await razorpayService.createOrder({
-      amount: orderAmountPaise,
+      amount: chargeAmountPaise,
       currency: 'INR',
       receipt: `cg_${planType[0]}_${receiptBase}`,
       notes: { userId: req.user.id, assessmentId: assessmentId || null, planType },
@@ -566,7 +568,7 @@ const createOrder = async (req, res) => {
         currency: 'INR',
         status: 'CREATED',
         razorpayOrderId: order.id,
-        metadata: baseMetadata,
+        metadata: { ...baseMetadata, ...(isTestMode ? { isTestMode: true, chargeAmountPaise } : {}) },
       },
     });
 
@@ -581,11 +583,11 @@ const createOrder = async (req, res) => {
       await triggerAutomation('payment_initiated', { leadId: lead.id, userId: req.user.id, planType });
     }
 
-    logger.info('[Payment] Order created', { paymentId: payment.id, orderId: order.id, planType });
+    logger.info('[Payment] Order created', { paymentId: payment.id, orderId: order.id, planType, chargeAmountPaise });
 
     return successResponse(res, {
       orderId:  order.id,
-      amount:   orderAmountPaise,
+      amount:   chargeAmountPaise,
       currency: 'INR',
       keyId:    config.razorpay.keyId,
       paymentId: payment.id,
