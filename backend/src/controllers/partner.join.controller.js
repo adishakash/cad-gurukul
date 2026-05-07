@@ -10,7 +10,7 @@ const { notifyPartner } = require('../services/notification/partnerNotificationS
 const logger = require('../utils/logger');
 const config = require('../config');
 
-const JOIN_FEE_RUPEES = Number(config.counsellorJoin?.feeRupees || 49999);
+const JOIN_FEE_RUPEES = Number(config.counsellorJoin?.feeRupees || 5);
 const JOIN_FEE_PAISE = rupeesToPaise(JOIN_FEE_RUPEES);
 
 const normalizeCouponCode = (code) => (code || '').trim().toUpperCase();
