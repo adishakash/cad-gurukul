@@ -2,9 +2,9 @@
 
 const PLAN_PRICES = {
   free: 0,
-  standard: 499,
-  premium: 1999,
-  consultation: 9999,
+  standard: 2,
+  premium: 4,
+  consultation: 6,
 };
 
 const PLAN_ORDER = ['free', 'standard', 'premium', 'consultation'];
