@@ -284,6 +284,13 @@ function PremiumTimeline({ leadStatus, paidReport, generatingReport, onRefresh, 
       desc:    'Download your complete premium career blueprint — share with parents & teachers.',
       done:    reportReady,
     },
+    {
+      key:     'counselling',
+      label:   '45-Min Counselling Session',
+      icon:    '🎓',
+      desc:    'Your plan includes a 45-minute counselling session with a counsellor. Our team will reach out to schedule it.',
+      done:    false,
+    },
   ]
 
   return (

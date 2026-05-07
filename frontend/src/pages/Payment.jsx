@@ -49,6 +49,7 @@ const PLAN_CONFIG = {
       'Salary outlook per career match',
       'Scholarship opportunities list',
       'Future-scope analysis (2030–2040)',
+      '45-min counselling session with a counsellor',
     ],
     cta: '🚀 Pay ₹1,999 & Get Premium AI Report',
     successMsg: 'Payment successful! Continue your premium assessment to unlock your Premium AI report.',
