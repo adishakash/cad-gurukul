@@ -168,9 +168,9 @@
       "title": "টিম",
       "subtitle": "শিক্ষক, ইঞ্জিনিয়ার এবং AI গবেষক — একই লক্ষ্যে একত্র।",
       "members": [
-        { "name": "Akash Sharma", "role": "প্রতিষ্ঠাতা ও ক্যারিয়ার কাউন্সেলর", "emoji": "🎓" },
-        { "name": "Priya Rajan", "role": "AI ও এডুকেশন লিড", "emoji": "🤖" },
-        { "name": "Rohan Mehta", "role": "প্ল্যাটফর্ম ইঞ্জিনিয়ার", "emoji": "💻" }
+        { "name": "Adish Gupta", "role": "প্রতিষ্ঠাতা ও ক্যারিয়ার কাউন্সেলর", "emoji": "🎓" },
+        { "name": "Ashima Gupta", "role": "AI ও এডুকেশন লিড", "emoji": "🤖" },
+        { "name": "Devershi Kuthekar", "role": "প্ল্যাটফর্ম ইঞ্জিনিয়ার", "emoji": "💻" }
       ]
     }
   },

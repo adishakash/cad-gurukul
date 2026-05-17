@@ -167,9 +167,9 @@
       "title": "குழு",
       "subtitle": "ஆசிரியர்கள், பொறியாளர்கள், AI ஆராய்ச்சியாளர்கள் — ஒரே நோக்கில் ஒன்று.",
       "members": [
-        { "name": "Akash Sharma", "role": "நிறுவனர் & கரியர் கவுன்ஸலர்", "emoji": "🎓" },
-        { "name": "Priya Rajan", "role": "AI & கல்வி தலைமை", "emoji": "🤖" },
-        { "name": "Rohan Mehta", "role": "பிளாட்ஃபாரம் இன்ஜினியர்", "emoji": "💻" }
+        { "name": "Adish Gupta", "role": "நிறுவனர் & கரியர் கவுன்ஸலர்", "emoji": "🎓" },
+        { "name": "Ashima Gupta", "role": "AI & கல்வி தலைமை", "emoji": "🤖" },
+        { "name": "Devershi Kuthekar", "role": "பிளாட்ஃபாரம் இன்ஜினியர்", "emoji": "💻" }
       ]
     }
   },

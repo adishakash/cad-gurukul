@@ -168,9 +168,9 @@
       "title": "ٹیم",
       "subtitle": "اساتذہ، انجینئر اور AI محققین — ایک ہی مقصد کے لیے۔",
       "members": [
-        { "name": "Akash Sharma", "role": "بانی اور کیریئر کاؤنسلر", "emoji": "🎓" },
-        { "name": "Priya Rajan", "role": "AI اور ایجوکیشن لیڈ", "emoji": "🤖" },
-        { "name": "Rohan Mehta", "role": "پلیٹ فارم انجینئر", "emoji": "💻" }
+        { "name": "Adish Gupta", "role": "بانی اور کیریئر کاؤنسلر", "emoji": "🎓" },
+        { "name": "Ashima Gupta", "role": "AI اور ایجوکیشن لیڈ", "emoji": "🤖" },
+        { "name": "Devershi Kuthekar", "role": "پلیٹ فارم انجینئر", "emoji": "💻" }
       ]
     }
   },

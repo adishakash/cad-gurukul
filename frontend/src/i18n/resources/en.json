@@ -168,9 +168,9 @@
       "title": "The Team",
       "subtitle": "Educators, engineers, and AI researchers — united by one goal.",
       "members": [
-        { "name": "Akash Sharma", "role": "Founder & Career Counsellor", "emoji": "🎓" },
-        { "name": "Priya Rajan", "role": "AI & Education Lead", "emoji": "🤖" },
-        { "name": "Rohan Mehta", "role": "Platform Engineer", "emoji": "💻" }
+        { "name": "Adish Gupta", "role": "Founder & Career Counsellor", "emoji": "🎓" },
+        { "name": "Ashima Gupta", "role": "AI & Education Lead", "emoji": "🤖" },
+        { "name": "Devershi Kuthekar", "role": "Platform Engineer", "emoji": "💻" }
       ]
     }
   },

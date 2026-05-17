@@ -168,9 +168,9 @@
       "title": "टीम",
       "subtitle": "शिक्षक, इंजीनियर और AI शोधकर्ता — एक लक्ष्य के लिए साथ।",
       "members": [
-        { "name": "Akash Sharma", "role": "संस्थापक व करियर काउंसलर", "emoji": "🎓" },
-        { "name": "Priya Rajan", "role": "AI और शिक्षा लीड", "emoji": "🤖" },
-        { "name": "Rohan Mehta", "role": "प्लेटफ़ॉर्म इंजीनियर", "emoji": "💻" }
+        { "name": "Adish Gupta", "role": "संस्थापक व करियर काउंसलर", "emoji": "🎓" },
+        { "name": "Ashima Gupta", "role": "AI और शिक्षा लीड", "emoji": "🤖" },
+        { "name": "Devershi Kuthekar", "role": "प्लेटफ़ॉर्म इंजीनियर", "emoji": "💻" }
       ]
     }
   },
