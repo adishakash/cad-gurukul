@@ -248,11 +248,13 @@
       "title": "हमसे संपर्क करें",
       "contacts": {
         "emailLabel": "ईमेल",
-        "emailValue": "support@cadgurukul.com",
+        "emailValue": "contact@cadgurukul.com",
         "phoneLabel": "फोन",
-        "phoneValue": "+91 98765 43210",
+        "phoneValue": "+91 9055451499",
         "hoursLabel": "समय",
-        "hoursValue": "सोम–शनि, सुबह 9 बजे – शाम 7 बजे IST"
+        "hoursValue": "सोम–शुक्र, सुबह 9 बजे – शाम 7 बजे IST",
+        "addressLabel": "पता",
+        "addressValue": "31/3, चन्नी हिम्मत, जम्मू (J&K), भारत – पिन 180015"
       },
       "studentCardTitle": "छात्र और अभिभावक",
       "studentCardBody": "यदि आपके पास अपनी रिपोर्ट या आकलन से जुड़ा प्रश्न है, तो अपना रजिस्टर्ड ईमेल बताएं ताकि हम आपका अकाउंट जल्दी ढूंढ सकें।"

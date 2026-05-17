@@ -248,11 +248,13 @@
       "title": "Get in Touch",
       "contacts": {
         "emailLabel": "Email",
-        "emailValue": "support@cadgurukul.com",
+        "emailValue": "contact@cadgurukul.com",
         "phoneLabel": "Phone",
-        "phoneValue": "+91 98765 43210",
+        "phoneValue": "+91 9055451499",
         "hoursLabel": "Hours",
-        "hoursValue": "Mon–Sat, 9 AM – 7 PM IST"
+        "hoursValue": "Mon–Friday, 9 AM – 7 PM IST",
+        "addressLabel": "Address",
+        "addressValue": "31/3, Channi Himmat, Jammu (J&K), India – Pin 180015"
       },
       "studentCardTitle": "For Students & Parents",
       "studentCardBody": "If you have a question about your report or assessment, mention your registered email so we can look up your account faster."

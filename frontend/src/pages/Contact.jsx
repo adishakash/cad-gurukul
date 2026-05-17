@@ -15,6 +15,7 @@ export default function Contact() {
     { icon: '📧', label: t('contact.info.contacts.emailLabel'), value: t('contact.info.contacts.emailValue') },
     { icon: '📞', label: t('contact.info.contacts.phoneLabel'), value: t('contact.info.contacts.phoneValue') },
     { icon: '🕐', label: t('contact.info.contacts.hoursLabel'), value: t('contact.info.contacts.hoursValue') },
+    { icon: '📍', label: t('contact.info.contacts.addressLabel'), value: t('contact.info.contacts.addressValue') },
   ]
 
   const onSubmit = async (data) => {
