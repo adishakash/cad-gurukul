@@ -336,6 +336,56 @@ const listReports = async (req, res) => {
 // COUNSELLOR-SCOPED ROUTES (CAREER_COUNSELLOR access level)
 // ─────────────────────────────────────────────────────────────────────────────
 
+const getCounsellorScope = async (ccUserId) => {
+  const ccUser = await prisma.user.findUnique({
+    where: { id: ccUserId },
+    select: { ccReferralCode: true },
+  });
+
+  const attributedPayments = await prisma.payment.findMany({
+    where: {
+      status: 'CAPTURED',
+      metadata: { path: ['ccUserId'], equals: ccUserId },
+    },
+    select: { userId: true },
+    distinct: ['userId'],
+  });
+
+  const attributedSales = await prisma.ccAttributedSale.findMany({
+    where: { ccUserId },
+    select: { paymentId: true },
+  });
+
+  const salePaymentRefs = attributedSales
+    .map((sale) => sale.paymentId)
+    .filter(Boolean);
+
+  let saleLinkedPayments = [];
+  if (salePaymentRefs.length) {
+    saleLinkedPayments = await prisma.payment.findMany({
+      where: {
+        OR: [
+          { id: { in: salePaymentRefs } },
+          { razorpayPaymentId: { in: salePaymentRefs } },
+        ],
+      },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+  }
+
+  const attributedUserIds = Array.from(new Set([
+    ...attributedPayments.map((p) => p.userId),
+    ...saleLinkedPayments.map((p) => p.userId),
+  ]));
+
+  return {
+    ccUserId,
+    ccReferralCode: ccUser?.ccReferralCode || null,
+    attributedUserIds,
+  };
+};
+
 /**
  * GET /api/v1/counsellor/leads  (CC+ required)
  *
@@ -348,6 +398,7 @@ const listReports = async (req, res) => {
  */
 const listCounsellorLeads = async (req, res) => {
   try {
+    const scope = await getCounsellorScope(req.user.id);
     const {
       page = 1, limit = 25,
       status, classStandard, selectedPlan,
@@ -357,8 +408,16 @@ const listCounsellorLeads = async (req, res) => {
 
     const skip  = (parseInt(page) - 1) * parseInt(limit);
 
-    // CC only sees counselling-interested leads (phase 3 scoping)
-    const where = { counsellingInterested: true };
+    const scopeClauses = [{ assignedStaffId: scope.ccUserId }];
+    if (scope.ccReferralCode) {
+      scopeClauses.push({ referralCode: { equals: scope.ccReferralCode, mode: 'insensitive' } });
+    }
+    if (scope.attributedUserIds.length) {
+      scopeClauses.push({ userId: { in: scope.attributedUserIds } });
+    }
+
+    // Scope to this counsellor's attributed students across all plans.
+    const where = { OR: scopeClauses };
 
     if (status)        where.status        = status;
     if (classStandard) where.classStandard = classStandard;
@@ -371,11 +430,15 @@ const listCounsellorLeads = async (req, res) => {
     }
 
     if (search) {
-      where.OR = [
-        { fullName:     { contains: search, mode: 'insensitive' } },
-        { email:        { contains: search, mode: 'insensitive' } },
-        { mobileNumber: { contains: search } },
-        { city:         { contains: search, mode: 'insensitive' } },
+      where.AND = [
+        {
+          OR: [
+            { fullName:     { contains: search, mode: 'insensitive' } },
+            { email:        { contains: search, mode: 'insensitive' } },
+            { mobileNumber: { contains: search } },
+            { city:         { contains: search, mode: 'insensitive' } },
+          ],
+        },
       ];
     }
 
@@ -414,13 +477,21 @@ const listCounsellorLeads = async (req, res) => {
  */
 const listCounsellorStudents = async (req, res) => {
   try {
+    const scope = await getCounsellorScope(req.user.id);
     const { page = 1, limit = 20, search } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Only students who have expressed interest in counselling via at least one lead
+    const scopeClauses = [{ leads: { some: { assignedStaffId: scope.ccUserId } } }];
+    if (scope.ccReferralCode) {
+      scopeClauses.push({ leads: { some: { referralCode: { equals: scope.ccReferralCode, mode: 'insensitive' } } } });
+    }
+    if (scope.attributedUserIds.length) {
+      scopeClauses.push({ id: { in: scope.attributedUserIds } });
+    }
+
     const where = {
       role: 'STUDENT',
-      leads: { some: { counsellingInterested: true } },
+      OR: scopeClauses,
     };
 
     if (search) {
@@ -461,13 +532,21 @@ const listCounsellorStudents = async (req, res) => {
  */
 const listCounsellorReports = async (req, res) => {
   try {
+    const scope = await getCounsellorScope(req.user.id);
     const { page = 1, limit = 20, status } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Only reports for students who have counselling-interested leads
+    const scopeClauses = [{ user: { leads: { some: { assignedStaffId: scope.ccUserId } } } }];
+    if (scope.ccReferralCode) {
+      scopeClauses.push({ user: { leads: { some: { referralCode: { equals: scope.ccReferralCode, mode: 'insensitive' } } } } });
+    }
+    if (scope.attributedUserIds.length) {
+      scopeClauses.push({ userId: { in: scope.attributedUserIds } });
+    }
+
     const where = {
       ...(status ? { status } : {}),
-      user: { leads: { some: { counsellingInterested: true } } },
+      OR: scopeClauses,
     };
 
     const [reports, total] = await Promise.all([
