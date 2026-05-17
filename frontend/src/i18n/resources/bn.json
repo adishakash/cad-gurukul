@@ -719,6 +719,7 @@
       "bodySuffix": ". আপনার শহরের 47 জন শিক্ষার্থী এই সপ্তাহে স্পষ্টতা পেয়েছে।",
       "ctaStandard": "ফুল রিপোর্ট — {{price}} →",
       "ctaPremium": "🚀 প্রিমিয়াম AI রিপোর্ট — {{price}} ⭐",
+      "ctaConsultation": "📞 1-on-1 কাউন্সেলিং সেশন — {{price}}",
       "lockedCareerTitle": "🔒 ক্যারিয়ার ম্যাচ #{{number}}",
       "lockedCareerDescription": "এই হাই‑ফিট ক্যারিয়ার সুপারিশ দেখতে আনলক করুন",
       "hiddenStream": "লুকানো",

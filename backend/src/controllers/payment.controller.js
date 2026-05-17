@@ -173,9 +173,18 @@ const createCcSaleFromPayment = async ({ payment, planType, lead }) => {
 
   if (!ccUserId) return null;
 
-  const commissionRate = planType === 'consultation'
-    ? (ccUser?.isConsultationAuthorized ? 0.5 : 0.1)
-    : 0.7;
+  // Commission rates per plan type (business rules):
+  //   standard  (₹499)  → 70%
+  //   premium   (₹1999) → 30%
+  //   consultation (₹9999) → 20%
+  let commissionRate;
+  if (planType === 'consultation') {
+    commissionRate = 0.20;
+  } else if (planType === 'premium') {
+    commissionRate = 0.30;
+  } else {
+    commissionRate = 0.70; // standard (₹499)
+  }
 
   const grossAmountPaise = metadata.catalogAmountPaise || payment.amountPaise;
   const discountAmountPaise = metadata.discountAmountPaise || 0;
@@ -295,11 +304,15 @@ const finalizeCapturedPayment = async ({ payment, planType, assessmentId, userId
     generateReportAsync(assessmentForGeneration, profileForGeneration, reportIdForGeneration, planType);
   }
 
-  if (planType === 'consultation') {
+  // Trigger consultation booking for both the ₹1999 premium plan AND the ₹9999 consultation plan.
+  // ₹1999 (premium) → 45-min one-to-one counselling scheduled automatically with a counsellor.
+  // ₹9999 (consultation) → full dedicated consultation session.
+  if (planType === 'consultation' || planType === 'premium') {
     _createConsultationBookingAndSendEmail({
       userId,
       paymentId: payment.id,
       leadId: lead?.id || null,
+      planType,
     }).catch((err) =>
       logger.error('[Payment] Consultation booking creation failed', { error: err.message }),
     );
@@ -307,11 +320,12 @@ const finalizeCapturedPayment = async ({ payment, planType, assessmentId, userId
 
   await createCcSaleFromPayment({ payment, planType, lead });
 
-  return { resumeAssessment: planType !== 'consultation' && hasRemainingQuestions };
+  return { resumeAssessment: (planType !== 'consultation' && planType !== 'premium') && hasRemainingQuestions };
 };
 
 const getLeadStatusAfterPayment = (planType, hasQueuedReport) => {
-  if (planType === 'consultation') return 'counselling_interested';
+  // Both Rs 9999 consultation AND Rs 1999 premium get a consultation booking
+  if (planType === 'consultation' || planType === 'premium') return 'counselling_interested';
   return hasQueuedReport ? 'premium_report_generating' : 'paid';
 };
 
@@ -910,72 +924,94 @@ const getPaymentStatus = async (req, res) => {
 // CONSULTATION BOOKING HELPER (private, fire-and-forget)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Number of consultation sessions per plan type
+const CONSULTATION_SESSIONS = {
+  premium:      1, // ₹1,999 — 1 session
+  consultation: 6, // ₹9,999 — 6 sessions
+};
+
 /**
- * Creates a ConsultationBooking record and sends the scheduling email to the
- * registered student email. Called immediately after a ₹9,999
- * consultation payment is captured in verifyPayment / handleWebhook.
+ * Creates ConsultationBooking records and sends the scheduling email for session 1.
  *
- * Idempotent — if a booking already exists for this paymentId it returns early.
+ * - premium      (₹1,999) → 1 booking created, slot-selection email sent immediately.
+ * - consultation (₹9,999) → 6 bookings created; email sent for session 1 only.
+ *   Sessions 2-6 start with status 'pending' and are activated one-by-one as each
+ *   preceding session is completed.
+ *
+ * Idempotent — if session 1 booking already exists for this paymentId it returns early.
  */
-async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadId }) {
-  // Idempotency guard
-  const existing = await prisma.consultationBooking.findUnique({ where: { paymentId } });
+async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadId, planType = 'consultation' }) {
+  const totalSessions = CONSULTATION_SESSIONS[planType] || 1;
+
+  // Idempotency guard — check if session 1 already exists
+  const existing = await prisma.consultationBooking.findUnique({
+    where: { paymentId_sessionNumber: { paymentId, sessionNumber: 1 } },
+  });
   if (existing) {
     logger.info('[Payment] ConsultationBooking already exists, skipping', { paymentId });
     return existing;
   }
 
-  // Secure, unguessable 64-char hex token for email links
-  const slotToken = crypto.randomBytes(32).toString('hex');
-
-  const booking = await prisma.consultationBooking.create({
-    data: {
-      id:        crypto.randomUUID(),
-      userId,
-      leadId:    leadId || null,
-      paymentId,
-      slotToken,
-      status:    'booking_confirmed',
+  // Fetch user details once for all sessions
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      studentProfile: { select: { fullName: true } },
     },
   });
+  const studentName = user?.studentProfile?.fullName
+    || user?.email?.split('@')[0]
+    || 'Student';
 
-  // Append timeline event
+  // Create all session booking records in a transaction
+  const bookings = await prisma.$transaction(async (tx) => {
+    const created = [];
+    for (let i = 1; i <= totalSessions; i += 1) {
+      const slotToken = crypto.randomBytes(32).toString('hex');
+      // Sessions 2+ start as 'pending' — activated after session i-1 completes
+      const status = i === 1 ? 'booking_confirmed' : 'pending';
+      const booking = await tx.consultationBooking.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId,
+          leadId: leadId || null,
+          paymentId,
+          sessionNumber: i,
+          totalSessions,
+          slotToken,
+          status,
+        },
+      });
+      created.push(booking);
+    }
+    return created;
+  });
+
+  const firstBooking = bookings[0];
+
+  // Append timeline event for session 1
   if (leadId) {
     await prisma.leadEvent.create({
       data: {
         id:       crypto.randomUUID(),
         leadId,
         event:    'consultation_booking_confirmed',
-        metadata: { bookingId: booking.id },
+        metadata: { bookingId: firstBooking.id, totalSessions },
       },
     }).catch((err) =>
       logger.warn('[Payment] ConsultationBooking LeadEvent failed', { error: err.message }),
     );
   }
 
-  // Fetch the registered user email for scheduling
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      email: true,
-      studentProfile: {
-        select: { fullName: true },
-      },
-    },
-  });
-
-  const studentName = user?.studentProfile?.fullName
-    || user?.email?.split('@')[0]
-    || 'Student';
-
   const emailArgs = {
-    slotToken,
-    counsellorName:      booking.counsellorName,
-    counsellorExpertise: booking.counsellorExpertise,
-    counsellorContact:   booking.counsellorContact,
+    slotToken: firstBooking.slotToken,
+    counsellorName:      firstBooking.counsellorName,
+    counsellorExpertise: firstBooking.counsellorExpertise,
+    counsellorContact:   firstBooking.counsellorContact,
   };
 
-  // Send only to the registered student email
+  // Send slot-selection email for session 1 only
   if (user?.email) {
     try {
       await sendConsultationSlotEmail({
@@ -985,7 +1021,7 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
       });
 
       await prisma.consultationBooking.update({
-        where: { id: booking.id },
+        where: { id: firstBooking.id },
         data: {
           status: 'slot_mail_sent',
           schedulingEmailSentAt: new Date(),
@@ -1000,13 +1036,13 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
             id: crypto.randomUUID(),
             leadId,
             event: 'consultation_slot_mail_sent',
-            metadata: { bookingId: booking.id },
+            metadata: { bookingId: firstBooking.id, sessionNumber: 1 },
           },
         }).catch(() => {});
       }
     } catch (err) {
       await prisma.consultationBooking.update({
-        where: { id: booking.id },
+        where: { id: firstBooking.id },
         data: {
           status: 'booking_confirmed',
           schedulingEmailSentAt: null,
@@ -1022,14 +1058,14 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
             id: crypto.randomUUID(),
             leadId,
             event: 'consultation_slot_mail_failed',
-            metadata: { bookingId: booking.id, error: err.message },
+            metadata: { bookingId: firstBooking.id, error: err.message },
           },
         }).catch(() => {});
       }
     }
   } else {
     await prisma.consultationBooking.update({
-      where: { id: booking.id },
+      where: { id: firstBooking.id },
       data: {
         status: 'booking_confirmed',
         schedulingEmailSentAt: null,
@@ -1043,19 +1079,20 @@ async function _createConsultationBookingAndSendEmail({ userId, paymentId, leadI
           id: crypto.randomUUID(),
           leadId,
           event: 'consultation_slot_mail_failed',
-          metadata: { bookingId: booking.id, error: 'Student email unavailable' },
+          metadata: { bookingId: firstBooking.id, error: 'Student email unavailable' },
         },
       }).catch(() => {});
     }
   }
 
-  logger.info('[Payment] ConsultationBooking created', {
-    bookingId: booking.id,
+  logger.info('[Payment] ConsultationBookings created', {
+    bookingId: firstBooking.id,
+    totalSessions,
     userId,
     studentEmail: user?.email,
   });
 
-  return booking;
+  return firstBooking;
 }
 
 module.exports = { createOrder, getQuote, verifyPayment, handleWebhook, getPaymentHistory, getPaymentStatus };

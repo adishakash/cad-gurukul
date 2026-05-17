@@ -418,6 +418,12 @@ export default function Report() {
                   >
                     {t('report.lockBanner.ctaPremium', { price: '₹1,999' })}
                   </button>
+                  <button
+                    onClick={() => { trackEvent('premium_clicked', { source: 'lock_banner', plan: 'consultation' }); navigate(`/payment?plan=consultation${report.assessmentId ? `&assessmentId=${report.assessmentId}` : ''}`) }}
+                    className="bg-[#1a3a5c] text-white font-bold px-4 py-2 rounded-full text-sm hover:bg-[#12293f] transition"
+                  >
+                    {t('report.lockBanner.ctaConsultation', { price: '₹9,999' })}
+                  </button>
                 </div>
               </div>
             </div>

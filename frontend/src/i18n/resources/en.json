@@ -719,6 +719,7 @@
       "bodySuffix": ". 47 students from your city unlocked clarity this week.",
       "ctaStandard": "Full Report — {{price}} →",
       "ctaPremium": "🚀 Premium AI Report — {{price}} ⭐",
+      "ctaConsultation": "📞 1-on-1 Counselling Session — {{price}}",
       "lockedCareerTitle": "🔒 Career Match #{{number}}",
       "lockedCareerDescription": "Unlock to see this high-fit career recommendation",
       "hiddenStream": "Hidden",

@@ -630,11 +630,14 @@ export default function CounsellorDashboard() {
                     <div className="py-10 text-center text-gray-400">Loading consultations…</div>
                   ) : (
                     <Table
-                      headers={['Student', 'Email', 'Phone', 'Scheduled', 'Status', 'Meeting']}
+                      headers={['Student', 'Email', 'Phone', 'Session', 'Scheduled', 'Status', 'Meeting']}
                       rows={consultations.map((c) => [
                         c.studentName,
                         c.studentEmail || '—',
                         c.studentPhone || '—',
+                        c.totalSessions > 1
+                          ? <span key="s" className="text-xs font-semibold">{c.sessionNumber}/{c.totalSessions}</span>
+                          : '1/1',
                         c.scheduledStartAt ? new Date(c.scheduledStartAt).toLocaleString('en-IN') : '—',
                         c.status,
                         c.meetingLink
@@ -645,7 +648,7 @@ export default function CounsellorDashboard() {
                     />
                   )
                 ) : (
-                  <div className="text-sm text-gray-500">You are not authorized for ₹9,999 consultations yet.</div>
+                  <div className="text-sm text-gray-500">You are not authorized for consultations yet. Contact admin to get authorized.</div>
                 )}
               </div>
             )}

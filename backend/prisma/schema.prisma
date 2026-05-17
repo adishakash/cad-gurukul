@@ -1350,7 +1350,9 @@ model ConsultationBooking {
   id        String  @id @default(cuid())
   userId    String
   leadId    String? // nullable for backward compat
-  paymentId String  @unique // Payment.id — soft reference (no Prisma relation on Payment side)
+  paymentId     String  // Payment.id — soft reference (no Prisma relation on Payment side)
+  sessionNumber Int     @default(1) // 1-based index within this payment's sessions
+  totalSessions Int     @default(1) // total sessions purchased (1 for premium, 6 for consultation)
 
   /// Assigned counsellor (optional, for partner view)
   counsellorUserId String?
@@ -1417,6 +1419,8 @@ model ConsultationBooking {
   lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
   counsellorUser User? @relation("CounsellorConsultations", fields: [counsellorUserId], references: [id], onDelete: SetNull)
 
+  @@unique([paymentId, sessionNumber])
+  @@index([paymentId])
   @@index([userId])
   @@index([counsellorUserId])
   @@index([slotToken])
