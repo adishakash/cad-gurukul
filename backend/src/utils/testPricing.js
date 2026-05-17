@@ -33,7 +33,9 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-const IS_TEST_MODE = process.env.PAYMENT_TEST_MODE === 'true';
+const parseEnvBool = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+const IS_TEST_MODE = parseEnvBool(process.env.PAYMENT_TEST_MODE);
+const DEFAULT_TEST_AMOUNT_PAISE = Number(process.env.PAYMENT_TEST_DEFAULT_PAISE || 100);
 
 /**
  * Maps catalog paise amounts to test paise amounts.
@@ -54,15 +56,25 @@ const TEST_PRICE_MAP = {
  * @param {number} originalAmountPaise  - catalog price in paise
  * @returns {{ chargeAmountPaise: number, isTestMode: boolean }}
  */
-function getEffectiveChargeAmount(originalAmountPaise) {
+function getEffectiveChargeAmount(originalAmountPaise, opts = {}) {
   if (!IS_TEST_MODE) {
     return { chargeAmountPaise: originalAmountPaise, isTestMode: false };
   }
 
   const testAmount = TEST_PRICE_MAP[originalAmountPaise];
   if (testAmount === undefined) {
-    // Unknown amount — pass through unchanged (safe fallback)
-    return { chargeAmountPaise: originalAmountPaise, isTestMode: true };
+    const fallback = Number(opts.fallbackTestAmountPaise);
+    if (Number.isFinite(fallback) && fallback > 0) {
+      return { chargeAmountPaise: Math.round(fallback), isTestMode: true };
+    }
+
+    // Unknown amount in test mode — use a tiny default charge.
+    if (Number.isFinite(DEFAULT_TEST_AMOUNT_PAISE) && DEFAULT_TEST_AMOUNT_PAISE > 0) {
+      return { chargeAmountPaise: Math.round(DEFAULT_TEST_AMOUNT_PAISE), isTestMode: true };
+    }
+
+    // Last-resort guard.
+    return { chargeAmountPaise: 100, isTestMode: true };
   }
 
   return { chargeAmountPaise: testAmount, isTestMode: true };

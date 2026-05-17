@@ -6,6 +6,7 @@ const prisma = require('../config/database');
 const razorpayService = require('../services/payment/razorpayService');
 const { successResponse, errorResponse, rupeesToPaise } = require('../utils/helpers');
 const { splitGstFromInclusive, addGstToExclusive } = require('../utils/gst');
+const { getEffectiveChargeAmount } = require('../utils/testPricing');
 const { notifyPartner } = require('../services/notification/partnerNotificationService');
 const logger = require('../utils/logger');
 const config = require('../config');
@@ -160,8 +161,12 @@ const createOrder = async (req, res) => {
       },
     });
 
+    const { chargeAmountPaise, isTestMode } = getEffectiveChargeAmount(totals.totalAmountPaise, {
+      fallbackTestAmountPaise: 100,
+    });
+
     const order = await razorpayService.createOrder({
-      amount: totals.totalAmountPaise,
+      amount: chargeAmountPaise,
       currency: 'INR',
       receipt: `cj_${Date.now()}`,
       notes: { email: normalizedEmail, role: 'CAREER_COUNSELLOR' },
@@ -216,7 +221,10 @@ const createOrder = async (req, res) => {
 
       return successResponse(res, {
         orderId: order.id,
-        amountPaise: totals.totalAmountPaise,
+        amountPaise: chargeAmountPaise,
+        chargeAmountPaise,
+        catalogAmountPaise: totals.totalAmountPaise,
+        isTestMode,
         totalAmountPaise: totals.totalAmountPaise,
         currency: 'INR',
         keyId: config.razorpay.keyId,
@@ -278,7 +286,10 @@ const createOrder = async (req, res) => {
 
     return successResponse(res, {
       orderId: order.id,
-      amountPaise: totals.totalAmountPaise,
+      amountPaise: chargeAmountPaise,
+      chargeAmountPaise,
+      catalogAmountPaise: totals.totalAmountPaise,
+      isTestMode,
       totalAmountPaise: totals.totalAmountPaise,
       currency: 'INR',
       keyId: config.razorpay.keyId,
