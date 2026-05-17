@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { authenticate, requirePortalRole } = require('../middleware/auth');
+const { authenticate, requirePortalRole, requireSuperAdmin } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { authLimiter } = require('../middleware/rateLimiter');
 const { upload, enforceSizeLimit } = require('../middleware/upload');
@@ -146,8 +146,12 @@ router.get('/cc/commissions',         ccAdminController.listAllCommissions);
 // Payouts: view, generate batch, update status
 router.get('/cc/payouts',             ccAdminController.listAllPayouts);
 router.post('/cc/payouts/generate',   ccAdminController.generatePayoutBatch);
+router.post('/cc/payouts/manual-add', requireSuperAdmin, ccAdminController.manuallyAddCCPayout);
 router.get('/cc/payouts/:id',         ccAdminController.getPayoutDetail);
 router.patch('/cc/payouts/:id',       ccAdminController.updatePayoutStatus);
+
+// Payment control: pause/resume automatic payouts (SUPER_ADMIN only)
+router.put('/cc/users/:id/pause-payments', requireSuperAdmin, ccAdminController.toggleCCPaymentsPause);
 
 // Training content CRUD (shared CclTrainingContent table with targetRole, with file upload)
 router.get('/cc/training',            ccAdminController.listAllTraining);

@@ -166,6 +166,10 @@ model User {
   consultationAuthorizedAt DateTime?
   // CC referral link
   ccReferralCode     String?             @unique
+  // CC payments control (pause automatic payouts, require manual processing)
+  ccPaymentsPaused   Boolean             @default(false)
+  paymentsPausedAt   DateTime?
+  pausedBy           String? // adminUser.id who paused
   partnerApplication PartnerApplication?
   bankAccount        BankAccount?
 

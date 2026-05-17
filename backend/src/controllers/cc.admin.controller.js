@@ -159,26 +159,45 @@ const listAllPayouts = async (req, res) => {
  * Groups all pending CC commissions (status="pending", payoutId=null)
  * into per-CC payout batches scheduled for next Thursday.
  * Safe to call multiple times — commissions already in a payout are skipped.
+ * 
+ * SKIPS CCs with ccPaymentsPaused=true (manual payouts only for those).
  */
 const generatePayoutBatch = async (req, res) => {
   try {
     const pendingCommissions = await prisma.ccCommission.findMany({
       where:   { status: 'pending', payoutId: null },
-      include: { ccUser: { select: { id: true, name: true } } },
+      include: { ccUser: { select: { id: true, name: true, ccPaymentsPaused: true } } },
     });
 
     if (pendingCommissions.length === 0) {
       return successResponse(res, { payoutsCreated: 0, message: 'No pending commissions to batch' });
     }
 
-    // Group by CC
+    // Group by CC, excluding paused ones
     const grouped = {};
+    const skippedCCs = [];
     for (const comm of pendingCommissions) {
+      // Skip paused CCs — they require manual payout processing
+      if (comm.ccUser.ccPaymentsPaused) {
+        if (!skippedCCs.includes(comm.ccUserId)) {
+          skippedCCs.push(comm.ccUserId);
+        }
+        continue;
+      }
+
       if (!grouped[comm.ccUserId]) {
         grouped[comm.ccUserId] = { userId: comm.ccUserId, name: comm.ccUser.name, commissions: [], totalPaise: 0 };
       }
       grouped[comm.ccUserId].commissions.push(comm);
       grouped[comm.ccUserId].totalPaise += comm.amountPaise;
+    }
+
+    if (Object.keys(grouped).length === 0) {
+      return successResponse(res, {
+        payoutsCreated: 0,
+        skippedCCs: skippedCCs.length,
+        message: `No commissions to batch. ${skippedCCs.length} CC(s) have paused automatic payments.`,
+      });
     }
 
     const scheduledFor = getNextThursday();
@@ -211,13 +230,14 @@ const generatePayoutBatch = async (req, res) => {
       }
     });
 
-    logger.info('[Admin.CC] Payout batch generated', { count: payoutsCreated.length, scheduledFor });
+    logger.info('[Admin.CC] Payout batch generated', { count: payoutsCreated.length, skipped: skippedCCs.length, scheduledFor });
 
     return successResponse(res, {
       payoutsCreated: payoutsCreated.length,
+      skippedCCs: skippedCCs.length,
       scheduledFor,
       payouts: payoutsCreated,
-    }, `Payout batch generated: ${payoutsCreated.length} CC(s)`);
+    }, `Payout batch generated: ${payoutsCreated.length} CC(s). ${skippedCCs.length} CC(s) paused.`);
   } catch (err) {
     logger.error('[Admin.CC] generatePayoutBatch error', { error: err.message });
     return errorResponse(res, 'Failed to generate payout batch', 500);
@@ -499,6 +519,148 @@ const listTrainingHistory = async (req, res) => {
   }
 };
 
+// ─── Payment Control (SUPER_ADMIN only) ───────────────────────────────────────
+
+/**
+ * PUT /api/v1/admin/cc/users/:id/pause-payments
+ * 
+ * Toggle automatic payment pause for a CC.
+ * When paused, generatePayoutBatch skips this CC — admin must manually add payouts.
+ * 
+ * Body: { paused: boolean, reason?: string }
+ * Only SUPER_ADMIN can use this endpoint.
+ */
+const toggleCCPaymentsPause = async (req, res) => {
+  try {
+    const { paused, reason } = req.body;
+
+    if (typeof paused !== 'boolean') {
+      return errorResponse(res, 'paused must be a boolean', 400, 'VALIDATION_ERROR');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true, email: true, role: true, ccPaymentsPaused: true },
+    });
+
+    if (!user) {
+      return errorResponse(res, 'CC user not found', 404, 'NOT_FOUND');
+    }
+
+    if (user.role !== 'CAREER_COUNSELLOR') {
+      return errorResponse(res, 'User is not a Career Counsellor', 422, 'INVALID_TARGET');
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        ccPaymentsPaused: paused,
+        paymentsPausedAt: paused ? new Date() : null,
+        pausedBy: paused ? req.user.id : null,
+      },
+      select: { id: true, name: true, email: true, ccPaymentsPaused: true, paymentsPausedAt: true },
+    });
+
+    logger.info('[Admin.CC] CC payment pause toggled', {
+      ccUserId: req.params.id,
+      paused,
+      reason: reason || '',
+      adminId: req.user.id,
+    });
+
+    const msg = paused
+      ? `Automatic payments paused for ${user.name}. Use manual payout endpoint.`
+      : `Automatic payments resumed for ${user.name}. Will be included in next batch.`;
+
+    return successResponse(res, updated, msg);
+  } catch (err) {
+    logger.error('[Admin.CC] toggleCCPaymentsPause error', { error: err.message });
+    return errorResponse(res, 'Failed to toggle payment pause', 500);
+  }
+};
+
+/**
+ * POST /api/v1/admin/cc/payouts/manual-add
+ * 
+ * Manually create a payout for a CC (especially for paused CCs).
+ * Super admin can directly add any amount without waiting for commissions to accumulate.
+ * 
+ * Body: {
+ *   ccUserId: string,
+ *   amountPaise: number,
+ *   reason?: string,
+ *   scheduledFor?: ISO date string (defaults to next Thursday)
+ * }
+ * 
+ * Only SUPER_ADMIN can use this endpoint.
+ */
+const manuallyAddCCPayout = async (req, res) => {
+  try {
+    const { ccUserId, amountPaise, reason, scheduledFor } = req.body;
+
+    // Validation
+    if (!ccUserId || typeof ccUserId !== 'string') {
+      return errorResponse(res, 'ccUserId is required and must be a string', 400, 'VALIDATION_ERROR');
+    }
+
+    if (!amountPaise || typeof amountPaise !== 'number' || amountPaise <= 0) {
+      return errorResponse(res, 'amountPaise must be a positive number', 400, 'VALIDATION_ERROR');
+    }
+
+    // Verify CC user exists
+    const ccUser = await prisma.user.findUnique({
+      where: { id: ccUserId },
+      select: { id: true, name: true, email: true, role: true },
+    });
+
+    if (!ccUser) {
+      return errorResponse(res, 'CC user not found', 404, 'NOT_FOUND');
+    }
+
+    if (ccUser.role !== 'CAREER_COUNSELLOR') {
+      return errorResponse(res, 'User is not a Career Counsellor', 422, 'INVALID_TARGET');
+    }
+
+    // Determine scheduled date
+    let payout_scheduledFor = scheduledFor ? new Date(scheduledFor) : getNextThursday();
+    payout_scheduledFor.setHours(0, 0, 0, 0);
+
+    // Create the payout directly
+    const payout = await prisma.ccPayout.create({
+      data: {
+        ccUserId,
+        amountPaise,
+        status: 'pending',
+        scheduledFor: payout_scheduledFor,
+        notes: reason ? `Manual payout: ${reason}` : 'Manual payout by admin',
+      },
+      include: {
+        ccUser: { select: { name: true, email: true } },
+      },
+    });
+
+    logger.info('[Admin.CC] Manual payout created', {
+      payoutId: payout.id,
+      ccUserId,
+      amountPaise,
+      reason: reason || '',
+      adminId: req.user.id,
+    });
+
+    return successResponse(res, {
+      payoutId: payout.id,
+      ccName: payout.ccUser.name,
+      ccUserId: payout.ccUserId,
+      amountPaise: payout.amountPaise,
+      status: payout.status,
+      scheduledFor: payout.scheduledFor,
+    }, `Manual payout created for ${ccUser.name}: ₹${(amountPaise / 100).toFixed(2)}`);
+  } catch (err) {
+    logger.error('[Admin.CC] manuallyAddCCPayout error', { error: err.message });
+    return errorResponse(res, 'Failed to create manual payout', 500);
+  }
+};
+
 module.exports = {
   // Sales
   listAllSales,
@@ -509,6 +671,9 @@ module.exports = {
   generatePayoutBatch,
   getPayoutDetail,
   updatePayoutStatus,
+  manuallyAddCCPayout,
+  // Payment control
+  toggleCCPaymentsPause,
   // Training
   listAllTraining,
   createTrainingContent,
