@@ -5,6 +5,7 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const { markDatabaseWriteProbeSkipped, runDatabaseWriteProbe } = require('./utils/databaseReadiness');
 const prisma = require('./config/database');
+const { verifyStartupSchema } = require('./utils/startupSchemaGuard');
 const { isEmailConfigured, verifyEmailTransport } = require('./services/email/emailService');
 
 const connectWithTimeout = (ms) =>
@@ -20,6 +21,9 @@ let server;
 const start = async () => {
   await connectWithTimeout(10000);
   logger.info('[Server] Database connected');
+
+  await verifyStartupSchema();
+  logger.info('[Server] Startup schema guard completed');
 
   if (config.db.writeProbeEnabled) {
     await runDatabaseWriteProbe({ timeoutMs: config.db.writeProbeTimeoutMs });

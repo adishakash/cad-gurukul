@@ -150,7 +150,14 @@ const createOrder = async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
     const existing = await prisma.user.findUnique({
       where: { email: normalizedEmail },
-      include: { partnerApplication: true },
+      include: {
+        partnerApplication: {
+          select: {
+            id: true,
+            paymentStatus: true,
+          },
+        },
+      },
     });
 
     const order = await razorpayService.createOrder({
