@@ -59,9 +59,9 @@ export default function Footer() {
         <div className="border-t border-gray-700 mt-10 pt-6 flex flex-col md:flex-row justify-between items-center text-xs text-gray-500 gap-3">
           <p>© {new Date().getFullYear()} CAD Gurukul. {t('footer.rights')}</p>
           <div className="flex space-x-4">
-            <span className="cursor-pointer hover:text-gray-300">{t('footer.policies.privacy')}</span>
-            <span className="cursor-pointer hover:text-gray-300">{t('footer.policies.terms')}</span>
-            <span className="cursor-pointer hover:text-gray-300">{t('footer.policies.refund')}</span>
+            <Link to="/privacy" className="hover:text-gray-300 transition-colors">{t('footer.policies.privacy')}</Link>
+            <Link to="/terms" className="hover:text-gray-300 transition-colors">{t('footer.policies.terms')}</Link>
+            <Link to="/refund" className="hover:text-gray-300 transition-colors">{t('footer.policies.refund')}</Link>
           </div>
         </div>
       </div>

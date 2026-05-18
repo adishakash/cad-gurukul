@@ -10,7 +10,7 @@ export default function PrivacyPolicy() {
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Privacy Policy</h1>
         <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-          Last updated: April 2026
+          Last updated: May 2026
         </p>
       </section>
 
@@ -51,11 +51,25 @@ export default function PrivacyPolicy() {
           the new policy on this page with an updated date.
         </p>
 
-        <h2>7. Contact Us</h2>
+        <h2>7. Your Rights</h2>
         <p>
-          If you have any questions about this Privacy Policy, please contact us at{' '}
-          <a href="mailto:support@cadgurukul.com" className="text-brand-red">support@cadgurukul.com</a>.
+          You have the right to access, correct, or delete the personal information we hold about you.
+          You may also opt out of marketing communications at any time by contacting us or using the
+          unsubscribe link in any email we send.
         </p>
+
+        <h2>8. Grievance Officer</h2>
+        <p>
+          In accordance with the Information Technology Act 2000 and rules made thereunder, if you have
+          any grievances regarding our privacy practices, please contact our Grievance Officer:
+        </p>
+        <address className="not-italic">
+          <strong>CAD Gurukul</strong><br />
+          31/3, Channi Himmat, Jammu (J&amp;K), India – 180015<br />
+          📞 <a href="tel:+919055451499" className="text-brand-red">+91 9055451499</a><br />
+          📧 <a href="mailto:contact@cadgurukul.com" className="text-brand-red">contact@cadgurukul.com</a><br />
+          Hours: Mon–Friday, 9 AM – 7 PM IST
+        </address>
       </section>
     </div>
   )

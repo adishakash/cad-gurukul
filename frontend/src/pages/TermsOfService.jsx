@@ -10,7 +10,7 @@ export default function TermsOfService() {
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Terms of Service</h1>
         <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-          Last updated: April 2026
+          Last updated: May 2026
         </p>
       </section>
 
@@ -57,11 +57,20 @@ export default function TermsOfService() {
           constitutes acceptance of the updated terms.
         </p>
 
-        <h2>8. Contact Us</h2>
+        <h2>8. Governing Law</h2>
         <p>
-          For questions regarding these Terms of Service, contact us at{' '}
-          <a href="mailto:support@cadgurukul.com" className="text-brand-red">support@cadgurukul.com</a>.
+          These Terms shall be governed by and construed in accordance with the laws of India. Any disputes
+          shall be subject to the exclusive jurisdiction of the courts in Jammu, Jammu &amp; Kashmir.
         </p>
+
+        <h2>9. Contact Us</h2>
+        <p>For questions regarding these Terms of Service, reach us at:</p>
+        <address className="not-italic">
+          <strong>CAD Gurukul</strong><br />
+          31/3, Channi Himmat, Jammu (J&amp;K), India – 180015<br />
+          📞 <a href="tel:+919055451499" className="text-brand-red">+91 9055451499</a><br />
+          📧 <a href="mailto:contact@cadgurukul.com" className="text-brand-red">contact@cadgurukul.com</a>
+        </address>
       </section>
     </div>
   )

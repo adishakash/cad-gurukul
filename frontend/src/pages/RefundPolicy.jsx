@@ -10,7 +10,7 @@ export default function RefundPolicy() {
       <section className="bg-brand-dark text-white py-20 px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Refund Policy</h1>
         <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-          Last updated: April 2026
+          Last updated: May 2026
         </p>
       </section>
 
@@ -38,8 +38,10 @@ export default function RefundPolicy() {
         <h2>4. How to Request a Refund</h2>
         <p>
           To request a refund, email us at{' '}
-          <a href="mailto:support@cadgurukul.com" className="text-brand-red">support@cadgurukul.com</a>{' '}
+          <a href="mailto:contact@cadgurukul.com" className="text-brand-red">contact@cadgurukul.com</a>{' '}
           with your registered email address, payment reference number, and reason for the refund request.
+          You can also call us at <a href="tel:+919055451499" className="text-brand-red">+91 9055451499</a> during
+          business hours (Mon–Friday, 9 AM – 7 PM IST).
         </p>
 
         <h2>5. Processing Time</h2>
@@ -49,10 +51,14 @@ export default function RefundPolicy() {
         </p>
 
         <h2>6. Contact Us</h2>
-        <p>
-          For any queries related to refunds, please contact us at{' '}
-          <a href="mailto:support@cadgurukul.com" className="text-brand-red">support@cadgurukul.com</a>.
-        </p>
+        <p>For any queries related to refunds, please reach us at:</p>
+        <address className="not-italic">
+          <strong>CAD Gurukul</strong><br />
+          31/3, Channi Himmat, Jammu (J&amp;K), India – 180015<br />
+          📞 <a href="tel:+919055451499" className="text-brand-red">+91 9055451499</a><br />
+          📧 <a href="mailto:contact@cadgurukul.com" className="text-brand-red">contact@cadgurukul.com</a><br />
+          Hours: Mon–Friday, 9 AM – 7 PM IST
+        </address>
       </section>
     </div>
   )
